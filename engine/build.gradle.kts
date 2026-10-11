@@ -60,7 +60,7 @@ dependencies {
     // Security patch levels inside the lines already resolved (triage in
     // docs/Dependency-Review.md). Local to the daemon: the Android app's
     // catalog, and the Jackson 2.13 ABI extensions are compiled against, stay.
-    implementation(platform("io.netty:netty-bom:4.2.18.Final"))
+    implementation(platform("io.netty:netty-bom:4.2.19.Final"))
     constraints {
         implementation("com.fasterxml.jackson.core:jackson-databind:2.13.5")
         implementation("com.fasterxml.jackson.core:jackson-core:2.13.5")
