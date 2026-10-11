@@ -1,0 +1,199 @@
+name: CloudStreamMac
+options:
+  bundleIdPrefix: com.lagradost
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    # arm64-only product: the bundled libmpv/ffmpeg/JRE runtime are arm64
+    # slices (ADR-0003 ships per-arch DMGs). Without this, a universal
+    # Release build tries to link an x86_64 slice against the arm64 dylib.
+    ARCHS: [arm64]
+    GENERATE_INFOPLIST_FILE: true
+    PRODUCT_NAME: CloudStream
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_EMIT_LOC_STRINGS: true
+    # TMDB suggestion key: injected into Info.plist (TMDbApiKey), read via
+    # Bundle — never hardcoded in version control (P1-7). Provide a real key
+    # in the untracked client/LocalSecrets.xcconfig (TMDB_API_KEY = …);
+    # the placeholder keeps the build green and the suggestions feature
+    # simply inactive (SearchSuggestionService checks for an empty key).
+
+targets:
+  CloudStreamMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      # Tracked config that pulls in the untracked LocalSecrets.xcconfig;
+      # registered so xcodegen emits a proper file reference for the
+      # target's baseConfiguration (P1-7).
+      - path: Config/Secrets.xcconfig
+        type: file
+        buildPhase: none
+      - path: Resources/Assets.xcassets
+      # Staged by scripts/build_dev.sh and package_app.sh before xcodebuild;
+      # optional so the project can be generated in a fresh checkout.
+      - path: Resources/Binaries
+        type: folder
+        optional: true
+        buildPhase: resources
+      - path: Resources/tools
+        type: folder
+        optional: true
+        buildPhase: resources
+      - path: Resources/runtime
+        type: folder
+        optional: true
+        buildPhase: resources
+      - path: Resources/Frameworks
+        type: folder
+        optional: true
+        buildPhase: resources
+    # Secrets come from the tracked Secrets.xcconfig, which includes the
+    # untracked LocalSecrets.xcconfig (P1-7). XcodeGen turns configFiles
+    # entries into real baseConfigurationReferences.
+    configFiles:
+      Debug: Config/Secrets.xcconfig
+      Release: Config/Secrets.xcconfig
+    settings:
+      base:
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
+        INFOPLIST_KEY_NSHumanReadableCopyright: "GPL-3.0"
+        CODE_SIGN_ENTITLEMENTS: CloudStreamMac.entitlements
+        ENABLE_HARDENED_RUNTIME: true
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
+          - "@executable_path/../Resources/Frameworks"
+          - "@executable_path/../Resources/Binaries"
+        # Runtime search paths come from LD_RUNPATH_SEARCH_PATHS only;
+        # repeating them as -Wl,-rpath made ld warn about duplicates.
+        OTHER_LDFLAGS:
+          - "-L$(SRCROOT)/Resources/Binaries"
+          - "-lmpv"
+          - "-framework"
+          - "OpenGL"
+          - "-framework"
+          - "IOSurface"
+        OTHER_SWIFT_FLAGS:
+          - "-Xcc"
+          - "-I$(SRCROOT)/include"
+        # libmpv's supported GPU render API still requires this isolated GL bridge.
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - "GL_SILENCE_DEPRECATION=1"
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/PlayerSupport/mpv_bridge.h
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/include"
+      configs:
+        # Dev-machine convenience only — release builds fail loudly if the
+        # bundled runtime is missing instead of silently depending on Homebrew.
+        Debug:
+          LD_RUNPATH_SEARCH_PATHS:
+            - "$(inherited)"
+            - "@executable_path/../Frameworks"
+            - "@executable_path/../Resources/Frameworks"
+            - "@executable_path/../Resources/Binaries"
+            - "/opt/homebrew/opt/mpv/lib"
+          OTHER_LDFLAGS:
+            - "-L$(SRCROOT)/Resources/Binaries"
+            - "-L/opt/homebrew/opt/mpv/lib"
+            - "-lmpv"
+            - "-framework"
+            - "OpenGL"
+            - "-framework"
+            - "IOSurface"
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: CloudStream
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSSupportsAutomaticGraphicsSwitching: true
+        TMDbApiKey: "$(TMDB_API_KEY)"
+        CFBundleURLTypes:
+          - CFBundleURLName: com.lagradost.cloudstream.repository
+            CFBundleURLSchemes: [cloudstreamrepo, cloudstream, cs.repo, cs3]
+          - CFBundleURLName: com.lagradost.cloudstream.app
+            CFBundleURLSchemes: [cloudstreamapp, cloudstreamplayer]
+    preBuildScripts:
+      - name: Sync Daemon Fat Jar
+        script: |
+          set -e
+          REPO_ROOT="${SRCROOT}/.."
+          # Builds that prepared the engine explicitly (CI, package scripts)
+          # say so; Xcode then must not rebuild it behind their back.
+          if [ "${CS_ENGINE_PREPARED:-0}" = "1" ]; then
+            [ -f "${SRCROOT}/Resources/tools/daemon.jar" ] || { echo "error: CS_ENGINE_PREPARED=1 but Resources/tools/daemon.jar is missing" >&2; exit 1; }
+            exit 0
+          fi
+          if [ -f "${REPO_ROOT}/gradlew" ]; then
+            "${REPO_ROOT}/gradlew" -p "${REPO_ROOT}" :engine:jar --console=plain -q
+            mkdir -p "${SRCROOT}/Resources/tools"
+            cp -f "${REPO_ROOT}/engine/build/libs/daemon.jar" "${SRCROOT}/Resources/tools/daemon.jar"
+          fi
+        basedOnDependencyAnalysis: false
+    postBuildScripts:
+      - name: Stage Native Frameworks
+        script: |
+          bash "${SRCROOT}/../scripts/stage_frameworks.sh" "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents"
+        basedOnDependencyAnalysis: false
+      # dist is written only by scripts/publish_artifact.sh, after the
+      # bundle is signed and verified. Xcode builds never publish.
+
+  CloudStreamMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: CloudStreamMac
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_NAME: CloudStreamMacTests
+        PRODUCT_MODULE_NAME: CloudStreamMacTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.lagradost.cloudstreammac.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/CloudStream.app/Contents/MacOS/CloudStream"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        # The app module's bridging header (mpv) is walked by the explicit
+        # module dependency scanner when tests import it.
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/include"
+
+  CloudStreamMacUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: CloudStreamMac
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_NAME: CloudStreamMacUITests
+        PRODUCT_MODULE_NAME: CloudStreamMacUITests
+        TEST_TARGET_NAME: CloudStreamMac
+
+schemes:
+  CloudStreamMac:
+    build:
+      targets:
+        CloudStreamMac: all
+    test:
+      # AppEnvironment also isolates preferences, credentials and file roots;
+      # unit hosts skip automatic services, while UI launches use a private engine.
+      environmentVariables:
+        CS_IN_MEMORY_DB: "1"
+      targets:
+        - CloudStreamMacTests
+        - CloudStreamMacUITests

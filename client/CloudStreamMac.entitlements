@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- SEC-05: Hardened Runtime, NOT App Sandbox: the app starts the bundled
+	     JRE (engine and extension workers) and ffmpeg as child processes.
+	     The bundled java is signed separately with java.entitlements (JIT);
+	     these entries apply to the app process itself.
+	     - disable-library-validation: bundled libmpv and its media libraries.
+	     - network client/server: outbound requests and the loopback engine IPC. -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+</dict>
+</plist>

@@ -1,0 +1,213 @@
+{
+  "capturedAt": "2026-09-30T11:47:03.157057+00:00",
+  "daemon": {
+    "result": "BUILD SUCCESSFUL",
+    "command": "./gradlew :macos:daemon:test --no-daemon",
+    "totals": {
+      "tests": 166,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 3,
+      "passed": 163
+    },
+    "suites": [
+      {
+        "suite": "com.lagradost.macos.ArtifactIntegrityTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.CatalogTrustTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.DaemonStateTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.DetailsMetadataTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.LinksStreamingTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.NetworkSettingsTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.PluginBridgeTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      {
+        "suite": "com.lagradost.macos.ProviderExecutorTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.ProviderTesterTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RateLimiterTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepoSignatureTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryFetchIntegrationTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryIdentityTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryJsonTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryMigrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryServiceTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 2
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryTransportTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryTrustTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.ReviewFixRegressionTest",
+        "tests": 10,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RuntimeNormalizerTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.SolveBridgeTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.StateRepositoryTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.URLSanitizerTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.VerifierJobsTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "swiftCore": {
+    "tests": 7,
+    "failures": 0,
+    "command": "bash macos/scripts/test_extensions_core.sh"
+  },
+  "native": {
+    "result": "TEST BUILD SUCCEEDED",
+    "scope": "Native app and test bundles compiled with signing disabled; UI tests not executed; final daemon-only changes followed this build."
+  },
+  "sourceSha256": {
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryService.kt": "3aa78f61585e6ffa04070a37bc08d8d9f546bebd2019a00b62943c94e37988b0",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryTransport.kt": "84a2b65dd9caa45b54368ecbce098a19f4a52634f0c3dddc668f2aa54972f071",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryContentFetcher.kt": "c344ac2c7a21ff5a3da6af14a1cc375dc30e9103b70886d419c72bc2515648df",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryJson.kt": "d407f551f43cf4bbd214996abc32037e2cc96289f032c89b3d65ae245edcaf70",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/CatalogTrust.kt": "ba7ef6ae8d6dc29eafd715b384ae1cb4e305e41f3f71bf1be03ee213ff9fccfe",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/RepoSignature.kt": "c2455adcf3e1268fd42033a1f17765787410064d77941fd414d6860400bc9b1b",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/DaemonState.kt": "607ddb2897c59041c02ae6b36c5a4877d803f5e28b19a546b9787b57a4d10bc4",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/PluginBridge.kt": "5a4a35cabac31dab340dc0aa186475ca3038d89b899f522b9959534f44373e60",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/StateRepository.kt": "265f7a9d82161946053c959b4133374e65119929665643944e5ff27546f9c297",
+    "macos/client/Sources/ViewModels/ExtensionsStore.swift": "b6d1035380f24b9aca6c2e8a68750b79781eebedc195bfef0d440bda3746ffdc",
+    "macos/client/Sources/Models/Dtos.swift": "b8a346f9d7499a45ca135795cefcb68bb356154262e612b1b9034c7112427cbe",
+    "macos/client/Sources/UI/Extensions/ExtensionsView.swift": "a00744f2a4199da793be5a9a7742a3be261714b3e14846f23fad0c443adad497"
+  },
+  "productionReady": false,
+  "notes": [
+    "Working tree includes concurrent offline/network/player work preserved by this task.",
+    "The earlier approval usage-limit failure cleared on resumption; pending transport changes were subsequently tested.",
+    "Synthetic signed catalogs use real ephemeral Ed25519 keys; local transport tests use actual TLS sockets."
+  ]
+}

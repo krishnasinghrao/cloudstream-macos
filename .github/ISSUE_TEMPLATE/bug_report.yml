@@ -1,0 +1,50 @@
+name: Bug Report
+description: Report an issue or bug in CloudStream for macOS
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please check if a similar issue has already been reported.
+        **Note:** CloudStream for macOS does not provide video content. If an issue is specific to a third-party extension, please report it to that extension's repository.
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS Version
+      description: e.g. macOS 15.0 Sequoia
+      placeholder: macOS 15.x
+    validations:
+      required: true
+  - type: input
+    id: mac-model
+    attributes:
+      label: Mac Hardware
+      description: e.g. M1 MacBook Air, M2 Mac mini, M3 Pro MacBook Pro
+      placeholder: Apple Silicon (M1/M2/M3/M4)
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can maintainers reproduce the issue?
+      placeholder: |
+        1. Open CloudStream
+        2. Navigate to ...
+        3. Click on ...
+        4. See error ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Output
+      description: Relevant logs from `~/Library/Logs/CloudStreamMac/daemon-stdout.log` (sanitize any private info).
+      render: shell

@@ -1,0 +1,69 @@
+# ---------------------------------------------------------------------------
+# CloudStream macOS
+# ---------------------------------------------------------------------------
+
+# Published builds (scripts/publish_artifact.sh)
+/dist/
+
+# Gradle
+.gradle/
+.kotlin/
+/build/
+/engine/build/
+/library/build/
+local.properties
+
+# Xcode / client build outputs and caches. client/build also holds the
+# toolchain inputs media-stack/ and vendor-jdk/, which are machine-local.
+/client/build/
+/client/.build/
+/.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcuserdatad
+*.xcresult
+*.xcarchive
+
+# Staged into the app bundle by the build scripts (no trailing slash: a
+# worktree may link these to the main checkout's copies instead)
+/client/Resources/runtime
+/client/Resources/tools
+/client/Resources/Binaries
+/client/Resources/Frameworks
+/client/Resources/media-manifest.json
+
+# Local secrets (TMDB_API_KEY etc.); Secrets.xcconfig includes it optionally
+/client/LocalSecrets.xcconfig
+*.p12
+*.mobileprovision
+*.provisionprofile
+.signing/
+.env
+.env.*
+
+# Packaging
+*.dmg
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Logs and crash dumps
+*.log
+hs_err_pid*
+replay_pid*
+*.hprof
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.fleet/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*

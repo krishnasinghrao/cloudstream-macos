@@ -1,0 +1,75 @@
+{
+  "observed_at_utc": "2026-09-30T19:57:12.648349+00:00",
+  "meaning": "New characterization probes confirm unsupported behavior; existing conformance and loader tests remain green. No production fix is claimed.",
+  "total_tests": 28,
+  "suites": [
+    {
+      "suite": "com.lagradost.macos.AndroidCompatibilityAuditProbe",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp_utc": "2026-09-30T19:54:38.082Z",
+      "cases": [
+        "resource requirement is rejected before class loading with unsupported 422 over IPC",
+        "JVM context bridge discards a supplied context",
+        "context exposes null Android resources assets and system services",
+        "resource classes exist without their Android functionality",
+        "worker host lacks Android scheduling WebView and app datastore classes"
+      ]
+    },
+    {
+      "suite": "com.lagradost.macos.RuntimeAuditProbe",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp_utc": "2026-09-30T19:54:40.910Z",
+      "cases": [
+        "details ABI failure becomes a local HTTP 502",
+        "Android CloudflareKiller is absent from the JVM host",
+        "links ABI failure becomes HTTP 200 with an empty successful-looking stream",
+        "community consent cannot make a hashless extension installable",
+        "known explicit shortlink ignores the server redirect",
+        "unprefixed unknown shortcode incorrectly resolves through py md",
+        "JVM Result does not expose the DEX underscore method name",
+        "JVM webview resolution throws before any HTTP request"
+      ]
+    },
+    {
+      "suite": "com.lagradost.macos.AndroidStubConformanceTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp_utc": "2026-09-30T19:54:39.299Z",
+      "cases": [
+        "base64 wraps like Android default and decodes wrapped input",
+        "uri query parameters decode and encoding matches Android",
+        "context storage follows the configured data root and is namespaced",
+        "launch options parse strictly and fail closed",
+        "pair exposes public final fields like Android",
+        "shared preferences follow Android editor semantics and persist"
+      ]
+    },
+    {
+      "suite": "com.lagradost.macos.PluginBridgeTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp_utc": "2026-09-30T19:54:39.385Z",
+      "cases": [
+        "multi dex extension translates every dex entry",
+        "publication rollback keeps registries consistent when a generation is replaced",
+        "malformed archives fail through the exception barrier",
+        "resource dependent extensions are rejected before any code runs",
+        "android compiled extension loads with namespaced context and android descriptors",
+        "sha256 is stable and hex-encoded",
+        "android compiled provider receives its declared main-page requests in order",
+        "failing load publishes nothing and commits nothing",
+        "tampered translation cache is rebuilt from verified source before loading"
+      ]
+    }
+  ]
+}

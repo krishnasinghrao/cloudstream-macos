@@ -1,0 +1,54 @@
+finding,severity,primary_package,audit_title
+A01,P1,Q03,Worker-provided URLs are not restricted before native playback
+A02,P1,Q05,A mismatched HTTP 206 response is saved as a complete video
+A03,P1,R01,Native-player teardown contains two unsynchronized shared-state races
+A04,P1,Q03,File-menu backup commands bypass the application lock
+A05,P1,D02,Stable provider identity is lost in the library and backup pipeline
+A06,P1,D01,SwiftData failures are converted into empty data or apparently successful mutations
+A07,P1,Q02,"The bundled JRE cannot support APIs used by the Android shims, and CI rejects those references"
+A08,P1,Q02,Runtime packaging starts an engine against the developer's real data in in-process mode
+A09,P1,Q01,CI and `make test-client` can report success after `xcodebuild` fails
+A10,P1,Q04,A syntactically valid backup preference can trap the application after library restore
+A11,P1,W01,Worker IPC writes can block before deadlines and before forced shutdown are armed
+A12,P2,W02,Worker startup reservations and streaming-search bounds are ineffective
+A13,P2,L01,Restart spawns the replacement before the previous engine releases its data lock
+A14,P2,L01,Crash recovery has no backoff and can turn safe mode off on the next crash
+A15,P2,L01,A live engine that misses the startup deadline is left permanently unmanaged for health recovery
+A16,P2,L01,“Ready” and “bootstrapped” can become true before the client or providers are usable
+A17,P2,L01,Opening another main window can break the singleton engine observation
+A18,P2,D03,Profile switches do not cancel or fence profile-specific asynchronous work
+A19,P2,D05,Backup repository restore calls an API that intentionally stops working after one migration
+A20,P2,Q04,Safety backups overwrite each other within the same minute
+A21,P2,D05,"“Automatically every day” means only “when the engine bootstraps,” with one clock for all profiles"
+A22,P2,D04,Movie playback is omitted from history and watch statistics
+A23,P2,D04,"Deleted history can reappear, and its Continue Watching position is retained"
+A24,P2,D04,Continue Watching can resume the wrong episode
+A25,P2,D05,Backup merge does not implement consistent “newer wins” semantics
+A26,P2,D04,Deleting library items leaves unowned history and playback-preference records
+A27,P2,Q05,Direct resume without a validator can splice different files of identical length
+A28,P2,Q05,Direct video downloads omit separate audio tracks
+A29,P2,T01,Resuming frozen ffmpeg jobs bypasses concurrency and offline admission
+A30,P2,T01,"Download completion is not crash-consistent across rename, subtitles and database state"
+A31,P2,T01,Failed file deletion still removes the download's records
+A32,P2,N01,Poster and subtitle downloads buffer unbounded remote bodies in the main process
+A33,P2,Q06,Clearing provider credentials does not clear credentials in an already running provider
+A34,P2,R02,Native next/previous and autoplay do not use the selected episode order
+A35,P2,R02,Split-stream playback discards per-audio request headers
+A36,P2,R02,Player initialization and asynchronous command failures do not reliably reach the player state machine
+A37,P2,Q07,Discover pagination can append stale results after refresh or provider clearing
+A38,P2,D03,Cached details survive provider/engine configuration changes indefinitely
+A39,P2,D03,Spotlight can retain stale profile items and suppress retries after failure
+A40,P2,B01,The fresh-checkout client CI job does not stage its required native dependencies
+A41,P2,B01,Release publication points to the wrong DMG and does not provision signing credentials
+A42,P2,B01,Media staging does not prove dependency closure and accepts stale resources
+A43,P2,B01,Multiple build paths publish a mutable distribution app before final verification
+A44,P2,Q01,The isolated Swift test harness is broken and the key integration boundaries lack demonstrated coverage
+A45,P2,Q06,Download resolution ignores the daemon's typed retryable failures
+A46,P2,Q06,Anti-bot retries replace the provider's login cookies
+A47,P2,R02,Playback never starts the implemented extractor keepalive verifier
+A48,P3,Q07,Now Playing artwork can be applied to the wrong session
+A49,P3,Q07,Search suggestions incorrectly encode query parameter values
+A50,P3,Q07,Discover's existing-shelf merge does not deduplicate within the incoming page
+A51,P3,D05,Android backup import drops account identity before resolving conflicts
+A52,P3,Q08,The development smoke check reports failures without failing
+A53,P3,Q08,Supervisor logs overwrite old prefixes and can retain misleading stale tails

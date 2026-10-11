@@ -1,0 +1,19 @@
+{
+  "suite": "com.lagradost.macos.RuntimeAuditProbe",
+  "tests": 8,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "timestamp_utc": "2026-09-30T19:08:25.026Z",
+  "cases": [
+    "details ABI failure becomes a local HTTP 502",
+    "Android CloudflareKiller is absent from the JVM host",
+    "links ABI failure becomes HTTP 200 with an empty successful-looking stream",
+    "community consent cannot make a hashless extension installable",
+    "known explicit shortlink ignores the server redirect",
+    "unprefixed unknown shortcode incorrectly resolves through py md",
+    "JVM Result does not expose the DEX underscore method name",
+    "JVM webview resolution throws before any HTTP request"
+  ],
+  "meaning": "Passing characterization probes confirm current failures; no application repair is claimed."
+}

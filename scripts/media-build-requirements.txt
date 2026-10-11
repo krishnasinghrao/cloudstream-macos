@@ -1,0 +1,6 @@
+# Build tools for scripts/build_media_stack.sh, pinned so two builds of
+# the same sources use the same tools. Update deliberately and rebuild.
+meson==1.12.1
+ninja==1.13.2
+pkgconf==3.0.7.post0
+Jinja2==3.1.6

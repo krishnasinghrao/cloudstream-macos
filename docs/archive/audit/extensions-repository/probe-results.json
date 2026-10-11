@@ -1,0 +1,85 @@
+{
+  "name": "com.lagradost.macos.ExtensionsRepositoryAuditProbe",
+  "tests": "19",
+  "failures": "0",
+  "errors": "0",
+  "skipped": "0",
+  "cases": [
+    {
+      "name": "boot hash rejection is bypassed by fallback directory scan",
+      "passed": true
+    },
+    {
+      "name": "legacy search null is misreported as empty success",
+      "passed": true
+    },
+    {
+      "name": "status slow is dropped while revoked loaded provider keeps running",
+      "passed": true
+    },
+    {
+      "name": "load failure leaks registered provider without installed descriptor",
+      "passed": true
+    },
+    {
+      "name": "verified download returns corrupt existing equal-length file",
+      "passed": true
+    },
+    {
+      "name": "repo removal misses installed plugin absent from latest catalog",
+      "passed": true
+    },
+    {
+      "name": "install in repo B selects repo A hash when internal names collide",
+      "passed": true
+    },
+    {
+      "name": "HTTPS manifest fetches HTTP list without rejection",
+      "passed": true
+    },
+    {
+      "name": "failed replacement unloads working version and tombstones it",
+      "passed": true
+    },
+    {
+      "name": "shared preferences lose values and removal throws",
+      "passed": true
+    },
+    {
+      "name": "persisted override is ignored on plugin load",
+      "passed": true
+    },
+    {
+      "name": "home ignores provider-defined main-page requests",
+      "passed": true
+    },
+    {
+      "name": "signed manifest authenticates no plugin-list contents",
+      "passed": true
+    },
+    {
+      "name": "uninstall uses catalog hash as an unchecked filesystem path",
+      "passed": true
+    },
+    {
+      "name": "state write failure reports successful in-memory mutation",
+      "passed": true
+    },
+    {
+      "name": "simultaneous identical loads double-register providers",
+      "passed": true
+    },
+    {
+      "name": "pinned repository accepts unsigned replacement",
+      "passed": true
+    },
+    {
+      "name": "unload leaves provider in shared API mapping",
+      "passed": true
+    },
+    {
+      "name": "failed retrust destroys the old pinned key",
+      "passed": true
+    }
+  ]
+}

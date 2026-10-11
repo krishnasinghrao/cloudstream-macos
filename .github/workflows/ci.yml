@@ -1,0 +1,419 @@
+name: ci
+
+# Runs when started by hand ("Run workflow" in the Actions tab) and when a
+# release tag is pushed. macOS runner minutes are limited, so pushes and pull
+# requests do not start it. To restore automatic runs, add back:
+#   push: {branches: [main], tags: ["macos-v*"]}
+#   pull_request:
+#   schedule: [{cron: "17 3 * * *"}]   # nightly live-repository check
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Build and package DMG artifact (without publishing a release)'
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "macos-v*"
+      - "v*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The macos-15 image defaults to Xcode 16.4, whose SDK predates the macOS 26
+  # APIs the app uses and whose compiler crashes on this code base. The image
+  # also carries Xcode 26.x, so the jobs select it and still run on macOS 15,
+  # the app's minimum OS.
+  XCODE_VERSION: "26.3"
+
+jobs:
+  engine:
+    name: Engine — ABI, tests + fat jar
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # A release is published from a tag, and `package` waits for this job, so
+      # a tag that disagrees with the app version stops here, before any build.
+      - name: Release tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          version="$(awk -F'"' '/MARKETING_VERSION:/ {print $2; exit}' client/project.yml)"
+          tag="${GITHUB_REF_NAME#macos-}"
+          tag="${tag#v}"
+          if [[ -z "$version" || ( "$tag" != "$version" && "$tag" != "$version"-* ) ]]; then
+            echo "::error::Tag '${GITHUB_REF_NAME}' does not match MARKETING_VERSION '${version}' in client/project.yml (expected v${version} or v${version}-beta.N)"
+            exit 1
+          fi
+          echo "Releasing ${version} from tag ${GITHUB_REF_NAME}"
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Legacy extension APIs stay deleted (plan T2.6)
+        run: |
+          if grep -rnE 'getAllPlugins|findLoadedByInternalNameOrManifest|loadPluginFromCs3|pluginMetadataFor|isArtifactAuthorizedToLoad|catalogPluginForInstall|allKnownPlugins|markPluginRemoved|isPluginRemoved|loadedPluginsSha256OverrideForTest' engine/src/main client/Sources; then
+            echo "::error::A deleted legacy extension API is referenced again"; exit 1
+          fi
+      - name: Library ABI matches api/library.api
+        run: ./gradlew :library:checkKotlinAbi --console=plain
+      - name: Run engine tests
+        run: ./gradlew :engine:test --console=plain
+      - name: Build fat jar and SBOM
+        run: ./gradlew :engine:jar :engine:sbom --console=plain
+      - name: Host classes use only modules in the bundled runtime
+        run: |
+          python3 scripts/verify_runtime_modules.py \
+            --classes engine/build/classes/kotlin/main \
+            --script scripts/bundle_runtime.sh --jdk "$JAVA_HOME"
+      # A new advisory against a packed version fails the job until it is
+      # fixed or given a recorded decision (engine/advisory-triage.json).
+      # An unreachable advisory service is reported, not treated as clean.
+      - name: Advisories for the packed dependency versions
+        run: |
+          python3 scripts/dependency_report.py advisories engine/build/sbom/daemon.cdx.json \
+            --triage engine/advisory-triage.json --output engine/build/sbom/advisories.json
+      # Reported for review; licences that need a person are listed in
+      # docs/Dependency-Review.md and do not gate the build.
+      - name: Licences of the packed dependencies
+        continue-on-error: true
+        run: |
+          python3 scripts/dependency_report.py licenses engine/build/sbom/daemon.cdx.json \
+            --output engine/build/sbom/licenses.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: engine-jar
+          path: |
+            engine/build/libs/daemon.jar
+            engine/build/sbom/
+
+  client:
+    name: Client — Swift 6 strict concurrency + XCTest
+    if: github.event_name != 'schedule'
+    # The product targets macOS 15 on arm64, so the tests must run there:
+    # an older runner can compile the target but not execute it.
+    runs-on: macos-15
+    env:
+      CS_MEDIA_PREFIX: ${{ github.workspace }}/client/build/media-stack
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          developer_dir="/Applications/Xcode_${XCODE_VERSION}.app"
+          [[ -d "$developer_dir" ]] || { echo "::error::Xcode ${XCODE_VERSION} is not installed on this runner image"; ls /Applications | grep -i '^Xcode' || true; exit 1; }
+          sudo xcode-select -s "$developer_dir"
+          xcodebuild -version
+          swift --version
+      - name: Runner can build and run the macOS 15 arm64 target
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcodebuild -version
+          [[ "$(uname -m)" == "arm64" ]] || { echo "::error::This job needs an arm64 runner"; exit 1; }
+          major="$(sw_vers -productVersion | cut -d. -f1)"
+          (( major >= 15 )) || { echo "::error::This job needs macOS 15 or newer to execute the tests"; exit 1; }
+          xcrun --sdk macosx --show-sdk-version
+      # A vendor JDK: its jlink image is self-contained, which Homebrew's is not.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install xcodegen
+        run: brew install xcodegen
+      # libmpv/ffmpeg for the app's minimum macOS. The key covers everything
+      # that decides the result; a restored cache is still verified below.
+      - name: Cache media stack
+        id: media-cache
+        uses: actions/cache@v4
+        with:
+          path: client/build/media-stack
+          key: media-stack-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_media_stack.sh', 'scripts/media-build-requirements.txt', 'scripts/check_min_os.sh', 'client/project.yml') }}
+      - name: Build media stack
+        if: steps.media-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/media-venv"
+          "$RUNNER_TEMP/media-venv/bin/pip" install -r scripts/media-build-requirements.txt
+          PATH="$RUNNER_TEMP/media-venv/bin:$PATH" scripts/build_media_stack.sh
+      # Nothing below relies on resources that happen to be lying around: the
+      # engine jar, the runtime and the media closure are produced here, from
+      # this checkout, and each step fails if its output does not verify.
+      - name: Prepare engine jar, runtime and media closure
+        run: |
+          set -euo pipefail
+          target="$(awk -F'"' '/MACOSX_DEPLOYMENT_TARGET:/ {print $2; exit}' client/project.yml)"
+          [[ -f "$CS_MEDIA_PREFIX/media-provenance.json" ]] || { echo "::error::The media stack has no provenance record"; exit 1; }
+          scripts/check_min_os.sh --min "$target" "$CS_MEDIA_PREFIX/lib" "$CS_MEDIA_PREFIX/bin/ffmpeg"
+          ./gradlew :engine:jar :engine:sbom --console=plain
+          CS_DISTRIBUTION=1 scripts/bundle_runtime.sh engine/build/libs/daemon.jar
+          CS_MEDIA_MIN_OS="$target" scripts/bundle_media.sh
+          python3 scripts/stage_media.py check "$CS_MEDIA_PREFIX/bin/ffmpeg" "$CS_MEDIA_PREFIX/lib/libmpv.2.dylib" client/Resources
+          if otool -L client/Resources/Binaries/* client/Resources/Frameworks/*.dylib | grep -E '/opt/homebrew|/usr/local/'; then
+            echo "::error::A staged media binary links a Homebrew library"; exit 1
+          fi
+      - name: Generate Xcode project
+        working-directory: client
+        run: xcodegen generate
+      - name: Isolated extension transport and store tests
+        run: bash scripts/test_extensions_core.sh
+      - name: Isolated backup and preference validation tests
+        run: bash scripts/test_backup_core.sh
+      - name: Build, staging, publication and smoke-check regression tests
+        run: python3 -m unittest discover -s scripts/tests
+      - name: Build (Swift 6, strict concurrency complete)
+        working-directory: client
+        run: |
+          set -euo pipefail
+          ../scripts/run_logged.sh build/logs/build.log \
+          xcodebuild -project CloudStreamMac.xcodeproj \
+            -scheme CloudStreamMac \
+            -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/results/build.xcresult \
+            build CODE_SIGNING_ALLOWED=NO CS_ENGINE_PREPARED=1
+      # Unit tests only; UI tests need a logged-in GUI session (plan T9.2).
+      # Tests that need provisioned native fixtures skip visibly; a skip is
+      # reported in the log and is not counted as a pass.
+      - name: Unit tests
+        working-directory: client
+        run: |
+          set -euo pipefail
+          ../scripts/run_logged.sh build/logs/tests.log \
+          xcodebuild -project CloudStreamMac.xcodeproj \
+            -scheme CloudStreamMac \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData \
+            -only-testing:CloudStreamMacTests \
+            -resultBundlePath build/results/tests.xcresult \
+            test CODE_SIGNING_ALLOWED=NO CS_ENGINE_PREPARED=1
+          grep -E "Executed [0-9]+ tests" build/logs/tests.log | tail -1
+      - name: Upload build and test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-build-log
+          path: |
+            client/build/logs/**
+            client/build/results/**
+            client/build/DerivedData/Logs/**
+            client/Resources/media-manifest.json
+            client/Resources/tools/runtime-provenance.json
+            client/Resources/tools/sbom.cdx.json
+
+  live-repositories:
+    name: Nightly — live community repositories
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Live repository tests
+        env:
+          CS_LIVE_REPO_TESTS: "1"
+        run: ./gradlew :engine:test --tests 'com.lagradost.macos.RepositoryServiceTest' --console=plain
+      - name: Open an issue on failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Nightly live repository check failed ($(date -u +%F))" \
+            --body "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  package:
+    name: Package — signed, notarized DMG
+    if: startsWith(github.ref, 'refs/tags/macos-v') || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.package)
+    needs: [engine, client]
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      CS_MEDIA_PREFIX: ${{ github.workspace }}/client/build/media-stack
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure keychain environment
+        run: echo "CS_SIGNING_KEYCHAIN=$RUNNER_TEMP/cloudstream-signing.keychain-db" >> "$GITHUB_ENV"
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          developer_dir="/Applications/Xcode_${XCODE_VERSION}.app"
+          [[ -d "$developer_dir" ]] || { echo "::error::Xcode ${XCODE_VERSION} is not installed on this runner image"; ls /Applications | grep -i '^Xcode' || true; exit 1; }
+          sudo xcode-select -s "$developer_dir"
+          xcodebuild -version
+          swift --version
+      - name: Runner can build and run the macOS 15 arm64 target
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcodebuild -version
+          [[ "$(uname -m)" == "arm64" ]] || { echo "::error::This job needs an arm64 runner"; exit 1; }
+          (( "$(sw_vers -productVersion | cut -d. -f1)" >= 15 )) || { echo "::error::This job needs macOS 15 or newer"; exit 1; }
+      - name: Install tooling
+        run: brew install xcodegen
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Cache media stack
+        id: media-cache
+        uses: actions/cache@v4
+        with:
+          path: client/build/media-stack
+          key: media-stack-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_media_stack.sh', 'scripts/media-build-requirements.txt', 'scripts/check_min_os.sh', 'client/project.yml') }}
+      - name: Build media stack
+        if: steps.media-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/media-venv"
+          "$RUNNER_TEMP/media-venv/bin/pip" install -r scripts/media-build-requirements.txt
+          PATH="$RUNNER_TEMP/media-venv/bin:$PATH" scripts/build_media_stack.sh
+      - name: Generate Xcode project
+        working-directory: client
+        run: xcodegen generate
+      # Provision Apple Developer ID signing & notarization credentials if available;
+      # otherwise fall back to ad-hoc signed community DMG packaging.
+      - name: Provision signing and notarization credentials
+        id: credentials
+        env:
+          CS_CERTIFICATE_P12_BASE64: ${{ secrets.CS_CERTIFICATE_P12_BASE64 }}
+          CS_CERTIFICATE_PASSWORD: ${{ secrets.CS_CERTIFICATE_PASSWORD }}
+          CS_NOTARY_KEY_BASE64: ${{ secrets.CS_NOTARY_KEY_BASE64 }}
+          CS_NOTARY_KEY_ID: ${{ secrets.CS_NOTARY_KEY_ID }}
+          CS_NOTARY_ISSUER_ID: ${{ secrets.CS_NOTARY_ISSUER_ID }}
+          CS_SIGNING_IDENTITY: ${{ secrets.CS_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${CS_CERTIFICATE_P12_BASE64:-}" && -n "${CS_NOTARY_KEY_BASE64:-}" && -n "${CS_SIGNING_IDENTITY:-}" ]]; then
+            echo "mode=distribution" >> "$GITHUB_OUTPUT"
+            keychain_password="$(openssl rand -hex 24)"
+            security create-keychain -p "$keychain_password" "$CS_SIGNING_KEYCHAIN"
+            security set-keychain-settings -lut 21600 "$CS_SIGNING_KEYCHAIN"
+            security unlock-keychain -p "$keychain_password" "$CS_SIGNING_KEYCHAIN"
+            certificate="$RUNNER_TEMP/certificate.p12"
+            notary_key="$RUNNER_TEMP/notary.p8"
+            trap 'rm -f "$certificate" "$notary_key"' EXIT
+            printf '%s' "$CS_CERTIFICATE_P12_BASE64" | base64 --decode > "$certificate"
+            security import "$certificate" -P "$CS_CERTIFICATE_PASSWORD" -t cert -f pkcs12 -k "$CS_SIGNING_KEYCHAIN" \
+              -T /usr/bin/codesign -T /usr/bin/security > /dev/null
+            security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$CS_SIGNING_KEYCHAIN" > /dev/null
+            security list-keychains -d user -s "$CS_SIGNING_KEYCHAIN" login.keychain-db
+            security default-keychain -s "$CS_SIGNING_KEYCHAIN"
+            printf '%s' "$CS_NOTARY_KEY_BASE64" | base64 --decode > "$notary_key"
+            xcrun notarytool store-credentials cloudstream-notary --key "$notary_key" \
+              --key-id "$CS_NOTARY_KEY_ID" --issuer "$CS_NOTARY_ISSUER_ID" > /dev/null
+            security find-identity -v -p codesigning "$CS_SIGNING_KEYCHAIN" | grep -qF "$CS_SIGNING_IDENTITY" \
+              || { echo "::error::The imported certificate does not contain the configured signing identity"; exit 1; }
+          else
+            echo "::notice::Developer ID credentials not configured. Packaging ad-hoc signed community DMG."
+            echo "mode=development" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Package (sign, package DMG, verify)
+        id: package
+        env:
+          CS_SIGNING_IDENTITY: ${{ secrets.CS_SIGNING_IDENTITY }}
+          CS_KEYCHAIN_PROFILE: cloudstream-notary
+          PACKAGE_MODE: ${{ steps.credentials.outputs.mode }}
+        run: |
+          set -euo pipefail
+          if [[ "$PACKAGE_MODE" == "distribution" ]]; then
+            ./scripts/package_app.sh --distribution | tee "$RUNNER_TEMP/package.log"
+          else
+            ./scripts/package_app.sh --development | tee "$RUNNER_TEMP/package.log"
+          fi
+          dmg="$(sed -n 's/^dmg=//p' "$RUNNER_TEMP/package.log" | tail -1)"
+          generation="$(sed -n 's/^generation=//p' "$RUNNER_TEMP/package.log" | tail -1)"
+          [[ -f "$dmg" ]] || { echo "::error::Packaging did not report a DMG"; exit 1; }
+          if [[ "$PACKAGE_MODE" == "distribution" ]]; then
+            xcrun stapler validate "$dmg"
+            spctl --assess --type open --context context:primary-signature "$dmg"
+          fi
+          echo "dmg=$dmg" >> "$GITHUB_OUTPUT"
+          echo "generation=$generation" >> "$GITHUB_OUTPUT"
+      - name: Remove signing keychain
+        if: always() && steps.credentials.outputs.mode == 'distribution'
+        run: |
+          security delete-keychain "$CS_SIGNING_KEYCHAIN" || true
+          security default-keychain -s login.keychain-db || true
+      - name: Upload build metadata and inventory
+        if: always() && steps.package.outputs.generation != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-metadata
+          path: |
+            ${{ steps.package.outputs.generation }}/BUILD_INFO.json
+            ${{ steps.package.outputs.generation }}/native-inventory.json
+            ${{ steps.package.outputs.generation }}/provenance/**
+      - name: Compute DMG checksum
+        id: checksum
+        run: |
+          set -euo pipefail
+          dmg="${{ steps.package.outputs.dmg }}"
+          dmg_dir="$(dirname "$dmg")"
+          dmg_name="$(basename "$dmg")"
+          ( cd "$dmg_dir" && shasum -a 256 "$dmg_name" > "${dmg_name}.sha256" )
+          echo "SHA256 Checksum:"
+          cat "$dmg_dir/${dmg_name}.sha256"
+          echo "sha256=$dmg_dir/${dmg_name}.sha256" >> "$GITHUB_OUTPUT"
+      - name: Upload DMG artifact
+        if: always() && steps.package.outputs.dmg != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: CloudStream-DMG
+          path: |
+            ${{ steps.package.outputs.dmg }}
+            ${{ steps.checksum.outputs.sha256 }}
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/macos-v') || startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: CloudStream for macOS ${{ github.ref_name }}
+          files: |
+            ${{ steps.package.outputs.dmg }}
+            ${{ steps.checksum.outputs.sha256 }}
+          body: |
+            ### CloudStream for macOS (${{ github.ref_name }})
+            
+            Native macOS client for CloudStream, built with Swift 6 and modern macOS design.
+            
+            #### First Launch (macOS Gatekeeper)
+            If macOS displays a security prompt on first launch for community builds:
+            ```bash
+            xattr -cr /Applications/CloudStream.app
+            ```
+            Or right-click (`Control`-click) `CloudStream.app` in Finder and select **Open**.
+            
+            #### Verification
+            Verify downloaded disk image integrity via SHA-256:
+            ```bash
+            shasum -a 256 -c CloudStream.dmg.sha256
+            ```
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          fail_on_unmatched_files: true

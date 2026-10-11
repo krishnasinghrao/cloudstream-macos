@@ -1,0 +1,130 @@
+{
+  "totals": {
+    "tests": 79,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3
+  },
+  "suites": [
+    {
+      "name": "com.lagradost.macos.SolveBridgeTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:04.206Z",
+      "hostname": "localhost",
+      "time": "0.003"
+    },
+    {
+      "name": "com.lagradost.macos.LinksStreamingTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:01.924Z",
+      "hostname": "localhost",
+      "time": "1.867"
+    },
+    {
+      "name": "com.lagradost.macos.ProviderExecutorTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:03.845Z",
+      "hostname": "localhost",
+      "time": "0.187"
+    },
+    {
+      "name": "com.lagradost.macos.RateLimiterTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:04.032Z",
+      "hostname": "localhost",
+      "time": "0.067"
+    },
+    {
+      "name": "com.lagradost.macos.RuntimeNormalizerTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:04.204Z",
+      "hostname": "localhost",
+      "time": "0.001"
+    },
+    {
+      "name": "com.lagradost.macos.RepoSignatureTest",
+      "tests": "7",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:04.103Z",
+      "hostname": "localhost",
+      "time": "0.053"
+    },
+    {
+      "name": "com.lagradost.macos.PluginBridgeTest",
+      "tests": "9",
+      "skipped": "1",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:03.797Z",
+      "hostname": "localhost",
+      "time": "0.045"
+    },
+    {
+      "name": "com.lagradost.macos.URLSanitizerTest",
+      "tests": "14",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:04.210Z",
+      "hostname": "localhost",
+      "time": "0.001"
+    },
+    {
+      "name": "com.lagradost.macos.VerifierJobsTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:04.213Z",
+      "hostname": "localhost",
+      "time": "0.029"
+    },
+    {
+      "name": "com.lagradost.macos.RepositoryServiceTest",
+      "tests": "9",
+      "skipped": "2",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:04.157Z",
+      "hostname": "localhost",
+      "time": "0.011"
+    },
+    {
+      "name": "com.lagradost.macos.DaemonStateTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:01.872Z",
+      "hostname": "localhost",
+      "time": "0.05"
+    },
+    {
+      "name": "com.lagradost.macos.ReviewFixRegressionTest",
+      "tests": "10",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-09-30T06:00:04.170Z",
+      "hostname": "localhost",
+      "time": "0.033"
+    }
+  ]
+}

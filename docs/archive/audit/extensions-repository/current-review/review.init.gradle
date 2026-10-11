@@ -1,0 +1,10 @@
+allprojects {
+    afterEvaluate { p ->
+        if (p.path == ':macos:daemon') {
+            p.kotlin.sourceSets.getByName('test').kotlin.srcDir(p.file('../docs/audit/extensions-repository/current-review'))
+            p.tasks.withType(Test).configureEach {
+                systemProperty 'cs.cloudstream.home', p.layout.buildDirectory.dir('tmp/current-review-home').get().asFile.absolutePath
+            }
+        }
+    }
+}

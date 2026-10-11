@@ -1,0 +1,132 @@
+{
+  "host_jar": "macos/dist/CloudStream.app/Contents/Resources/tools/daemon.jar",
+  "scope": "Static constant-pool references; missing optional paths may not execute.",
+  "results": [
+    {
+      "translated_artifact": "30dc643628702d6b2fe139339e59996783c95a0c1d41efe0a31872ae4d10908b.cs3-classes.dex.jar",
+      "missing_host_class_references": [
+        "android/animation/TimeInterpolator",
+        "android/app/AlertDialog",
+        "android/app/AlertDialog$Builder",
+        "android/app/Dialog",
+        "android/content/ClipData",
+        "android/content/ClipData$Item",
+        "android/content/ClipboardManager",
+        "android/content/DialogInterface$OnClickListener",
+        "android/content/DialogInterface$OnDismissListener",
+        "android/content/Intent",
+        "android/content/res/ColorStateList",
+        "android/graphics/Color",
+        "android/graphics/Insets",
+        "android/graphics/drawable/ColorDrawable",
+        "android/graphics/drawable/Drawable",
+        "android/graphics/drawable/GradientDrawable",
+        "android/graphics/drawable/GradientDrawable$Orientation",
+        "android/graphics/drawable/StateListDrawable",
+        "android/os/Build$VERSION",
+        "android/os/Handler",
+        "android/os/Message",
+        "android/os/SystemClock",
+        "android/text/Editable",
+        "android/text/TextUtils$TruncateAt",
+        "android/text/TextWatcher",
+        "android/util/DisplayMetrics",
+        "android/util/TypedValue",
+        "android/view/KeyEvent",
+        "android/view/MotionEvent",
+        "android/view/View",
+        "android/view/View$OnApplyWindowInsetsListener",
+        "android/view/View$OnClickListener",
+        "android/view/View$OnFocusChangeListener",
+        "android/view/ViewGroup$LayoutParams",
+        "android/view/ViewParent",
+        "android/view/ViewPropertyAnimator",
+        "android/view/Window",
+        "android/view/WindowInsets",
+        "android/view/WindowInsets$Type",
+        "android/view/animation/DecelerateInterpolator",
+        "android/view/inputmethod/InputMethodManager",
+        "android/webkit/ConsoleMessage",
+        "android/webkit/CookieManager",
+        "android/webkit/ValueCallback",
+        "android/webkit/WebChromeClient",
+        "android/webkit/WebSettings",
+        "android/webkit/WebStorage",
+        "android/webkit/WebView",
+        "android/webkit/WebView$WebViewTransport",
+        "android/webkit/WebViewClient",
+        "android/widget/Button",
+        "android/widget/EditText",
+        "android/widget/FrameLayout",
+        "android/widget/FrameLayout$LayoutParams",
+        "android/widget/LinearLayout",
+        "android/widget/LinearLayout$LayoutParams",
+        "android/widget/ProgressBar",
+        "android/widget/ScrollView",
+        "android/widget/Switch",
+        "android/widget/TextView",
+        "android/widget/Toast",
+        "com/lagradost/cloudstream3/CommonActivity",
+        "com/lagradost/cloudstream3/MainActivity",
+        "com/lagradost/cloudstream3/MainActivity$Companion",
+        "com/lagradost/cloudstream3/network/CloudflareKiller",
+        "com/lagradost/cloudstream3/syncproviders/AccountManager",
+        "com/lagradost/cloudstream3/syncproviders/AccountManager$Companion",
+        "com/lagradost/cloudstream3/syncproviders/SyncAPI",
+        "com/lagradost/cloudstream3/syncproviders/SyncAPI$LibraryList",
+        "com/lagradost/cloudstream3/syncproviders/SyncAPI$LibraryMetadata",
+        "com/lagradost/cloudstream3/syncproviders/SyncRepo",
+        "com/lagradost/cloudstream3/utils/DataStore",
+        "com/lagradost/cloudstream3/utils/Event",
+        "com/lagradost/cloudstream3/utils/UiText"
+      ],
+      "kotlin_result_method_references": [
+        "constructor_impl(Ljava/lang/Object;)Ljava/lang/Object;",
+        "exceptionOrNull_impl(Ljava/lang/Object;)Ljava/lang/Throwable;",
+        "isFailure_impl(Ljava/lang/Object;)Z",
+        "unbox_impl()Ljava/lang/Object;"
+      ]
+    },
+    {
+      "translated_artifact": "507b486b195b98903b0cec0fca811c27fdff6cf200f6f94a662c64dd8abe0e59.cs3-classes.dex.jar",
+      "missing_host_class_references": [
+        "com/lagradost/cloudstream3/network/CloudflareKiller"
+      ],
+      "kotlin_result_method_references": [
+        "constructor_impl(Ljava/lang/Object;)Ljava/lang/Object;",
+        "exceptionOrNull_impl(Ljava/lang/Object;)Ljava/lang/Throwable;",
+        "isFailure_impl(Ljava/lang/Object;)Z"
+      ]
+    },
+    {
+      "translated_artifact": "52758210caa1cf0a6dc929d0f73fec5919e0ab66e5eddf6386ed30f7c771980a.cs3-classes.dex.jar",
+      "missing_host_class_references": [],
+      "kotlin_result_method_references": [
+        "constructor_impl(Ljava/lang/Object;)Ljava/lang/Object;",
+        "exceptionOrNull_impl(Ljava/lang/Object;)Ljava/lang/Throwable;",
+        "isFailure_impl(Ljava/lang/Object;)Z"
+      ]
+    },
+    {
+      "translated_artifact": "9433fd970480a53f52f3ec4b49d3213c7bda5a26b109dc80ef82cd2ec13a37a7.cs3-classes.dex.jar",
+      "missing_host_class_references": [
+        "com/lagradost/cloudstream3/network/CloudflareKiller"
+      ],
+      "kotlin_result_method_references": [
+        "box_impl(Ljava/lang/Object;)Lkotlin/Result;",
+        "constructor_impl(Ljava/lang/Object;)Ljava/lang/Object;",
+        "exceptionOrNull_impl(Ljava/lang/Object;)Ljava/lang/Throwable;",
+        "isFailure_impl(Ljava/lang/Object;)Z"
+      ]
+    },
+    {
+      "translated_artifact": "b78635ef4f2f66c134184552fe5e4956cc02ec1c5ce6d6811cccfd3747367883.cs3-classes.dex.jar",
+      "missing_host_class_references": [],
+      "kotlin_result_method_references": [
+        "constructor_impl(Ljava/lang/Object;)Ljava/lang/Object;",
+        "exceptionOrNull_impl(Ljava/lang/Object;)Ljava/lang/Throwable;",
+        "isFailure_impl(Ljava/lang/Object;)Z"
+      ]
+    }
+  ]
+}

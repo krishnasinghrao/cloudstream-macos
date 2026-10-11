@@ -1,0 +1,223 @@
+{
+  "observed_at_utc": "2026-09-30T18:58:42.061898+00:00",
+  "scope": "Public repository manifests and plugin lists only; no extension installation or media playback.",
+  "results": [
+    {
+      "name": "Hexated (SoraStream)",
+      "url": "https://codeberg.org/cloudstream/cloudstream-extensions-hexated/raw/branch/builds/repo.json",
+      "manifest_sha256": "8879d640953485f75b368f28f47ab42111bd7f1c8ec1db15158f5bd878818769",
+      "effective_url": "https://codeberg.org/cloudstream/cloudstream-extensions-hexated/raw/branch/builds/repo.json",
+      "transport": "codeberg-contents-api",
+      "signed": false,
+      "plugin_lists": [
+        "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/plugins.json"
+      ],
+      "total": 64,
+      "active": 59,
+      "active_with_sha256": 0,
+      "missing_hash": 59,
+      "other_hash_formats": [],
+      "beta_only": 0,
+      "list_errors": [],
+      "examples_without_sha256": [
+        "Anichi",
+        "Anilibria",
+        "Animasu",
+        "AnimeDekhoProvider",
+        "AnimeIndoProvider",
+        "AnimeSailProvider",
+        "Aniworld",
+        "Anroll",
+        "Cinemathek",
+        "Dizikorea"
+      ]
+    },
+    {
+      "name": "MegaRepo",
+      "url": "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/repo.json",
+      "manifest_sha256": "ec001977ef15c356758ddbfbe92c851f8f569ca2a121ab01a672c1043c98e498",
+      "effective_url": "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/repo.json",
+      "transport": "direct",
+      "signed": false,
+      "plugin_lists": [
+        "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/plugins.json"
+      ],
+      "total": 1,
+      "active": 1,
+      "active_with_sha256": 0,
+      "missing_hash": 1,
+      "other_hash_formats": [],
+      "beta_only": 0,
+      "list_errors": [],
+      "examples_without_sha256": [
+        "MegaProvider"
+      ]
+    },
+    {
+      "name": "English Providers",
+      "url": "https://codeberg.org/cloudstream/cloudstream-extensions/raw/branch/builds/repo.json",
+      "manifest_sha256": "91b693d50c40ec8fe729887ec93c89dd0d3ead3361d52fbadec4aaa7257eb662",
+      "effective_url": "https://codeberg.org/cloudstream/cloudstream-extensions/raw/branch/builds/repo.json",
+      "transport": "codeberg-contents-api",
+      "signed": false,
+      "plugin_lists": [
+        "https://codeberg.org/cloudstream/cloudstream-extensions/raw/branch/builds/plugins.json"
+      ],
+      "total": 33,
+      "active": 13,
+      "active_with_sha256": 0,
+      "missing_hash": 13,
+      "other_hash_formats": [],
+      "beta_only": 0,
+      "list_errors": [],
+      "examples_without_sha256": [
+        "AnimePaheProvider",
+        "Ask4Movie",
+        "DubbedAnimeProvider",
+        "EjaTv",
+        "IHaveNoTvProvider",
+        "KawaiifuProvider",
+        "KimCartoonProvider",
+        "MeloMovieProvider",
+        "NginxProvider",
+        "SoaptwoDayProvider"
+      ]
+    },
+    {
+      "name": "Multilingual Providers",
+      "url": "https://codeberg.org/cloudstream/cloudstream-extensions-multilingual/raw/branch/builds/repo.json",
+      "manifest_sha256": "375b92e7d9602e9494ceb65fb8aa5be2b15a0bbec22268f0c8c684680458abbf",
+      "effective_url": "https://codeberg.org/cloudstream/cloudstream-extensions-multilingual/raw/branch/builds/repo.json",
+      "transport": "codeberg-contents-api",
+      "signed": false,
+      "plugin_lists": [
+        "https://codeberg.org/cloudstream/cloudstream-extensions-multilingual/raw/branch/builds/plugins.json"
+      ],
+      "total": 56,
+      "active": 52,
+      "active_with_sha256": 0,
+      "missing_hash": 52,
+      "other_hash_formats": [],
+      "beta_only": 0,
+      "list_errors": [],
+      "examples_without_sha256": [
+        "AltadefinizioneProvider",
+        "AnimefenixProvider",
+        "AnimeflvIOProvider",
+        "AnimeflvnetProvider",
+        "AnimeSaturnProvider",
+        "AnimeWorldProvider",
+        "AniPlayProvider",
+        "CalcioStreamingProvider",
+        "CasaCinemaProvider",
+        "CineBlog01Provider"
+      ]
+    },
+    {
+      "name": "LikDev256 (Indian / Tamil)",
+      "url": "https://codeberg.org/JakeWasHere7/likdev256-tamil-providers/raw/branch/builds/repo.json",
+      "manifest_sha256": "cafbcdef6a9d6c1cabee545d5e5c42f3659a5040ddc5f2faa4a8514ea667b02f",
+      "effective_url": "https://codeberg.org/JakeWasHere7/likdev256-tamil-providers/raw/branch/builds/repo.json",
+      "transport": "codeberg-contents-api",
+      "signed": false,
+      "plugin_lists": [
+        "https://codeberg.org/JakeWasHere7/likdev256-tamil-providers/raw/branch/builds/plugins.json"
+      ],
+      "total": 16,
+      "active": 12,
+      "active_with_sha256": 0,
+      "missing_hash": 12,
+      "other_hash_formats": [],
+      "beta_only": 2,
+      "list_errors": [],
+      "examples_without_sha256": [
+        "AllMovieLandProvider",
+        "EinthusanProvider",
+        "FDMProvider",
+        "KatMoviesProvider",
+        "MadStreamProvider",
+        "MassTamilanProvider",
+        "NOXXProvider",
+        "PrivateMoviezProvider",
+        "ShowFlixProvider",
+        "TamilDhoolProvider"
+      ]
+    },
+    {
+      "name": "CNC Verse",
+      "url": "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/refs/heads/builds/CNC.json",
+      "manifest_sha256": "b08197f8947d1d7f16b8bd493d47b8731e7de4cbe7fcaaa731e3ae9e7b7fe0d8",
+      "effective_url": "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/refs/heads/builds/CNC.json",
+      "transport": "direct",
+      "signed": false,
+      "plugin_lists": [
+        "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/builds/plugins.json"
+      ],
+      "total": 36,
+      "active": 33,
+      "active_with_sha256": 33,
+      "missing_hash": 0,
+      "other_hash_formats": [],
+      "beta_only": 1,
+      "list_errors": [],
+      "examples_without_sha256": []
+    },
+    {
+      "name": "Default repository",
+      "url": "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
+      "manifest_sha256": "0d0b4659aa105e520b1809251749a647bc21a5581d4db53364520e047f2794c2",
+      "effective_url": "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
+      "transport": "direct",
+      "signed": false,
+      "plugin_lists": [
+        "https://raw.githubusercontent.com/recloudstream/extensions/builds/plugins.json"
+      ],
+      "total": 5,
+      "active": 5,
+      "active_with_sha256": 5,
+      "missing_hash": 0,
+      "other_hash_formats": [],
+      "beta_only": 0,
+      "list_errors": [],
+      "examples_without_sha256": []
+    },
+    {
+      "name": "CSX",
+      "url": "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json",
+      "manifest_sha256": "ade7e733d7089b1dda3ba65fd01cba2e22286fe6a2c14e3fae44d9ab12244517",
+      "effective_url": "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json",
+      "transport": "direct",
+      "signed": false,
+      "plugin_lists": [
+        "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/plugins.json"
+      ],
+      "total": 5,
+      "active": 5,
+      "active_with_sha256": 5,
+      "missing_hash": 0,
+      "other_hash_formats": [],
+      "beta_only": 0,
+      "list_errors": [],
+      "examples_without_sha256": []
+    },
+    {
+      "name": "Phisher",
+      "url": "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/repo.json",
+      "manifest_sha256": "6554ae029fb25d90ee2b0654fa39ef6a0a2b9676f3aa53d009e138a84af0b6a0",
+      "effective_url": "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/repo.json",
+      "transport": "direct",
+      "signed": false,
+      "plugin_lists": [
+        "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/plugins.json"
+      ],
+      "total": 85,
+      "active": 85,
+      "active_with_sha256": 85,
+      "missing_hash": 0,
+      "other_hash_formats": [],
+      "beta_only": 0,
+      "list_errors": [],
+      "examples_without_sha256": []
+    }
+  ]
+}

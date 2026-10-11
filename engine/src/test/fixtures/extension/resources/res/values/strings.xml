@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="provider_name">ResourceProvider</string>
+    <string name="greeting">Hello %1$s, page %2$d</string>
+    <string name="alias">@string/provider_name</string>
+    <string-array name="mirrors">
+        <item>alpha</item>
+        <item>@string/provider_name</item>
+    </string-array>
+    <integer-array name="sizes">
+        <item>12</item>
+        <item>24</item>
+    </integer-array>
+    <integer name="page_size">24</integer>
+    <bool name="enabled">true</bool>
+    <color name="accent">#FF112233</color>
+</resources>
