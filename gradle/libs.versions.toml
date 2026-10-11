@@ -15,7 +15,7 @@ kotlinxDatetime = "0.8.0"
 kotlinxIOCore = "0.9.1"
 kotlinxSerializationJson = "1.11.0"
 ksoup = "0.2.6"
-ktor = "3.5.0"
+ktor = "3.6.0"
 newpipeextractor = "v0.26.3"
 nicehttp = "0.4.18"
 rhino = { strictly = "1.8.1" } # The version upstream extensions are built against
