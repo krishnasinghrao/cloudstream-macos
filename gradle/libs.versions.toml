@@ -7,7 +7,7 @@ cryptography = "0.6.0"
 jacksonModuleKotlin = { strictly = "2.13.1" } # Extensions are compiled against the 2.13 ABI
 jsoup = "1.22.1"
 juniversalchardet = "2.5.0"
-kotlinGradlePlugin = "2.4.20"
+kotlinGradlePlugin = "2.4.21"
 kotlinxAtomicfu = "0.33.0"
 kotlinxCollectionsImmutable = "0.4.0"
 kotlinxCoroutines = "1.11.0"
