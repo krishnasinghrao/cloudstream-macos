@@ -11,7 +11,7 @@ plugins {
 }
 
 val ktorVersion = libs.versions.ktor.get()
-val okhttpVersion = "5.3.2"
+val okhttpVersion = "5.5.0"
 
 // What is packed into daemon.jar is locked (gradle.lockfile). A dependency
 // that resolves to another version fails the build until the lock is updated
