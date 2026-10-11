@@ -140,7 +140,7 @@ jobs:
       # that decides the result; a restored cache is still verified below.
       - name: Cache media stack
         id: media-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: client/build/media-stack
           key: media-stack-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_media_stack.sh', 'scripts/media-build-requirements.txt', 'scripts/check_min_os.sh', 'client/project.yml') }}
@@ -281,7 +281,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - name: Cache media stack
         id: media-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: client/build/media-stack
           key: media-stack-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_media_stack.sh', 'scripts/media-build-requirements.txt', 'scripts/check_min_os.sh', 'client/project.yml') }}
