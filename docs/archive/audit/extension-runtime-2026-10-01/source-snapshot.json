@@ -1,0 +1,409 @@
+{
+  "observed_at_utc": "2026-09-30T19:33:02.532106+00:00",
+  "local_git_head": "de03bd9e7c34aa61fd0a11a491cfbb528f7efcbd",
+  "upstream_comparison_commit": "d77c8564653346b1dc70339e8758a0fc76dd2819",
+  "scope": "Reviewed execution path; source files linked in the report and relevant upstream comparison files. No production source was edited by the audit.",
+  "pre_existing_modified_files": [
+    "macos/client/CloudStreamMac.xcodeproj/project.pbxproj",
+    "macos/scripts/clean.sh"
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "8afa96ef99a61bc790746f3f2f397261f7e28e0139b73042c26e098fde149eb4",
+      "bytes": 4802,
+      "lines": 111
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/CommonActivity.kt",
+      "sha256": "b72ba56791be0cf3497b6f972dea6899fde80e1b210026790c772c20eb47aaa6",
+      "bytes": 22637,
+      "lines": 606
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/network/CloudflareKiller.kt",
+      "sha256": "e835f90b8688039e91828b257ff0710ed12367c681af7ebf06e735f8832fe0c8",
+      "bytes": 4958,
+      "lines": 138
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/plugins/Plugin.kt",
+      "sha256": "ab51e108f989e183f77a97a41af4e9321ae70235b182bafaaa5df3bf814e0731",
+      "bytes": 1251,
+      "lines": 40
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/plugins/PluginManager.kt",
+      "sha256": "1ef9c8b26d39096e61c1660e7625d01063651977cb15748e0487a84f19802302",
+      "bytes": 37263,
+      "lines": 967
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/plugins/RepositoryManager.kt",
+      "sha256": "2d42fcb643d2662c5bef8971117248466b57a9d9dc67c575cd1383f180a80803",
+      "bytes": 11546,
+      "lines": 285
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/ui/APIRepository.kt",
+      "sha256": "6def175341f274c00b38e6213186df1afcce9edcf5c43142a5e32651453ae0c8",
+      "bytes": 8170,
+      "lines": 220
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/utils/DataStore.kt",
+      "sha256": "03c709f2769169a8982eb3dbc9d93c319e732efa4d2fc46913dff11af2609e53",
+      "bytes": 8222,
+      "lines": 241
+    },
+    {
+      "path": "library/src/androidMain/kotlin/com/lagradost/cloudstream3/network/WebViewResolver.android.kt",
+      "sha256": "4fec1bd15e149b99b8d80e224a91c5c8cf545b21e1d1d679a33889a902dd41f8",
+      "bytes": 12322,
+      "lines": 309
+    },
+    {
+      "path": "library/src/commonMain/kotlin/com/lagradost/cloudstream3/extractors/Filemoon.kt",
+      "sha256": "c7b96391add0416445a30e84dccac81c372328ca0b58bd032285f6059b9a3504",
+      "bytes": 3934,
+      "lines": 118
+    },
+    {
+      "path": "library/src/commonMain/kotlin/com/lagradost/cloudstream3/extractors/StreamWishExtractor.kt",
+      "sha256": "681f7c56695dde56f861de5f03cbcac6015b071f29ba25d6b821333e0825f0e2",
+      "bytes": 6898,
+      "lines": 229
+    },
+    {
+      "path": "library/src/commonMain/kotlin/com/lagradost/cloudstream3/plugins/BasePlugin.kt",
+      "sha256": "8e8bc994d3e541475b68cf122d64495753a3c44616cf4aa4131b3a52dc75a5e2",
+      "bytes": 2793,
+      "lines": 88
+    },
+    {
+      "path": "library/src/commonMain/kotlin/com/lagradost/cloudstream3/utils/ExtractorApi.kt",
+      "sha256": "0a3bf8278a365d5d51107aaf0264271c9a30a4c4b6e60b96c12e1d6985e5487b",
+      "bytes": 49087,
+      "lines": 1472
+    },
+    {
+      "path": "library/src/jvmMain/kotlin/com/lagradost/api/ContextHelper.jvm.kt",
+      "sha256": "a85da4bbc36bc774b2837012e703ac044fa03f7b14608866516d1044caad9529",
+      "bytes": 108,
+      "lines": 4
+    },
+    {
+      "path": "library/src/jvmMain/kotlin/com/lagradost/cloudstream3/network/WebViewResolver.jvm.kt",
+      "sha256": "922142009998959f4d7581f274886007cb3f3bbf7133de8338ff69bb40a3b287",
+      "bytes": 2578,
+      "lines": 74
+    },
+    {
+      "path": "macos/client/Sources/App/DaemonSupervisor.swift",
+      "sha256": "d7897d420ba172fbfa7145a0872a8d0fb995e306e65296b2b0e673c57f0d7a70",
+      "bytes": 24148,
+      "lines": 585
+    },
+    {
+      "path": "macos/client/Sources/App/ManagedExtensionPolicy.swift",
+      "sha256": "5d1f763554d308a044e89e28f21e0b3b0c4572671efda36702dd38b48c977eaf",
+      "bytes": 5771,
+      "lines": 109
+    },
+    {
+      "path": "macos/client/Sources/Services/DaemonClient.swift",
+      "sha256": "78fd3a22294a949088e0eab785104854a9efd80a114e1ca6d059ecf5e11a858d",
+      "bytes": 23859,
+      "lines": 504
+    },
+    {
+      "path": "macos/client/Sources/Services/UserPreferences.swift",
+      "sha256": "0b67358159bb9bd46e7e348dd7d91ca4354fa7c8b063d42a87d351fce0dc31a3",
+      "bytes": 21014,
+      "lines": 444
+    },
+    {
+      "path": "macos/client/Sources/Services/WebViewSolverService.swift",
+      "sha256": "9d4145266f436acb3ac51811295e6e88bcf00c2ec915ba4570bf28bcf8754782",
+      "bytes": 6143,
+      "lines": 137
+    },
+    {
+      "path": "macos/client/Sources/UI/Extensions/ExtensionsView.swift",
+      "sha256": "e1f154967a7e9cde38b4b4e797093952288b93c3b815aea3ea3d60ee24eeb202",
+      "bytes": 49624,
+      "lines": 975
+    },
+    {
+      "path": "macos/client/Sources/ViewModels/AppState.swift",
+      "sha256": "159ab67e13395137de1d3233287a2df32c7b429733a0e52dd56bf74885c3e8f6",
+      "bytes": 21213,
+      "lines": 541
+    },
+    {
+      "path": "macos/client/Sources/ViewModels/ExtensionsStore.swift",
+      "sha256": "f7801fc6cc29200107a487a0e0638066f7f8527bda7120c038bde368ab681dff",
+      "bytes": 15818,
+      "lines": 344
+    },
+    {
+      "path": "macos/client/Sources/ViewModels/PlayerViewModel.swift",
+      "sha256": "cec663b36c95c96b5470485ac575762b94162be1f360ec8c17ad370f657fb41a",
+      "bytes": 56617,
+      "lines": 1474
+    },
+    {
+      "path": "macos/daemon/build.gradle.kts",
+      "sha256": "4b65dabd13925a4012eb8bdb4696c7442a045c0857ff7015623a54d3cea139bb",
+      "bytes": 5890,
+      "lines": 133
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/android/content/Context.kt",
+      "sha256": "295a5c8f6ad00279412efdf4c4105898c28c849db85cced82022e7874118eb07",
+      "bytes": 2307,
+      "lines": 52
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/android/content/FileSharedPreferences.kt",
+      "sha256": "0146fb05685a269c54aeb1a4b2ca61ca04ce57c25972d3db96933138660b027a",
+      "bytes": 6763,
+      "lines": 131
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/android/content/SharedPreferences.kt",
+      "sha256": "475f24d0186bdfb277d02c65f502739c01108084a2053c28889672662feeb247",
+      "bytes": 1465,
+      "lines": 33
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/android/content/res/Resources.kt",
+      "sha256": "9be5abb1dc7acd50a3cacc872486a51b6ee52a481dec01426b3d4cb6ad18e4f2",
+      "bytes": 293,
+      "lines": 8
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/android/net/Uri.kt",
+      "sha256": "dac6409095fac838e71ac1b422c321caddb50dc8ea3e4d19829e82f509ec2ae9",
+      "bytes": 8547,
+      "lines": 201
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/android/os/Looper.kt",
+      "sha256": "d09377dd24a9e6a4e65c1a729715926971b0378a93046eff677c98082ba23786",
+      "bytes": 320,
+      "lines": 10
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/android/util/Base64.kt",
+      "sha256": "487edf95e8a632c3167d4729ff011fedbd5dfcb12aa0b00c44f5fa3dd6f474ec",
+      "bytes": 2608,
+      "lines": 64
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/android/util/Log.kt",
+      "sha256": "988277da9f5f7144ee354fe8e7fdcec67ec92d0ba2627e37b778fac2ed012836",
+      "bytes": 1083,
+      "lines": 34
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/android/util/Pair.kt",
+      "sha256": "607d958139962e5a77b364d6a78c1f693e8ca6f3f998ab5ea1459a2cf4ef9ff5",
+      "bytes": 706,
+      "lines": 20
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/cloudstream3/CloudStreamApp.kt",
+      "sha256": "385c5cc8b76ce4b2014ad646f25f85e8347ffebff6d15d7d114e58af729a7aca",
+      "bytes": 1031,
+      "lines": 38
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/cloudstream3/plugins/Plugin.kt",
+      "sha256": "a2c0e4889f02db89a379b2a5300dabe7a56aeaf617d4cf202e302564c029dbe4",
+      "bytes": 1312,
+      "lines": 37
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/CatalogTrust.kt",
+      "sha256": "91bdb149dbc7a29717435efe04db6fb3ad22c0bbd9c3e382bcbb44235cd0fb53",
+      "bytes": 6979,
+      "lines": 107
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/ExtensionErrors.kt",
+      "sha256": "67ff1b006495b0dd5f0b26557be6607a2a592d3d8e9d5e39795da9b59ef5a941",
+      "bytes": 3199,
+      "lines": 46
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/ExtensionRoutes.kt",
+      "sha256": "a00749341f76f2a282902a255552aa1fa37d82a699d613454d9dd92cefd49d50",
+      "bytes": 14192,
+      "lines": 295
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/InstallationManager.kt",
+      "sha256": "4d099f353fb669c5bb5463fa8f1c2e38447c18e834e0b6be337ae3579ea49072",
+      "bytes": 40114,
+      "lines": 647
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/Main.kt",
+      "sha256": "b5fcabd7143c2772c768c63937331de715624253dc138f40ad8385c9a2608511",
+      "bytes": 12080,
+      "lines": 270
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/MediaRoutes.kt",
+      "sha256": "b8ccb8de4e0d52733eb98a001a4d55f5ed8fa656cbb59e8db0465a6148ce4dc0",
+      "bytes": 20421,
+      "lines": 481
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/NetworkSetup.kt",
+      "sha256": "5818d50a0f97bee129ede1ac139f299b5338dd2a8312b9bba094bf76e75ebb03",
+      "bytes": 4535,
+      "lines": 110
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/NewPipeBridge.kt",
+      "sha256": "1ee8d4d3212adcdd44a745f500302f4a6ee9b42a7c085a75129c2170f164c7ef",
+      "bytes": 2605,
+      "lines": 63
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/PluginBridge.kt",
+      "sha256": "8ea5779a4b3b795a4f26ed771de8be54d39ce21b78e6dd40fb0ad44efe55ba59",
+      "bytes": 21761,
+      "lines": 401
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/ProviderExecutor.kt",
+      "sha256": "dd9f17aee87ab6936b1130cfd2eb563c5c3e6c771936c1fec5b25e5018070ef5",
+      "bytes": 31981,
+      "lines": 650
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryContentFetcher.kt",
+      "sha256": "c344ac2c7a21ff5a3da6af14a1cc375dc30e9103b70886d419c72bc2515648df",
+      "bytes": 2975,
+      "lines": 48
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryService.kt",
+      "sha256": "d82ea133b76752193cfbfc89d7e2c430cf5ecf840393a7b17508cad8799b67bd",
+      "bytes": 42516,
+      "lines": 722
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryTransport.kt",
+      "sha256": "84a2b65dd9caa45b54368ecbce098a19f4a52634f0c3dddc668f2aa54972f071",
+      "bytes": 10983,
+      "lines": 199
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/SolveBridge.kt",
+      "sha256": "c94d5c8f3fc7d6b8799bb484cf6cf5bb1cd8cfcaf22bce3814e3e0e892bea881",
+      "bytes": 5781,
+      "lines": 137
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/SolveInterceptor.kt",
+      "sha256": "a8312b2dfa9f2717dacade179282a6f7ccd2fc20f58902d4a534499b0cd09bc5",
+      "bytes": 3989,
+      "lines": 99
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/VerifiedClassLoader.kt",
+      "sha256": "484cfa7704e65429b8f539e2303c7e1bc01b4bd3c4a5a4abdf5c75a8bd3fd6bd",
+      "bytes": 2970,
+      "lines": 73
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/worker/WorkerClient.kt",
+      "sha256": "af18708074364c7087ef9ced50efbdeec6039d488d5da0d31a7124583c8abd6d",
+      "bytes": 9061,
+      "lines": 190
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/worker/WorkerMain.kt",
+      "sha256": "afd0c4fe448c12a72fd0f2b095e0807dcee94fcc154521f3082392f046742f6a",
+      "bytes": 9542,
+      "lines": 195
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/worker/WorkerProtocol.kt",
+      "sha256": "19962a04c10376a81e16bccfc862b63f39c8946dd7c16b874fd2ea9b99843feb",
+      "bytes": 5118,
+      "lines": 131
+    },
+    {
+      "path": "macos/daemon/src/main/kotlin/com/lagradost/macos/worker/WorkerRuntime.kt",
+      "sha256": "3c58b485e1889328e46fca0ec4fd4c44323908dce74be0c401bed85fc8495beb",
+      "bytes": 19990,
+      "lines": 404
+    },
+    {
+      "path": "macos/daemon/src/test/fixtures/extension/build.sh",
+      "sha256": "dc57d5fbdd1b6aac90f019704c62a999d45317bc01b21a62fd1568e2e5dabbb9",
+      "bytes": 2605,
+      "lines": 38
+    },
+    {
+      "path": "macos/daemon/src/test/kotlin/com/lagradost/macos/AndroidStubConformanceTest.kt",
+      "sha256": "6edcd3d3eea846ae424942b8dda66c9e5bab2217c50a48d5ef6907c85ab47a6e",
+      "bytes": 5160,
+      "lines": 87
+    },
+    {
+      "path": "macos/daemon/src/test/kotlin/com/lagradost/macos/PluginBridgeTest.kt",
+      "sha256": "bcb930a2a9f21faffca6199eaf98d392b38cfee5438c0edabb754bb5171b99d1",
+      "bytes": 7480,
+      "lines": 124
+    },
+    {
+      "path": "macos/dist/BUILD_INFO.json",
+      "sha256": "a01b9ce64e409eb2a9b7254939b7d07aed0feee4043f2dca35aa20282ac41a46",
+      "bytes": 281,
+      "lines": 11
+    },
+    {
+      "path": "macos/docs/Extensions-Remediation-Plan.md",
+      "sha256": "e5cfdded29414a8c69cc88d1340a9c41e730655bfebd802fabb556fa4514bf68",
+      "bytes": 47505,
+      "lines": 404
+    },
+    {
+      "path": "macos/scripts/test_extensions_core.sh",
+      "sha256": "dd22474cd84933168d2fb6a43c9b7cc767f49a64f8435f408e61d7202ab78d8f",
+      "bytes": 1181,
+      "lines": 19
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "macos/dist/CloudStream.app/Contents/Resources/tools/daemon.jar",
+      "sha256": "f7e66f7b19707bc1a6f26146ba4822ab3345ca4db3466779590cd58a7595ae84",
+      "bytes": 32791681
+    },
+    {
+      "path": "macos/daemon/build/libs/daemon.jar",
+      "sha256": "f7e66f7b19707bc1a6f26146ba4822ab3345ca4db3466779590cd58a7595ae84",
+      "bytes": 32791681
+    }
+  ],
+  "packaged_and_build_daemon_identical": true,
+  "build_info": {
+    "appName": "CloudStream",
+    "buildType": "Release",
+    "buildDate": "2026-09-30T18:04:19Z",
+    "gitCommit": "de03bd9e",
+    "arch": "arm64",
+    "appSize": "159M",
+    "daemonJarSize": " 31M",
+    "location": "macos/dist/CloudStream.app",
+    "status": "clean, up-to-date, ready-to-run"
+  },
+  "follow_up_android_observed_at_utc": "2026-09-30T20:05:07.314284+00:00"
+}

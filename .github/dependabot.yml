@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      # Community extensions are compiled against the Jackson 2.13 and Rhino
+      # 1.8 ABIs the Android app ships (gradle/libs.versions.toml); only patch
+      # releases inside those lines are safe.
+      - dependency-name: "com.fasterxml.jackson.*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "org.mozilla:rhino"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

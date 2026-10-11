@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Ad-hoc (development) builds only: their bundled libraries carry no
+	     team identity, so the Hardened Runtime's library validation would
+	     refuse them. A Developer ID build signs every library with one team
+	     and its tools keep library validation (no entitlements). -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

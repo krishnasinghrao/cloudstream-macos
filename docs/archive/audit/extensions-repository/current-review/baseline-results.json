@@ -1,0 +1,204 @@
+{
+  "suites": [
+    {
+      "name": "com.lagradost.macos.StateRepositoryTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.RepositoryTrustTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.SolveBridgeTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.LinksStreamingTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.ArtifactIntegrityTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.DetailsMetadataTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.RepositoryMigrationTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.ProviderExecutorTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.RateLimiterTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.RepositoryTransportTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.RuntimeNormalizerTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.CatalogTrustTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.NetworkSettingsTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.RepoSignatureTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.ProviderTesterTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.PluginBridgeTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.URLSanitizerTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.VerifierJobsTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.RepositoryJsonTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.RepositoryIdentityTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.RepositoryServiceTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.DaemonStateTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    },
+    {
+      "name": "com.lagradost.macos.ReviewFixRegressionTest",
+      "tests": 10,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failed": [
+        "getRepoPlugins flags update when loaded hash differs from pinned hash"
+      ]
+    },
+    {
+      "name": "com.lagradost.macos.RepositoryFetchIntegrationTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "failed": []
+    }
+  ],
+  "totals": {
+    "tests": 166,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 3
+  }
+}

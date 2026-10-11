@@ -1,0 +1,10 @@
+allprojects {
+    afterEvaluate { p ->
+        if (p.path == ':macos:daemon') {
+            p.kotlin.sourceSets.getByName('test').kotlin.srcDir(p.file('../docs/audit/extension-runtime-2026-10-01'))
+            p.tasks.withType(Test).configureEach {
+                systemProperty 'cs.cloudstream.home', p.layout.buildDirectory.dir('tmp/runtime-audit-home').get().asFile.absolutePath
+            }
+        }
+    }
+}

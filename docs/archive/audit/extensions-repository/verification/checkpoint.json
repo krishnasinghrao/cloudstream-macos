@@ -1,0 +1,163 @@
+{
+  "capturedAt": "2026-09-30T06:48:41.523098+00:00",
+  "daemon": {
+    "command": "./gradlew :macos:daemon:test --no-daemon",
+    "result": "passed",
+    "totals": {
+      "tests": 111,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 3,
+      "passed": 108
+    },
+    "suites": [
+      {
+        "suite": "com.lagradost.macos.ArtifactIntegrityTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.DaemonStateTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.LinksStreamingTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.PluginBridgeTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      {
+        "suite": "com.lagradost.macos.ProviderExecutorTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RateLimiterTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepoSignatureTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryIdentityTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryMigrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryServiceTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 2
+      },
+      {
+        "suite": "com.lagradost.macos.RepositoryTrustTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.ReviewFixRegressionTest",
+        "tests": 10,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.RuntimeNormalizerTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.SolveBridgeTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.StateRepositoryTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.URLSanitizerTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.lagradost.macos.VerifierJobsTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "native": {
+    "command": "xcodebuild -project macos/client/CloudStreamMac.xcodeproj -scheme CloudStreamMac -destination platform=macOS,arch=arm64 -derivedDataPath /private/tmp/cloudstream-extensions-derived build-for-testing CLOUDSTREAM_SKIP_DIST_SYNC=1 CODE_SIGNING_ALLOWED=NO",
+    "result": "TEST BUILD SUCCEEDED",
+    "scope": "App and test bundles compiled; UI tests not executed; release codesigning/notarization unverified. Native build preceded final daemon-only edits."
+  },
+  "swiftCore": {
+    "result": "6 tests passed in earlier checkpoint",
+    "command": "bash macos/scripts/test_extensions_core.sh",
+    "rerunThisCheckpoint": false
+  },
+  "sourceSha256": {
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/AtomicFiles.kt": "147434269877b08a75efa6e2bab9f4f3d40c5700cd378a0dd3b3fff11b28cc7f",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/StateRepository.kt": "265f7a9d82161946053c959b4133374e65119929665643944e5ff27546f9c297",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/DaemonState.kt": "95196c5e92c3e41afb6c992ce3039c8767289c8e6a6c506710d0d88d9054878d",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/Main.kt": "d7882023b517991b10feff2cb7ccefa8e820195d5da412a43e3b8ac1b8f14bdd",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryService.kt": "d126b4c96a37cb1a0117aa1b1ac9b09e349b64458dc2919905cdd7585e346998",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/RepoSignature.kt": "5dae25697450429b4bdf6aa5a022157a335b8fc1f870164134db4592d10434e0",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/ProviderExecutor.kt": "0a392d2ad0fd3dda941d3b70235ab98ce36f23dbd1833360908e1dd16e4ff39d",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/SolveBridge.kt": "f01ee9adcc3511344528c995cd5b820f4e115728a34af390e58c39fd90258ee0",
+    "macos/daemon/src/main/kotlin/com/lagradost/macos/SolveInterceptor.kt": "d1b9eb854bc4ad4e76ea9c4cad913831c48f79333cd3020193794557da6c96d4",
+    "macos/client/Sources/ViewModels/ExtensionsStore.swift": "991bbaed8a5363980f811f829d94374ad1d787e52304577ccdc55dde43c88ee5",
+    "macos/client/Sources/ViewModels/AppState.swift": "dec7181a74ea8539fbd938f9c2d2dab270adab63ce32d921bb3161e170b8cee3",
+    "macos/client/Sources/Services/WebViewSolverService.swift": "9d4145266f436acb3ac51811295e6e88bcf00c2ec915ba4570bf28bcf8754782",
+    "macos/client/Sources/UI/Components/OnboardingView.swift": "d20809d3f3060ff5f24ab5aabff81169aa94c23aa673a598bed37832f82f8957",
+    "macos/client/Sources/Services/DaemonClient.swift": "71924b0bd4bca092fbbc70c7518e5f2c3a38fd5be92afade04f3b75a870be6b8",
+    "macos/client/Sources/Models/Dtos.swift": "41d058ed478edece036353fede65d3e49c22a401bf5e56de1c4193fea941faf7"
+  },
+  "productionReady": false
+}

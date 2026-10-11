@@ -1,0 +1,72 @@
+{
+  "reviewed": "2026-10-09",
+  "inventory": "engine/build/sbom/daemon.cdx.json (locked by engine/gradle.lockfile)",
+  "packages": {
+    "org.jsoup:jsoup": {
+      "GHSA-pmhh-3w7g-xqp8": {
+        "decision": "not-applicable",
+        "reason": "Affects jsoup's Cleaner with custom raw-text elements. Neither the engine nor the shared library calls Jsoup.clean/Cleaner/Safelist (checked by search); jsoup is used for parsing only. Fixed in 1.23.1, which belongs to the shared catalog."
+      },
+      "GHSA-65r4-943x-97jj": {
+        "decision": "mitigated-by-isolation",
+        "reason": "Quadratic memory in jsoup's XmlTreeBuilder on deeply nested, uniquely namespaced XML. The engine does not use jsoup and the shared library never selects the XML parser (Parser.xmlParser/XmlTreeBuilder; checked by search). Reachable only if an extension parses hostile XML itself, inside an isolated, sandboxed worker under memory caps (-Xmx256m) and call timeouts, where an OutOfMemoryError ends that worker only. Fixed in 1.23.2, which belongs to the shared catalog."
+      }
+    },
+    "com.fasterxml.jackson.core:jackson-core": {
+      "GHSA-7hhh-6rmp-j9qf": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      },
+      "GHSA-h46c-h94j-95f3": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      },
+      "GHSA-r7wm-3cxj-wff9": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      }
+    },
+    "com.fasterxml.jackson.core:jackson-databind": {
+      "GHSA-3wrr-7qpf-2prh": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      },
+      "GHSA-5jmj-h7xm-6q6v": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      },
+      "GHSA-cxp5-3px4-pw24": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      },
+      "GHSA-hgj6-7826-r7m5": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      },
+      "GHSA-vvgp-rfg2-7rr6": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      },
+      "GHSA-wjgm-6hv5-3cvf": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      },
+      "GHSA-wv8q-qhhj-9h54": {
+        "decision": "mitigated-by-isolation",
+        "reason": "SEC-09: Fixed upstream only in Jackson 2.15+/2.18+. Kept on 2.13.5 to preserve ABI compatibility with community extensions compiled against the Android app's classpath. Unreachable from the daemon control plane (which uses kotlinx.serialization). Reachable only when an extension parses remote provider JSON in an isolated, sandboxed child worker process under strict memory caps (-Xmx256m, -Xss512k) and call timeouts."
+      },
+      "GHSA-gx83-3vf8-gh7j": {
+        "decision": "not-applicable",
+        "reason": "Concerns polymorphic type validators / default typing. Engine code enables neither (checked by search); an extension that did would affect only its own isolated worker."
+      },
+      "GHSA-j3rv-43j4-c7qm": {
+        "decision": "not-applicable",
+        "reason": "Concerns polymorphic type validators / default typing. Engine code enables neither (checked by search); an extension that did would affect only its own isolated worker."
+      },
+      "GHSA-rmj7-2vxq-3g9f": {
+        "decision": "not-applicable",
+        "reason": "Concerns polymorphic type validators / default typing. Engine code enables neither (checked by search); an extension that did would affect only its own isolated worker."
+      }
+    }
+  }
+}

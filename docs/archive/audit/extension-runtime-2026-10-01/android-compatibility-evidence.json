@@ -1,0 +1,289 @@
+{
+  "observed_at_utc": "2026-09-30T19:56:01.976432+00:00",
+  "scope": "Packaged host inventory and static cached-artifact inspection; no community extension code executed.",
+  "cached_manifests": [
+    {
+      "artifact": "30dc643628702d6b2fe139339e59996783c95a0c1d41efe0a31872ae4d10908b.cs3",
+      "sha256": "30dc643628702d6b2fe139339e59996783c95a0c1d41efe0a31872ae4d10908b",
+      "manifest": {
+        "pluginClassName": "com.megix.CineStream",
+        "name": "CineStream",
+        "version": 487,
+        "requiresResources": false
+      }
+    },
+    {
+      "artifact": "507b486b195b98903b0cec0fca811c27fdff6cf200f6f94a662c64dd8abe0e59.cs3",
+      "sha256": "507b486b195b98903b0cec0fca811c27fdff6cf200f6f94a662c64dd8abe0e59",
+      "manifest": {
+        "pluginClassName": "com.megix.Bollyflix",
+        "name": "Bollyflix",
+        "version": 33,
+        "requiresResources": false
+      }
+    },
+    {
+      "artifact": "52758210caa1cf0a6dc929d0f73fec5919e0ab66e5eddf6386ed30f7c771980a.cs3",
+      "sha256": "52758210caa1cf0a6dc929d0f73fec5919e0ab66e5eddf6386ed30f7c771980a",
+      "manifest": {
+        "pluginClassName": "com.megix.MoviesDrive",
+        "name": "MoviesDrive",
+        "version": 33,
+        "requiresResources": false
+      }
+    },
+    {
+      "artifact": "9433fd970480a53f52f3ec4b49d3213c7bda5a26b109dc80ef82cd2ec13a37a7.cs3",
+      "sha256": "9433fd970480a53f52f3ec4b49d3213c7bda5a26b109dc80ef82cd2ec13a37a7",
+      "manifest": {
+        "pluginClassName": "com.megix.Moviesmod",
+        "name": "Moviesmod",
+        "version": 33,
+        "requiresResources": false
+      }
+    },
+    {
+      "artifact": "b78635ef4f2f66c134184552fe5e4956cc02ec1c5ce6d6811cccfd3747367883.cs3",
+      "sha256": "b78635ef4f2f66c134184552fe5e4956cc02ec1c5ce6d6811cccfd3747367883",
+      "manifest": {
+        "pluginClassName": "com.megix.VegaMovies",
+        "name": "VegaMovies",
+        "version": 82,
+        "requiresResources": false
+      }
+    }
+  ],
+  "packaged_android_classes": [
+    "android/content/Context",
+    "android/content/Context$Companion",
+    "android/content/FileSharedPreferences",
+    "android/content/FileSharedPreferences$Companion",
+    "android/content/FileSharedPreferences$EditorImpl",
+    "android/content/SharedPreferences",
+    "android/content/SharedPreferences$Editor",
+    "android/content/SharedPreferences$OnSharedPreferenceChangeListener",
+    "android/content/res/AssetManager",
+    "android/content/res/Resources",
+    "android/net/Uri",
+    "android/net/Uri$Builder",
+    "android/net/Uri$Companion",
+    "android/net/Uri$Companion$parse$2",
+    "android/net/Uri$Impl",
+    "android/net/Uri$Impl$Companion",
+    "android/os/Looper",
+    "android/os/Looper$Companion",
+    "android/util/Base64",
+    "android/util/Log",
+    "android/util/Pair",
+    "android/util/Pair$Companion"
+  ],
+  "abi_summary": [
+    {
+      "translated_artifact": "30dc643628702d6b2fe139339e59996783c95a0c1d41efe0a31872ae4d10908b.cs3-classes.dex.jar",
+      "issue_counts": {
+        "missing_class": 82,
+        "missing_method": 2
+      },
+      "missing_android_classes": 67,
+      "missing_androidx_classes": 0,
+      "missing_cloudstream_classes": [
+        "com/lagradost/cloudstream3/CommonActivity",
+        "com/lagradost/cloudstream3/MainActivity",
+        "com/lagradost/cloudstream3/MainActivity$Companion",
+        "com/lagradost/cloudstream3/network/CloudflareKiller",
+        "com/lagradost/cloudstream3/syncproviders/AccountManager",
+        "com/lagradost/cloudstream3/syncproviders/AccountManager$Companion",
+        "com/lagradost/cloudstream3/syncproviders/AuthUser",
+        "com/lagradost/cloudstream3/syncproviders/SyncAPI",
+        "com/lagradost/cloudstream3/syncproviders/SyncAPI$LibraryList",
+        "com/lagradost/cloudstream3/syncproviders/SyncAPI$LibraryMetadata",
+        "com/lagradost/cloudstream3/syncproviders/SyncRepo",
+        "com/lagradost/cloudstream3/syncproviders/providers/SimklApi",
+        "com/lagradost/cloudstream3/utils/DataStore",
+        "com/lagradost/cloudstream3/utils/Event",
+        "com/lagradost/cloudstream3/utils/UiText"
+      ]
+    },
+    {
+      "translated_artifact": "507b486b195b98903b0cec0fca811c27fdff6cf200f6f94a662c64dd8abe0e59.cs3-classes.dex.jar",
+      "issue_counts": {
+        "missing_class": 1
+      },
+      "missing_android_classes": 0,
+      "missing_androidx_classes": 0,
+      "missing_cloudstream_classes": [
+        "com/lagradost/cloudstream3/network/CloudflareKiller"
+      ]
+    },
+    {
+      "translated_artifact": "52758210caa1cf0a6dc929d0f73fec5919e0ab66e5eddf6386ed30f7c771980a.cs3-classes.dex.jar",
+      "issue_counts": {},
+      "missing_android_classes": 0,
+      "missing_androidx_classes": 0,
+      "missing_cloudstream_classes": []
+    },
+    {
+      "translated_artifact": "9433fd970480a53f52f3ec4b49d3213c7bda5a26b109dc80ef82cd2ec13a37a7.cs3-classes.dex.jar",
+      "issue_counts": {
+        "missing_class": 1
+      },
+      "missing_android_classes": 0,
+      "missing_androidx_classes": 0,
+      "missing_cloudstream_classes": [
+        "com/lagradost/cloudstream3/network/CloudflareKiller"
+      ]
+    },
+    {
+      "translated_artifact": "b78635ef4f2f66c134184552fe5e4956cc02ec1c5ce6d6811cccfd3747367883.cs3-classes.dex.jar",
+      "issue_counts": {},
+      "missing_android_classes": 0,
+      "missing_androidx_classes": 0,
+      "missing_cloudstream_classes": []
+    }
+  ],
+  "selected_cinestream_bytecode": [
+    {
+      "class": "com.megix.CineStream",
+      "method": "public void load(android.content.Context);",
+      "selected_instructions_and_exception_table": [
+        "21: invokevirtual #109                // Method com/megix/settings/Settings.initSeenProviders:()V",
+        "27: invokevirtual #120                // Method com/lagradost/cloudstream3/CloudStreamApp$Companion.getContext:()Landroid/content/Context;",
+        "35: getstatic     #125                // Field com/lagradost/cloudstream3/utils/DataStore.INSTANCE:Lcom/lagradost/cloudstream3/utils/DataStore;",
+        "45: invokevirtual #129                // Method com/lagradost/cloudstream3/utils/DataStore.getSharedPrefs:(Landroid/content/Context;)Landroid/content/SharedPreferences;",
+        "51: invokeinterface #137,  3          // InterfaceMethod android/content/SharedPreferences.getString:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+        "309: invokevirtual #252                // Method registerMainAPI:(Lcom/lagradost/cloudstream3/MainAPI;)V",
+        "315: invokevirtual #120                // Method com/lagradost/cloudstream3/CloudStreamApp$Companion.getContext:()Landroid/content/Context;",
+        "323: getstatic     #125                // Field com/lagradost/cloudstream3/utils/DataStore.INSTANCE:Lcom/lagradost/cloudstream3/utils/DataStore;",
+        "329: invokevirtual #129                // Method com/lagradost/cloudstream3/utils/DataStore.getSharedPrefs:(Landroid/content/Context;)Landroid/content/SharedPreferences;",
+        "335: invokeinterface #137,  3          // InterfaceMethod android/content/SharedPreferences.getString:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+        "599: invokevirtual #252                // Method registerMainAPI:(Lcom/lagradost/cloudstream3/MainAPI;)V",
+        "605: invokevirtual #120                // Method com/lagradost/cloudstream3/CloudStreamApp$Companion.getContext:()Landroid/content/Context;",
+        "613: getstatic     #125                // Field com/lagradost/cloudstream3/utils/DataStore.INSTANCE:Lcom/lagradost/cloudstream3/utils/DataStore;",
+        "619: invokevirtual #129                // Method com/lagradost/cloudstream3/utils/DataStore.getSharedPrefs:(Landroid/content/Context;)Landroid/content/SharedPreferences;",
+        "626: invokeinterface #137,  3          // InterfaceMethod android/content/SharedPreferences.getString:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+        "890: invokevirtual #252                // Method registerMainAPI:(Lcom/lagradost/cloudstream3/MainAPI;)V",
+        "1405: invokevirtual #385                // Method setOpenSettings:(Lkotlin/jvm/functions/Function1;)V",
+        "Exception table:",
+        "from    to  target type",
+        "42    58   267   Class java/lang/Exception",
+        "66    70   267   Class java/lang/Exception",
+        "70    94    97   any",
+        "98   110   267   Class java/lang/Exception",
+        "110   115   267   Class java/lang/Exception",
+        "122   139   158   any",
+        "139   151   154   any",
+        "159   171   263   Class java/lang/Exception",
+        "173   180   263   Class java/lang/Exception",
+        "182   187   263   Class java/lang/Exception",
+        "191   200   223   Class kotlinx/serialization/SerializationException",
+        "191   200   219   any",
+        "200   208   215   Class kotlinx/serialization/SerializationException",
+        "200   208   211   any",
+        "224   231   263   Class java/lang/Exception",
+        "234   260   263   Class java/lang/Exception",
+        "327   342   557   Class java/lang/Exception",
+        "352   356   557   Class java/lang/Exception",
+        "356   380   383   any",
+        "384   396   557   Class java/lang/Exception",
+        "396   401   557   Class java/lang/Exception",
+        "408   419   448   any",
+        "419   425   444   any",
+        "425   437   440   any",
+        "449   461   553   Class java/lang/Exception",
+        "463   470   553   Class java/lang/Exception",
+        "472   477   553   Class java/lang/Exception",
+        "481   490   513   Class kotlinx/serialization/SerializationException",
+        "481   490   509   any",
+        "490   498   505   Class kotlinx/serialization/SerializationException",
+        "490   498   501   any",
+        "514   521   553   Class java/lang/Exception",
+        "524   550   553   Class java/lang/Exception",
+        "617   633   848   Class java/lang/Exception",
+        "643   647   848   Class java/lang/Exception",
+        "647   671   674   any",
+        "675   687   848   Class java/lang/Exception",
+        "687   692   848   Class java/lang/Exception",
+        "699   710   739   any",
+        "710   716   735   any",
+        "716   728   731   any",
+        "740   752   844   Class java/lang/Exception",
+        "754   761   844   Class java/lang/Exception",
+        "763   768   844   Class java/lang/Exception",
+        "772   781   804   Class kotlinx/serialization/SerializationException",
+        "772   781   800   any",
+        "781   789   796   Class kotlinx/serialization/SerializationException",
+        "781   789   792   any",
+        "805   812   844   Class java/lang/Exception",
+        "815   841   844   Class java/lang/Exception",
+        "}"
+      ]
+    },
+    {
+      "class": "com.megix.settings.Settings",
+      "method": "public final void initSeenProviders();",
+      "selected_instructions_and_exception_table": [
+        "public final void initSeenProviders();",
+        "104: invokevirtual #448                // Method getSeenProviders:()Ljava/util/Set;",
+        "240: invokevirtual #308                // Method com/lagradost/cloudstream3/CloudStreamApp$Companion.getContext:()Landroid/content/Context;",
+        "250: getstatic     #313                // Field com/lagradost/cloudstream3/utils/DataStore.INSTANCE:Lcom/lagradost/cloudstream3/utils/DataStore;",
+        "257: invokevirtual #317                // Method com/lagradost/cloudstream3/utils/DataStore.getSharedPrefs:(Landroid/content/Context;)Landroid/content/SharedPreferences;",
+        "265: invokeinterface #323,  3          // InterfaceMethod android/content/SharedPreferences.getString:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+        "477: new           #38                 // class com/megix/settings/Settings$initSeenProviders$lambda$1$$inlined$getKey$1",
+        "484: invokespecial #611                // Method com/megix/settings/Settings$initSeenProviders$lambda$1$$inlined$getKey$1.\"<init>\":()V",
+        "Exception table:",
+        "from    to  target type",
+        "254   261   510   Class java/lang/Exception",
+        "261   272   506   Class java/lang/Exception",
+        "282   286   506   Class java/lang/Exception",
+        "286   311   314   any",
+        "315   328   506   Class java/lang/Exception",
+        "328   334   506   Class java/lang/Exception",
+        "342   353   385   any",
+        "353   361   381   any",
+        "361   374   377   any",
+        "386   399   502   Class java/lang/Exception",
+        "402   409   502   Class java/lang/Exception",
+        "412   419   502   Class java/lang/Exception",
+        "424   435   459   Class kotlinx/serialization/SerializationException",
+        "424   435   455   any",
+        "435   444   451   Class kotlinx/serialization/SerializationException",
+        "435   444   447   any",
+        "460   467   502   Class java/lang/Exception",
+        "470   499   502   Class java/lang/Exception",
+        ""
+      ]
+    },
+    {
+      "class": "com.megix.settings.Settings",
+      "method": "public final java.util.Set<java.lang.String> getSeenProviders();",
+      "selected_instructions_and_exception_table": [
+        "public final java.util.Set<java.lang.String> getSeenProviders();",
+        "3: invokevirtual #308                // Method com/lagradost/cloudstream3/CloudStreamApp$Companion.getContext:()Landroid/content/Context;",
+        "11: getstatic     #313                // Field com/lagradost/cloudstream3/utils/DataStore.INSTANCE:Lcom/lagradost/cloudstream3/utils/DataStore;",
+        "17: invokevirtual #317                // Method com/lagradost/cloudstream3/utils/DataStore.getSharedPrefs:(Landroid/content/Context;)Landroid/content/SharedPreferences;",
+        "23: invokeinterface #323,  3          // InterfaceMethod android/content/SharedPreferences.getString:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+        "203: new           #30                 // class com/megix/settings/Settings$getSeenProviders$$inlined$getKey$1",
+        "208: invokespecial #549                // Method com/megix/settings/Settings$getSeenProviders$$inlined$getKey$1.\"<init>\":()V",
+        "Exception table:",
+        "from    to  target type",
+        "15    29   228   Class java/lang/Exception",
+        "38    42   228   Class java/lang/Exception",
+        "42    66    69   any",
+        "70    82   228   Class java/lang/Exception",
+        "82    87   228   Class java/lang/Exception",
+        "94   102   136   any",
+        "102   113   132   any",
+        "113   125   128   any",
+        "137   149   224   Class java/lang/Exception",
+        "151   158   224   Class java/lang/Exception",
+        "160   165   224   Class java/lang/Exception",
+        "169   181   188   Class kotlinx/serialization/SerializationException",
+        "169   181   184   any",
+        "189   196   224   Class java/lang/Exception",
+        "196   221   224   Class java/lang/Exception",
+        ""
+      ]
+    }
+  ],
+  "existing_runtime_logs_have_resource_unsupported_message": false
+}

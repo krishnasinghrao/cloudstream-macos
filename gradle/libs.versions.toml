@@ -1,0 +1,50 @@
+# https://docs.gradle.org/current/userguide/plugins.html#sec:version_catalog_plugin_application
+# https://docs.gradle.org/current/userguide/dependency_versions.html#sec:strict-version
+# Versions track upstream CloudStream's catalog so extensions see the same library ABI.
+[versions]
+annotation = "1.10.0"
+cryptography = "0.6.0"
+jacksonModuleKotlin = { strictly = "2.13.1" } # Extensions are compiled against the 2.13 ABI
+jsoup = "1.22.1"
+juniversalchardet = "2.5.0"
+kotlinGradlePlugin = "2.4.20"
+kotlinxAtomicfu = "0.33.0"
+kotlinxCollectionsImmutable = "0.4.0"
+kotlinxCoroutines = "1.11.0"
+kotlinxDatetime = "0.8.0"
+kotlinxIOCore = "0.9.1"
+kotlinxSerializationJson = "1.11.0"
+ksoup = "0.2.6"
+ktor = "3.5.0"
+newpipeextractor = "v0.26.3"
+nicehttp = "0.4.18"
+rhino = { strictly = "1.8.1" } # The version upstream extensions are built against
+
+[libraries]
+annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
+cryptography-core = { module = "dev.whyoleg.cryptography:cryptography-core", version.ref = "cryptography" }
+cryptography-provider-optimal = { module = "dev.whyoleg.cryptography:cryptography-provider-optimal", version.ref = "cryptography" }
+jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jacksonModuleKotlin" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+juniversalchardet = { module = "com.github.albfernandez:juniversalchardet", version.ref = "juniversalchardet" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlinGradlePlugin" }
+kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlinGradlePlugin" }
+kotlinx-atomicfu = { module = "org.jetbrains.kotlinx:atomicfu", version.ref = "kotlinxAtomicfu" }
+kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version.ref = "kotlinxCollectionsImmutable" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
+kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinxIOCore" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+ksoup = { module = "com.fleeksoft.ksoup:ksoup", version.ref = "ksoup" }
+ktor-http = { module = "io.ktor:ktor-http", version.ref = "ktor" }
+newpipeextractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version.ref = "newpipeextractor" }
+nicehttp = { module = "com.github.Blatzar:NiceHttp", version.ref = "nicehttp" }
+rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlinGradlePlugin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinGradlePlugin" }
+
+[bundles]
+cryptography = ["cryptography-core", "cryptography-provider-optimal"]

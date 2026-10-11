@@ -1,0 +1,62 @@
+{
+  "suite": {
+    "name": "com.lagradost.macos.FactCheckProbe",
+    "tests": "12",
+    "skipped": "0",
+    "failures": "0",
+    "errors": "0",
+    "timestamp": "2026-09-30T05:59:15.398Z",
+    "hostname": "localhost",
+    "time": "0.366"
+  },
+  "cases": [
+    {
+      "name": "Context ignores isolated data root but test redirects user home safely",
+      "passed": true
+    },
+    {
+      "name": "modern null incorrectly falls back to legacy success",
+      "passed": true
+    },
+    {
+      "name": "Base64 DEFAULT rejects embedded linebreaks",
+      "passed": true
+    },
+    {
+      "name": "F33 counterexample aggregate receives only status one from child syncs",
+      "passed": true
+    },
+    {
+      "name": "failed load leaves catalog installed even without loaded descriptor",
+      "passed": true
+    },
+    {
+      "name": "cache directory with cs3 suffix aborts entire boot",
+      "passed": true
+    },
+    {
+      "name": "legacy null search is invoked twice before empty success",
+      "passed": true
+    },
+    {
+      "name": "Uri percent decoding and query escaping do not follow Android semantics",
+      "passed": true
+    },
+    {
+      "name": "cookie helper accepts URLs but interceptor supplies bare host",
+      "passed": true
+    },
+    {
+      "name": "same signing key can replay an older manifest",
+      "passed": true
+    },
+    {
+      "name": "host verifier survives disable and plugin unload",
+      "passed": true
+    },
+    {
+      "name": "Android Pair exposes private fields instead of required public fields",
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "observed_at_utc": "2026-09-30T19:06:58.528767+00:00",
+  "commit": "d77c8564653346b1dc70339e8758a0fc76dd2819",
+  "commit_date": "2026-09-28T16:38:21Z",
+  "files": [
+    {
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/README.md",
+      "upstream_sha256": "8ee3d3cde9d37bddfa0c234d08ee79129d5924a051de81ec38f3cf0c79f593cd",
+      "local_sha256": "8afa96ef99a61bc790746f3f2f397261f7e28e0139b73042c26e098fde149eb4",
+      "identical": false
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/plugins/RepositoryManager.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/app/src/main/java/com/lagradost/cloudstream3/plugins/RepositoryManager.kt",
+      "upstream_sha256": "2d42fcb643d2662c5bef8971117248466b57a9d9dc67c575cd1383f180a80803",
+      "local_sha256": "2d42fcb643d2662c5bef8971117248466b57a9d9dc67c575cd1383f180a80803",
+      "identical": true
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/plugins/PluginManager.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/app/src/main/java/com/lagradost/cloudstream3/plugins/PluginManager.kt",
+      "upstream_sha256": "1ef9c8b26d39096e61c1660e7625d01063651977cb15748e0487a84f19802302",
+      "local_sha256": "1ef9c8b26d39096e61c1660e7625d01063651977cb15748e0487a84f19802302",
+      "identical": true
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/ui/APIRepository.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/app/src/main/java/com/lagradost/cloudstream3/ui/APIRepository.kt",
+      "upstream_sha256": "6def175341f274c00b38e6213186df1afcce9edcf5c43142a5e32651453ae0c8",
+      "local_sha256": "6def175341f274c00b38e6213186df1afcce9edcf5c43142a5e32651453ae0c8",
+      "identical": true
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/network/CloudflareKiller.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/app/src/main/java/com/lagradost/cloudstream3/network/CloudflareKiller.kt",
+      "upstream_sha256": "e835f90b8688039e91828b257ff0710ed12367c681af7ebf06e735f8832fe0c8",
+      "local_sha256": "e835f90b8688039e91828b257ff0710ed12367c681af7ebf06e735f8832fe0c8",
+      "identical": true
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/CommonActivity.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/app/src/main/java/com/lagradost/cloudstream3/CommonActivity.kt",
+      "upstream_sha256": "b72ba56791be0cf3497b6f972dea6899fde80e1b210026790c772c20eb47aaa6",
+      "local_sha256": "b72ba56791be0cf3497b6f972dea6899fde80e1b210026790c772c20eb47aaa6",
+      "identical": true
+    },
+    {
+      "path": "library/src/jvmMain/kotlin/com/lagradost/cloudstream3/network/WebViewResolver.jvm.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/library/src/jvmMain/kotlin/com/lagradost/cloudstream3/network/WebViewResolver.jvm.kt",
+      "upstream_sha256": "922142009998959f4d7581f274886007cb3f3bbf7133de8338ff69bb40a3b287",
+      "local_sha256": "922142009998959f4d7581f274886007cb3f3bbf7133de8338ff69bb40a3b287",
+      "identical": true
+    },
+    {
+      "path": "library/src/androidMain/kotlin/com/lagradost/cloudstream3/network/WebViewResolver.android.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/library/src/androidMain/kotlin/com/lagradost/cloudstream3/network/WebViewResolver.android.kt",
+      "upstream_sha256": "4fec1bd15e149b99b8d80e224a91c5c8cf545b21e1d1d679a33889a902dd41f8",
+      "local_sha256": "4fec1bd15e149b99b8d80e224a91c5c8cf545b21e1d1d679a33889a902dd41f8",
+      "identical": true
+    },
+    {
+      "path": "library/src/commonMain/kotlin/com/lagradost/cloudstream3/plugins/BasePlugin.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/library/src/commonMain/kotlin/com/lagradost/cloudstream3/plugins/BasePlugin.kt",
+      "upstream_sha256": "58a10ccb577b9e4bda3b9938ec4ee956fcaa66030802704d22eb60cdea57aaab",
+      "local_sha256": "8e8bc994d3e541475b68cf122d64495753a3c44616cf4aa4131b3a52dc75a5e2",
+      "identical": false
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/utils/DataStore.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/app/src/main/java/com/lagradost/cloudstream3/utils/DataStore.kt",
+      "upstream_sha256": "03c709f2769169a8982eb3dbc9d93c319e732efa4d2fc46913dff11af2609e53",
+      "local_sha256": "03c709f2769169a8982eb3dbc9d93c319e732efa4d2fc46913dff11af2609e53",
+      "observed_at_utc": "2026-09-30T19:57:12.050291+00:00",
+      "identical": true
+    },
+    {
+      "path": "app/src/main/java/com/lagradost/cloudstream3/plugins/Plugin.kt",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/d77c8564653346b1dc70339e8758a0fc76dd2819/app/src/main/java/com/lagradost/cloudstream3/plugins/Plugin.kt",
+      "upstream_sha256": "ab51e108f989e183f77a97a41af4e9321ae70235b182bafaaa5df3bf814e0731",
+      "local_sha256": "ab51e108f989e183f77a97a41af4e9321ae70235b182bafaaa5df3bf814e0731",
+      "observed_at_utc": "2026-09-30T19:57:12.508613+00:00",
+      "identical": true
+    }
+  ]
+}

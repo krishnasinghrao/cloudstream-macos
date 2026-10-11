@@ -1,0 +1,292 @@
+// Frozen schema fixture: 3389a7b095accb9eb2a673605ddafc402b0cef09
+import Foundation
+import SwiftData
+
+/// CloudStream's 5 canonical library watch states (Design.md §4.3).
+enum WatchType: Int, Codable, CaseIterable, Identifiable, Sendable {
+    case watching = 0
+    case planToWatch = 1
+    case completed = 2
+    case onHold = 3
+    case dropped = 4
+
+    var id: Int { rawValue }
+
+    var label: String {
+        switch self {
+        case .watching: return "Watching"
+        case .planToWatch: return "Plan to Watch"
+        case .completed: return "Completed"
+        case .onHold: return "On Hold"
+        case .dropped: return "Dropped"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .watching: return "play.circle"
+        case .planToWatch: return "bookmark"
+        case .completed: return "checkmark.circle"
+        case .onHold: return "pause.circle"
+        case .dropped: return "xmark.circle"
+        }
+    }
+}
+
+/// Local library + watch history persistence (SwiftData).
+@Model
+final class StoredMediaItem {
+    @Attribute(.unique) var id: String // "provider|url"
+    var title: String
+    var posterURL: String?
+    var bannerURL: String?
+    var providerName: String
+    /// Stable provider identity (IPC v4); nil for items saved by older versions.
+    var providerID: String?
+    var providerURL: String
+    var mediaType: String
+    var watchTypeRaw: Int // WatchType.rawValue; -1 = not in library
+    var isFavorite: Bool = false
+    var lastEpisodeData: String?
+    var lastSeason: Int?
+    var lastEpisode: Int?
+    var progressSeconds: Double
+    var totalDurationSeconds: Double
+    var lastUpdated: Date
+    /// When the entry entered the library ("Newest First" sort). New property
+    /// with a default — SwiftData lightweight-migrates existing stores.
+    var createdAt: Date = Date()
+    /// Episodes the provider listed at the last check (Phase 6 new-episode
+    /// badges). 0 = never checked.
+    var knownEpisodeCount: Int = 0
+    /// Episodes that appeared since the user last opened the title.
+    var newEpisodeCount: Int = 0
+    var lastEpisodeCheck: Date?
+    /// Personal note and 1–5 star rating (0 = unrated).
+    var userNote: String?
+    var userRating: Int = 0
+
+    init(
+        id: String,
+        title: String,
+        posterURL: String? = nil,
+        bannerURL: String? = nil,
+        providerName: String,
+        providerID: String? = nil,
+        providerURL: String,
+        mediaType: String,
+        watchType: WatchType? = nil,
+        isFavorite: Bool = false
+    ) {
+        self.id = id
+        self.title = title
+        self.posterURL = posterURL
+        self.bannerURL = bannerURL
+        self.providerName = providerName
+        self.providerID = providerID
+        self.providerURL = providerURL
+        self.mediaType = mediaType
+        self.watchTypeRaw = watchType?.rawValue ?? -1
+        self.isFavorite = isFavorite
+        self.progressSeconds = 0
+        self.totalDurationSeconds = 0
+        self.lastUpdated = Date()
+        self.createdAt = Date()
+    }
+
+    /// Provider reference for daemon requests: the stable ID when known.
+    @Transient var providerKey: String { providerID ?? providerName }
+
+    @Transient var watchType: WatchType? {
+        get { WatchType(rawValue: watchTypeRaw) }
+        set { watchTypeRaw = newValue?.rawValue ?? -1 }
+    }
+
+    /// nil when the total duration is unknown — a progress fraction against
+    /// an unknown length is not a fraction.
+    var displayProgress: Double? {
+        guard totalDurationSeconds > 0 else { return nil }
+        return min(1, progressSeconds / totalDurationSeconds)
+    }
+
+    /// nil when unknown; sub-minute remains render as "<1m" instead of the
+    /// dishonest "0m".
+    var remainingLabel: String? {
+        guard totalDurationSeconds > 0 else { return nil }
+        let remaining = max(0, totalDurationSeconds - progressSeconds)
+        let minutes = Int(remaining / 60)
+        if minutes == 0 { return "<1m" }
+        if minutes >= 60 {
+            return "\(minutes / 60)h \(minutes % 60)m"
+        }
+        return "\(minutes)m"
+    }
+}
+import CryptoKit
+import Foundation
+import SwiftData
+
+/// Per-episode watch history (Offline-Features-Plan Phase 1).
+///
+/// `StoredMediaItem` keeps a single denormalised resume pointer per title so
+/// Continue Watching stays a single fetch; this model records every episode's
+/// position and watched flag so the detail page can show ticks, progress bars
+/// and pick the next unwatched episode — Android's `DataStoreHelper`
+/// `video_pos_dur` / `result_watch_state` parity.
+///
+/// Schema evolution is additive-only (see docs/adr/0006): new properties must
+/// carry defaults so SwiftData lightweight-migrates existing stores.
+@Model
+final class EpisodeProgress {
+    /// `"\(itemID)|\(sha256(episodeData))"` — episode data strings can be
+    /// multi-KB JSON blobs; hashing keeps the unique index small.
+    @Attribute(.unique) var id: String
+    /// `StoredMediaItem.id` ("provider|url").
+    var itemID: String
+    var episodeData: String
+    var season: Int?
+    var episode: Int?
+    var positionSeconds: Double
+    var durationSeconds: Double
+    var watched: Bool
+    var updatedAt: Date
+
+    init(itemID: String, episodeData: String, season: Int?, episode: Int?) {
+        self.id = Self.key(itemID: itemID, episodeData: episodeData)
+        self.itemID = itemID
+        self.episodeData = episodeData
+        self.season = season
+        self.episode = episode
+        self.positionSeconds = 0
+        self.durationSeconds = 0
+        self.watched = false
+        self.updatedAt = Date()
+    }
+
+    static func key(itemID: String, episodeData: String) -> String {
+        let digest = SHA256.hash(data: Data(episodeData.utf8))
+        return itemID + "|" + digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+}
+import Foundation
+import SwiftData
+
+/// Per-title playback memory (Offline-Features-Plan Phase 4.3): the audio and
+/// subtitle languages, subtitle offset and speed chosen for a show are
+/// re-applied to its next episode, plus a user-marked intro window for
+/// "Skip Intro" on files without chapters. Additive schema (ADR 0006).
+@Model
+final class TitlePlaybackPrefs {
+    /// `StoredMediaItem.id` ("provider|url").
+    @Attribute(.unique) var itemID: String
+    var audioLanguage: String?
+    var subtitleLanguage: String?
+    /// true = user turned subtitles off for this title.
+    var subtitlesOff: Bool = false
+    var subtitleDelay: Double = 0
+    var speed: Double = 1
+    var introStart: Double?
+    var introEnd: Double?
+    var updatedAt: Date = Date()
+
+    init(itemID: String) {
+        self.itemID = itemID
+    }
+
+}
+import Foundation
+import SwiftData
+
+/// Persisted download state (plan WS-3.6): the queue survives app restarts
+/// (incomplete items re-enqueue on launch, safe because link resolution is
+/// Just-In-Time) and the "Downloaded Titles" tab reflects real files.
+@Model
+final class DownloadRecord {
+    @Attribute(.unique) var id: UUID
+    var title: String
+    var episodeLabel: String
+    var provider: String
+    /// Stable provider identity (IPC v4); nil for records made by older versions.
+    var providerID: String?
+    var episodeData: String
+    var destinationPath: String
+    /// 0=queued 1=resolving 2=downloading 3=paused 4=completed 5=failed 6=cancelled
+    var statusRaw: Int
+    var bytesWritten: Int64
+    var durationSeconds: Double?
+    var failureReason: String?
+    var createdAt: Date
+    var completedAt: Date?
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        episodeLabel: String,
+        provider: String,
+        episodeData: String,
+        destinationPath: String,
+        statusRaw: Int = 0,
+        bytesWritten: Int64 = 0,
+        durationSeconds: Double? = nil,
+        failureReason: String? = nil,
+        createdAt: Date = Date(),
+        completedAt: Date? = nil,
+        providerID: String? = nil,
+    ) {
+        self.id = id
+        self.title = title
+        self.episodeLabel = episodeLabel
+        self.provider = provider
+        self.providerID = providerID
+        self.episodeData = episodeData
+        self.destinationPath = destinationPath
+        self.statusRaw = statusRaw
+        self.bytesWritten = bytesWritten
+        self.durationSeconds = durationSeconds
+        self.failureReason = failureReason
+        self.createdAt = createdAt
+        self.completedAt = completedAt
+    }
+
+}
+
+// Frozen persistent declarations from the audited commit, deliberately built
+// as module CloudStream. Runtime-only computed helpers do not affect schema.
+@main
+struct LegacyIdentityFixture {
+    @MainActor static func main() throws {
+        let args = CommandLine.arguments
+        let url = URL(fileURLWithPath: args[2])
+        let isProfile = args[1].hasSuffix("-profile")
+        let schema = isProfile
+            ? Schema([StoredMediaItem.self, EpisodeProgress.self, TitlePlaybackPrefs.self])
+            : Schema([StoredMediaItem.self, EpisodeProgress.self, TitlePlaybackPrefs.self, DownloadRecord.self])
+        let config = ModelConfiguration(isProfile ? "CloudStreamMac-Profile-fixture" : "CloudStreamMac", schema: schema, url: url, cloudKitDatabase: .none)
+        let container = try ModelContainer(for: schema, configurations: [config])
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+        if args[1] == "create" || args[1] == "create-profile" {
+            let item = StoredMediaItem(id: "P|https://fixture.test/old", title: "Old schema title", providerName: "P", providerID: "stable-old", providerURL: "https://fixture.test/old", mediaType: "TvSeries", watchType: .watching, isFavorite: true)
+            item.userNote = "Old schema note"
+            item.userRating = 5
+            item.progressSeconds = 123
+            item.totalDurationSeconds = 1000
+            item.lastEpisodeData = "old-episode"
+            let episode = EpisodeProgress(itemID: item.id, episodeData: "old-episode", season: 1, episode: 1)
+            episode.positionSeconds = 123
+            episode.durationSeconds = 1000
+            let prefs = TitlePlaybackPrefs(itemID: item.id)
+            prefs.speed = 1.5
+            context.insert(item); context.insert(episode); context.insert(prefs)
+            if !isProfile { context.insert(DownloadRecord(title: "Shared old download", episodeLabel: "Movie", provider: "P", episodeData: "movie", destinationPath: "/fixture/video.mp4")) }
+            try context.save()
+        }
+        let items = try context.fetch(FetchDescriptor<StoredMediaItem>())
+        let episodes = try context.fetch(FetchDescriptor<EpisodeProgress>())
+        let prefs = try context.fetch(FetchDescriptor<TitlePlaybackPrefs>())
+        let downloads = isProfile ? [] : try context.fetch(FetchDescriptor<DownloadRecord>())
+        let output: [String: Any] = ["itemID": items.first?.id ?? "", "note": items.first?.userNote ?? "", "episodeOwner": episodes.first?.itemID ?? "", "speed": prefs.first?.speed ?? 0, "downloads": downloads.count]
+        print(String(decoding: try JSONSerialization.data(withJSONObject: output), as: UTF8.self))
+    }
+}
