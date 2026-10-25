@@ -2,7 +2,7 @@
 # https://docs.gradle.org/current/userguide/dependency_versions.html#sec:strict-version
 # Versions track upstream CloudStream's catalog so extensions see the same library ABI.
 [versions]
-annotation = "1.10.0"
+annotation = "1.11.0"
 cryptography = "0.6.0"
 jacksonModuleKotlin = { strictly = "2.13.1" } # Extensions are compiled against the 2.13 ABI
 jsoup = "1.22.1"
