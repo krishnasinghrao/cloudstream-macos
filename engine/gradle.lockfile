@@ -2,8 +2,8 @@
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
 # To regenerate this file, run: ./gradlew :engine:dependencies --write-locks
-androidx.annotation:annotation-jvm:1.10.0=runtimeClasspath
-androidx.annotation:annotation:1.10.0=runtimeClasspath
+androidx.annotation:annotation-jvm:1.11.0=runtimeClasspath
+androidx.annotation:annotation:1.11.0=runtimeClasspath
 co.touchlab:stately-concurrency-jvm:2.1.0=runtimeClasspath
 co.touchlab:stately-concurrency:2.1.0=runtimeClasspath
 co.touchlab:stately-strict-jvm:2.1.0=runtimeClasspath
