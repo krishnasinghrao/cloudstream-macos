@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&style=flat-square" alt="Swift 6" />
   <img src="https://img.shields.io/badge/Kotlin-JVM%2017-7F52FF?logo=kotlin&style=flat-square" alt="Kotlin 17" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-green.svg?style=flat-square" alt="License: GPL v3" /></a>
+  <a href="https://github.com/sponsors/krishnasinghrao"><img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=githubsponsors&style=flat-square" alt="Sponsor" /></a>
 </p>
 
 ---
@@ -194,6 +195,7 @@ cd client && xcodegen generate && open CloudStreamMac.xcodeproj
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests.
 
+* **Sponsor:** If you find this project valuable and would like to support ongoing development, consider [sponsoring the project on GitHub](https://github.com/sponsors/krishnasinghrao)!
 * **AI Policy:** All automated or AI-assisted contributions must adhere to [AI-POLICY.md](AI-POLICY.md).
 * **Security:** Review our threat model in [docs/Security.md](docs/Security.md) and report issues via [SECURITY.md](SECURITY.md).
 
