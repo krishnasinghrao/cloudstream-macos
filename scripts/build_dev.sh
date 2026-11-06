@@ -5,7 +5,7 @@
 #   ./scripts/build_dev.sh            build Release .app
 #   ./scripts/build_dev.sh --launch   build, then smoke-launch and verify the engine
 #
-# Requirements: full Xcode (any recent 16+/26.x) at /Applications/Xcode.app or
+# Requirements: full Xcode 26 or later at /Applications/Xcode.app or
 # selected via xcode-select. Apple Developer ID is NOT required — the app is
 # ad-hoc signed for local runs.
 set -euo pipefail

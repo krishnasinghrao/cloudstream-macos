@@ -17,6 +17,6 @@ enum LibraryPagePolicy {
     static func entryKey(pageID: String, itemID: String, episodeData: String?) -> String {
         guard let episodeData else { return pageID + "|" + itemID }
         let digest = SHA256.hash(data: Data(episodeData.utf8))
-        return pageID + "|" + itemID + "|" + digest.map { String(format: "%02x", $0) }.joined()
+        return pageID + "|" + itemID + "|" + digest.hexString
     }
 }

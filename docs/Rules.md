@@ -1,7 +1,7 @@
 # Engineering & Security Rules: CloudStream macOS
 
 ## 1. Compliance with Project AI Policy
-All code contributions and automated tools must strictly adhere to CloudStream’s root [AI-POLICY.md](https://github.com/recloudstream/cloudstream/blob/master/AI-POLICY.md):
+All code contributions and automated tools must strictly adhere to the repository's [AI-POLICY.md](../AI-POLICY.md):
 1. **Declare AI Usage:** Always disclose AI-assisted code generation in commit messages and pull requests.
 2. **Empirical Verification:** Never commit AI-generated code without verified compilation, local test execution, and end-to-end testing.
 3. **Architectural Understanding:** You must be able to explain, debug, and justify every architectural pattern, function, and configuration file submitted.
@@ -57,7 +57,7 @@ To ensure this application remains an ultra-lightweight desktop alternative to b
 * **Rendering:** per [ADR-0019](adr/0019-gpu-render-bridge.md), video renders through `CAMetalLayer` + `mpv_render_context`. The default OpenGL context draws into IOSurfaces shared with Metal; the software context is the fallback. VideoToolbox keeps hardware decoding. OpenGL usage stays confined to the C bridge required by libmpv's render API.
 
 ### 4.2 Kotlin JVM Daemon Standards
-* **Pure JVM Runtime:** The daemon runs on standard OpenJDK 17+, using CloudStream's `:library` multiplatform target.
+* **Pure JVM Runtime:** The daemon runs on standard OpenJDK 17+, using this repository's `:library` module (CloudStream's extension API, built for Kotlin/JVM).
 * **Coroutines & Non-Blocking I/O:** Every search, scrape, and link extraction call must run on `Dispatchers.IO` using structured concurrency.
 * **Reflection & Classloader Isolation:** Plugin loading via `URLClassLoader` must be wrapped in strong exception barriers (`safeAsync`, `try-catch`) so that a malformed or broken plugin never crashes the daemon.
 * **Bytecode Cache:** Pre-transpiled `.jar` files from `.cs3` must be cached by SHA-256 hash to eliminate redundant conversions.

@@ -58,7 +58,7 @@ final class EpisodeProgress {
 
     static func key(itemID: String, episodeData: String) -> String {
         let digest = SHA256.hash(data: Data(episodeData.utf8))
-        return itemID + "|" + digest.map { String(format: "%02x", $0) }.joined()
+        return itemID + "|" + digest.hexString
     }
 
     var snapshot: EpisodeProgressSnapshot {
@@ -117,7 +117,8 @@ enum WatchProgressPolicy {
 
     /// "12m left" / "1h 4m left" / "<1m left".
     static func remainingLabel(_ seconds: Double) -> String {
-        let minutes = Int(seconds / 60)
+        guard seconds.isFinite else { return "<1m left" }
+        let minutes = Int(min(max(seconds, 0) / 60, Double(Int32.max)))
         if minutes == 0 { return "<1m left" }
         if minutes >= 60 { return "\(minutes / 60)h \(minutes % 60)m left" }
         return "\(minutes)m left"
@@ -125,7 +126,8 @@ enum WatchProgressPolicy {
 
     /// "34:12" / "1:02:07".
     static func timestamp(_ seconds: Double) -> String {
-        let total = max(0, Int(seconds.rounded()))
+        // Int(_:) traps on NaN, infinity and out-of-range values.
+        let total = seconds.isFinite ? Int(min(max(seconds, 0), Double(Int32.max)).rounded()) : 0
         let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60)
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }

@@ -189,7 +189,10 @@ extension DownloadService {
         }
 
         nonisolated static func formatDuration(_ seconds: Double) -> String {
-            let total = Int(seconds)
+            // A near-zero speed sample or an unbounded duration must not trap
+            // the Double -> Int conversion (non-finite or beyond Int.max).
+            guard seconds.isFinite else { return "–" }
+            let total = Int(min(max(seconds, 0), 359_999_999))
             let hours = total / 3600
             let minutes = (total % 3600) / 60
             let secs = total % 60

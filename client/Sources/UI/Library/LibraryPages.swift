@@ -38,7 +38,7 @@ struct PageEditorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(isRename ? "Rename Page" : "New Page").font(.headline)
-            TextField("Name", text: $name, prompt: Text("Favourite Episodes"))
+            TextField("Name", text: $name, prompt: Text("Favorite Episodes"))
                 .textFieldStyle(.roundedBorder)
                 .focused($nameFocused)
                 .onSubmit(save)

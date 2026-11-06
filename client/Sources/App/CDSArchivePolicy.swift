@@ -27,11 +27,5 @@ enum CDSArchivePolicy {
         } catch { return nil }
     }
 
-    static func digest(_ url: URL) throws -> String {
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-        var hash = SHA256()
-        while let chunk = try handle.read(upToCount: 256 * 1024), !chunk.isEmpty { hash.update(data: chunk) }
-        return hash.finalize().map { String(format: "%02x", $0) }.joined()
-    }
+    static func digest(_ url: URL) throws -> String { try SHA256.hexDigest(ofFileAt: url) }
 }

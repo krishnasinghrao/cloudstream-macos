@@ -8,7 +8,7 @@ enum LibraryIdentity {
     static func remote(providerID: String, url: String) -> String {
         let framed = "\(providerID.utf8.count):\(providerID)\(url.utf8.count):\(url)"
         let digest = SHA256.hash(data: Data(framed.utf8))
-        return "remote-v2:" + digest.map { String(format: "%02x", $0) }.joined()
+        return "remote-v2:" + digest.hexString
     }
 
     static func localDownload(_ id: UUID) -> String { "local-download-v2:" + id.uuidString.lowercased() }

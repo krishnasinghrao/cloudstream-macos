@@ -94,6 +94,11 @@ The first job of a tag run fails when the tag does not match
 or reuse a published tag; if a release is wrong, delete it and ship the next
 version.
 
+The app icon set in `client/Resources/Assets.xcassets/AppIcon.appiconset` is
+generated from `Icons/Cloudstream MacOS icon.png`; after changing the artwork,
+run `swift scripts/generate-app-icon.swift` from the repository root and commit
+the regenerated images.
+
 Audit reports and source snapshots under `docs/archive/audit/` describe the recorded
 revision. Preserve them; correct current reference documentation and add a new
 record for changed decisions. Historical line numbers and paths can differ

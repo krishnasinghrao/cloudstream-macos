@@ -1,6 +1,4 @@
-import AppKit
 import Foundation
-import SwiftData
 import UserNotifications
 
 /// Just-In-Time download pipeline (Architecture.md §4.2, plan WS-3.6).

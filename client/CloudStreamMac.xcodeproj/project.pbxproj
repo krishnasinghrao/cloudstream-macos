@@ -130,6 +130,7 @@
 		B7EE7202A99C603C108770C5 /* DeepLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BFF57E0CC9659C9C008C173 /* DeepLinkRouter.swift */; };
 		B90BCB0267DD3144F1934DDD /* DaemonSupervisor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1295D9DDF2AB31510F17626A /* DaemonSupervisor.swift */; };
 		BAD5E4A525082C5811F9BCF1 /* SQLiteRecoverySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9909265A72694481463EE9B8 /* SQLiteRecoverySnapshot.swift */; };
+		BADDCE370C0956048ABA25B7 /* HexDigest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15612277EA0886D96147522B /* HexDigest.swift */; };
 		BDDEF6C962AEF6F96B037EFA /* EpisodeUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BC567E5910E2DCC0BBB88A /* EpisodeUpdateChecker.swift */; };
 		BE66CAAFD95808A6E4046DE0 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4838B72A39DB7542CFCFF63B /* OnboardingView.swift */; };
 		BF7BAEDB4C7D11799038EA13 /* WebViewSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE23DE06BA4F8CE3D5AA1C3B /* WebViewSessionService.swift */; };
@@ -206,6 +207,7 @@
 		1295D9DDF2AB31510F17626A /* DaemonSupervisor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonSupervisor.swift; sourceTree = "<group>"; };
 		14D95371C42147EACF738D23 /* ExtensionPreferencesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionPreferencesSheet.swift; sourceTree = "<group>"; };
 		153560451BD72719DFB121C3 /* DirectFileJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectFileJob.swift; sourceTree = "<group>"; };
+		15612277EA0886D96147522B /* HexDigest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HexDigest.swift; sourceTree = "<group>"; };
 		203F1E71FF8B2BF680A53824 /* ExtensionPreferenceChanges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionPreferenceChanges.swift; sourceTree = "<group>"; };
 		21C2EF94B1DA7D3332339F32 /* ProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStore.swift; sourceTree = "<group>"; };
 		22A6D24959792C9477B1BE66 /* gl_surface.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gl_surface.h; sourceTree = "<group>"; };
@@ -641,6 +643,7 @@
 				C9C1136F7379719A13A0A59B /* EngineTransport.swift */,
 				D5BC567E5910E2DCC0BBB88A /* EpisodeUpdateChecker.swift */,
 				203F1E71FF8B2BF680A53824 /* ExtensionPreferenceChanges.swift */,
+				15612277EA0886D96147522B /* HexDigest.swift */,
 				682F444D8F6C8FE1BA92BF41 /* HTMLStringSanitizer.swift */,
 				560CDE84812BE52BB0099BD5 /* LibraryStore.swift */,
 				4DCFAFAC961F130832EFF359 /* MediaResolverService.swift */,
@@ -1006,6 +1009,7 @@
 				3D78C206768BA98CC4FB2156 /* GenericPasswordKeychain.swift in Sources */,
 				879DE8A0200EDD8E5DB0EF73 /* GlobalSearch.swift in Sources */,
 				E3AD4A009E8C96D0EC7B6768 /* HTMLStringSanitizer.swift in Sources */,
+				BADDCE370C0956048ABA25B7 /* HexDigest.swift in Sources */,
 				ABE522D81C55BF372F298625 /* HistoryView.swift in Sources */,
 				CB7984A92B11675657D8322F /* HomeView.swift in Sources */,
 				85169D928181692836BC511D /* LibraryIdentity.swift in Sources */,

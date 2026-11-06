@@ -135,7 +135,7 @@ enum SQLiteRecoverySnapshot {
         defer { try? handle.close() }
         try handle.synchronize()
         let manifest = Manifest(version: 1, createdAt: Date(), sourceStore: source.lastPathComponent,
-            snapshotSHA256: try digest(destination), reason: reason, sourceStoreIdentifier: try storeIdentifier(destination))
+            snapshotSHA256: try SHA256.hexDigest(ofFileAt: destination), reason: reason, sourceStoreIdentifier: try storeIdentifier(destination))
         let manifestURL = generation.appendingPathComponent("manifest.json")
         try JSONEncoder().encode(manifest).write(to: manifestURL, options: .atomic)
         let manifestHandle = try FileHandle(forWritingTo: manifestURL)
@@ -148,7 +148,7 @@ enum SQLiteRecoverySnapshot {
 
     static func verify(_ snapshot: URL) throws {
         let manifest = try readManifest(snapshot)
-        guard manifest.version == 1, try digest(snapshot) == manifest.snapshotSHA256 else {
+        guard manifest.version == 1, try SHA256.hexDigest(ofFileAt: snapshot) == manifest.snapshotSHA256 else {
             throw Failure(detail: "Recovery copy verification failed.")
         }
         var database: OpaquePointer?
@@ -189,13 +189,5 @@ enum SQLiteRecoverySnapshot {
               String(cString: result) == "ok", sqlite3_step(statement) == SQLITE_DONE else {
             throw Failure(detail: "The recovery database did not pass its integrity check.")
         }
-    }
-
-    private static func digest(_ file: URL) throws -> String {
-        let handle = try FileHandle(forReadingFrom: file)
-        defer { try? handle.close() }
-        var hash = SHA256()
-        while let block = try handle.read(upToCount: 256 * 1024), !block.isEmpty { hash.update(data: block) }
-        return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 }

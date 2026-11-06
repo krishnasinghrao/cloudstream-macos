@@ -78,13 +78,13 @@ enum EngineHealthProbe {
             var generator = SystemRandomNumberGenerator()
             bytes = bytes.map { _ in UInt8.random(in: .min ... .max, using: &generator) }
         }
-        return bytes.map { String(format: "%02x", $0) }.joined()
+        return bytes.hexString
     }
 
     static func proof(token: String, nonce: String) -> String {
         let mac = HMAC<SHA256>.authenticationCode(for: Data("cloudstream-health-v1:\(nonce)".utf8),
                                                   using: SymmetricKey(data: Data(token.utf8)))
-        return mac.map { String(format: "%02x", $0) }.joined()
+        return mac.hexString
     }
 
     /// Constant time over equal-length hex strings.

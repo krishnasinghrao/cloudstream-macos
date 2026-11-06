@@ -19,14 +19,6 @@ import kotlin.test.assertTrue
  */
 class ProviderExecutorTest {
 
-    @Suppress("DEPRECATION_ERROR")
-    private fun movie(providerName: String, title: String): SearchResponse = MovieSearchResponse(
-        name = title,
-        url = "https://fake.example/$title",
-        apiName = providerName,
-        type = TvType.Movie,
-    )
-
     /** Modern-API provider: overrides search(query, page). */
     private class ModernApi(
         override var name: String,

@@ -6,7 +6,7 @@ suite="${1:-}"
 sources=(
     App/AppEnvironment.swift App/ManagedExtensionPolicy.swift
     Services/DaemonClient.swift Services/EngineDemand.swift Services/EngineTransport.swift
-    Services/ExtensionPreferenceChanges.swift
+    Services/ExtensionPreferenceChanges.swift Services/HexDigest.swift
     Services/Contracts/LibraryIdentity.swift Services/Contracts/DaemonServiceContracts.swift
     ViewModels/ExtensionsStore.swift
 )
