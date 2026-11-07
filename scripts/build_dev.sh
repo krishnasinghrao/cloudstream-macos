@@ -36,6 +36,8 @@ step "Building daemon fat jar"
 ( cd "$REPO_ROOT" && ./gradlew :engine:jar :engine:sbom --console=plain -q )
 
 step "Assembling jlink runtime + AppCDS"
+# A self-contained JDK (fetched once), so the build runs on every supported Mac.
+[[ -n "${CI:-}" || -n "${CS_RUNTIME_JDK:-}" ]] || "$REPO_ROOT/scripts/fetch_vendor_jdk.sh"
 "$REPO_ROOT/scripts/bundle_runtime.sh" "$REPO_ROOT/engine/build/libs/daemon.jar" > /dev/null
 echo "    runtime + tools staged"
 

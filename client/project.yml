@@ -120,6 +120,8 @@ targets:
           NSAllowsArbitraryLoads: true
         NSSupportsAutomaticGraphicsSwitching: true
         TMDbApiKey: "$(TMDB_API_KEY)"
+        # In-app updates read this repository's GitHub Releases (ADR-0007).
+        CSUpdateRepository: krishnasinghrao/cloudstream-macos
         CFBundleURLTypes:
           - CFBundleURLName: com.lagradost.cloudstream.repository
             CFBundleURLSchemes: [cloudstreamrepo, cloudstream, cs.repo, cs3]

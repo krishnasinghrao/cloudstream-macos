@@ -338,6 +338,8 @@ struct SidebarView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 Divider()
+                // Only takes space while an update needs attention.
+                SidebarUpdateRow()
                 ProfileSwitcher()
             }
         }

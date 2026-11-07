@@ -108,6 +108,10 @@ Easily add community repository URLs, browse extensions, and configure playback 
 >   xattr -cr /Applications/CloudStream.app
 >   ```
 
+### Updates
+
+From the release after 1.0.0, CloudStream updates itself. When a new version is published, a small **Update Available** row appears at the bottom of the sidebar, above your profile: choose **Download**, then **Restart** once it is ready (it also installs the next time you quit). Every download is checked against the release's checksum and code signature before it is installed. You can also use **CloudStream ▸ Check for Updates…**, or **Settings ▸ General ▸ Software Update**, where automatic checks can be turned off. Copies of 1.0.0 need to be updated by hand once.
+
 ---
 
 ## Adding Extensions
@@ -160,7 +164,8 @@ For detailed specifications, see [docs/Architecture.md](docs/Architecture.md) an
   ```bash
   brew install xcodegen
   ```
-* JDK 17 (e.g., Eclipse Temurin 17 or Homebrew OpenJDK 17)
+* JDK 17 to build the engine (e.g., Homebrew OpenJDK 17). The runtime bundled into the app is linked from Eclipse Temurin 17, which `make build` and `make package` fetch once into `client/build/vendor-jdk` (checksum-pinned, `scripts/fetch_vendor_jdk.sh`), so the app runs on every supported Mac.
+* For a disk image: the media stack built from pinned sources (`scripts/build_media_stack.sh`, once; needs `pip install -r scripts/media-build-requirements.txt` in a virtualenv). `make package` refuses to make a DMG that would only run on the build Mac.
 
 ### Build and Run
 
@@ -180,7 +185,7 @@ make run
 | `make test-client` | Runs Xcode client unit and UI tests |
 | `make test-engine` | Runs daemon unit, ABI, and sandbox isolation tests |
 | `make test-library` | Verifies library ABI stability against `library/api/library.api` |
-| `make package` | Builds and packages the signed disk image (`dist/CloudStream.dmg`) |
+| `make package` | Builds and packages a portable disk image (`dist/CloudStream.dmg`) |
 | `make clean` | Purges build outputs and DerivedData |
 
 ### Working in Xcode

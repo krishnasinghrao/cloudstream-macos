@@ -73,10 +73,19 @@ fi
 ( cd "$REPO_ROOT" && ./gradlew :engine:jar :engine:sbom --console=plain -q )
 
 step "Bundling minimal runtime (jlink + AppCDS)"
+# A self-contained JDK, so the runtime runs on every supported Mac. CI and
+# CS_RUNTIME_JDK provide their own.
+[[ -n "${CI:-}" || -n "${CS_RUNTIME_JDK:-}" ]] || "$REPO_ROOT/scripts/fetch_vendor_jdk.sh"
 "$REPO_ROOT/scripts/bundle_runtime.sh" "$REPO_ROOT/engine/build/libs/daemon.jar"
 
+# Every DMG may be installed on another Mac, so a development DMG is held to
+# the same media and closure rules as a distribution one. CS_ALLOW_NOT_PORTABLE=1
+# (development only) builds one for this Mac anyway — do not distribute it.
+ALLOW_NOT_PORTABLE=0
+[[ "$MODE" == "development" && "${CS_ALLOW_NOT_PORTABLE:-0}" == "1" ]] && ALLOW_NOT_PORTABLE=1
+
 step "Preparing media binaries"
-prepare_media "$MODE"
+if [[ "$ALLOW_NOT_PORTABLE" == "1" ]]; then prepare_media development; else prepare_media distribution; fi
 
 # --- 2. Xcode Release archive ---------------------------------------------------
 step "Generating Xcode project (xcodegen)"
@@ -116,6 +125,14 @@ sign_bundle "$APP" "$IDENTITY"
 
 step "Verifying the candidate"
 verify_bundle "$APP" "$MODE"
+if [[ "$NATIVE_CLOSURE" != "verified" ]]; then
+    if [[ "$ALLOW_NOT_PORTABLE" == "1" ]]; then
+        echo "==> WARNING: this DMG runs on this Mac only (CS_ALLOW_NOT_PORTABLE=1) — do not distribute it"
+    else
+        echo "error: a DMG must load only from its bundle (native closure: $NATIVE_CLOSURE); run scripts/fetch_vendor_jdk.sh and scripts/build_media_stack.sh" >&2
+        exit 1
+    fi
+fi
 selftest_bundle "$APP"
 if ! "$REPO_ROOT/scripts/check_min_os.sh" "$APP"; then
     if [[ "$MODE" == "development" && "${CS_ALLOW_MIN_OS_MISMATCH:-0}" == "1" ]]; then

@@ -87,6 +87,8 @@ struct SettingsView: View {
                 .tag(SettingsTab.advanced)
         }
         .frame(width: 640, height: 560)
+        // CloudStream ▸ Check for Updates… shows its result here.
+        .onChange(of: SoftwareUpdater.shared.settingsFocusRequest) { selectedTab = .general }
         // Settings can export the library and manage profiles, so it sits
         // behind the same lock as the main window (ADR-0014).
         .overlay {
@@ -107,6 +109,8 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
+            SoftwareUpdateSettingsSection()
+
             Section("Onboarding") {
                 LabeledContent("Welcome Tour") {
                     Button("Show Onboarding") {

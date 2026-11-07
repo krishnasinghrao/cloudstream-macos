@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             EpisodeUpdateChecker.shared.start(appState: AppState.shared)
             BackupService.shared.startScheduling(appState: AppState.shared)
             SpotlightIndexer.shared.scheduleReindex()
+            SoftwareUpdater.shared.start()
         }
     }
 
@@ -62,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if AppEnvironment.isUnitTestHost { return .terminateNow }
         return MainActor.assumeIsolated {
             if DownloadService.shared.hasTransfersInFlight, !Self.isSystemInitiatedQuit(), !confirmQuitDuringDownloads() {
+                SoftwareUpdater.shared.terminationCancelled()
                 return .terminateCancel
             }
             // Persist the playing episode's position before anything stops.
@@ -75,7 +77,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     alert.informativeText = "Keep CloudStream open to retry saving, or quit without saving the latest playback position.\n\n\(error.localizedDescription)"
                     alert.addButton(withTitle: "Keep Open")
                     alert.addButton(withTitle: "Quit Without Saving")
-                    guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+                    guard alert.runModal() == .alertSecondButtonReturn else {
+                        SoftwareUpdater.shared.terminationCancelled()
+                        return .terminateCancel
+                    }
                 }
             }
             // Transfers stop without changing their persisted state, so the
@@ -133,6 +138,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             guard !AppEnvironment.isUnitTestHost else { return }
             ApplicationShutdown.shared.begin()
+            // Termination is certain and the engine has been told to stop: a
+            // staged update is swapped in now (ADR-0007).
+            SoftwareUpdater.shared.installAtTermination()
         }
     }
 }
@@ -173,6 +181,11 @@ struct CloudStreamMacApp: App {
             CommandGroup(replacing: .help) {
                 Button("Keyboard Shortcuts") { navigationSession.showShortcuts = true }
                     .keyboardShortcut("/", modifiers: .command)
+            }
+
+            // App menu ▸ Check for Updates…, after About (the Mac convention).
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesCommand()
             }
 
             CommandGroup(after: .newItem) {

@@ -22,6 +22,9 @@ Internet ⇄ [app WebKit for extensions]            — solver, WebViewResolver 
                                                      addresses only); loopback/link-local blocked in WebKit
 UI ⇄ ffmpeg / libmpv                               — sanitized URLs + headers only
 Organization ⇄ app                                 — managed preferences (configuration profile)
+GitHub Releases ⇄ app updater                     — HTTPS to GitHub hosts only (redirects too); SHA-256
+                                                     from GitHub, bundle/version/signature checks, then an
+                                                     atomic swap at quit (ADR-0007)
 ```
 
 ## Extension isolation (P5, ADR-0016)
@@ -149,6 +152,7 @@ Repository HTTP uses `RepositoryTransport`: verified TLS, explicit HTTPS redirec
 5. **Logs** — extension stderr is not persisted unless `-Dcs.extensionLogs=verbose`; every engine log value is redacted at write time, and logs and engine folders are owner-only.
 6. **Keychain** — items use the data protection keychain where the build has an access group; the file-keychain fallback (ad-hoc builds) never writes into an item another process created.
 7. **Blind requests from native media consumers.** libmpv, ffmpeg and external players open the stream URLs an extension returns directly. Their protocol whitelists keep them on HTTP(S), but they can still be pointed at a LAN address; a request is sent and its answer is played or discarded, never returned to the extension. Engine-side relayed fetches and the app's artwork loader refuse local addresses.
+8. **Updates trust the GitHub repository.** An update must match GitHub's checksum and be validly signed for this app's identifier; a Developer ID build also requires the same signing team. Ad-hoc builds have no identity to pin, so anyone able to publish a release on the repository can ship them an update (ADR-0007).
 
 ## Accepted exposures
 
