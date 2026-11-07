@@ -1,10 +1,10 @@
 import SwiftUI
 
-// MARK: - 2:3 Portrait Poster Card
+// MARK: - Dimension-aware Content Card
 
-/// A poster card that fills the grid cell it is placed in (no hardcoded
-/// width — the enclosing `LazyVGrid`/shelf decides the size) and highlights
-/// on hover with a background change, not a scale jump.
+/// Grids propose the width; shelves give landscape thumbnails more room.
+/// Every foreground image is aspect-fit so thumbnail text and faces survive.
+/// Badges, selection, and progress stay attached to the artwork's bounds.
 struct PosterCard: View {
     let title: String
     let subtitle: String?
@@ -15,26 +15,28 @@ struct PosterCard: View {
     var highlightBadge: String? = nil
     /// Bulk-selection state; nil when not selecting.
     var isSelected: Bool? = nil
+    var layout: ArtworkCardLayout = .grid
+    var imageCache: ImageCache = .shared
+    var geometryHint: ArtworkGeometry? = nil
+    var onGeometry: ((ArtworkGeometry) -> Void)? = nil
+
+    @State private var artworkLoader = ArtworkLoader()
+    @Environment(\.artworkCardShape) private var shape
 
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .bottom) {
-                ZStack(alignment: .topTrailing) {
-                    // Ratio placeholder: a Color has no ideal content size, so
-                    // this defines the 2:3 box from the proposal alone. A
-                    // fill-mode image's ideal size is its full bitmap size —
-                    // sizing the box from the image blew it up to window
-                    // width inside unbounded scroll proposals.
-                    Color.clear
-                        .aspectRatio(2 / 3, contentMode: .fit)
-                        .overlay {
-                            PosterImage(url: posterURL, headers: posterHeaders)
-                        }
-                        .clipShape(.rect(cornerRadius: 10, style: .continuous))
+        let request = ArtworkRequest(url: posterURL, headers: posterHeaders)
+        let asset = artworkLoader.phase(for: request, cache: imageCache).asset
+        let geometry = asset?.geometry ?? geometryHint ?? request.flatMap { imageCache.geometry(for: $0) }
+        let ratio = shape.ratio(for: geometry, placeholder: layout.placeholderRatio)
 
+        VStack(alignment: .leading, spacing: 8) {
+            Color.clear
+                .aspectRatio(ratio, contentMode: .fit)
+                .overlay { ArtworkSurface(asset: asset, contentMode: shape.contentMode) }
+                .overlay(alignment: .topLeading) {
                     if let highlightBadge {
                         Text(highlightBadge)
                             .font(.caption2.weight(.heavy))
@@ -43,10 +45,10 @@ struct PosterCard: View {
                             .padding(.vertical, 3)
                             .background(Color.accentColor, in: Capsule())
                             .padding(7)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                             .accessibilityLabel(highlightBadge)
                     }
-
+                }
+                .overlay(alignment: .bottomTrailing) {
                     if let isSelected {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(.title2)
@@ -54,32 +56,32 @@ struct PosterCard: View {
                             .foregroundStyle(.white, isSelected ? Color.accentColor : Color.black.opacity(0.4))
                             .shadow(radius: 2)
                             .padding(8)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                             .accessibilityLabel(isSelected ? "Selected" : "Not selected")
                     }
                 }
-
-                if let fraction = progressFraction, fraction > 0 {
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Rectangle().fill(Color.black.opacity(0.55))
-                            Rectangle()
-                                .fill(Color.accentColor)
-                                .frame(width: max(4, proxy.size.width * min(1, max(0, fraction))))
+                .overlay(alignment: .bottom) {
+                    if let fraction = progressFraction, fraction > 0 {
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(Color.black.opacity(0.55))
+                                Rectangle()
+                                    .fill(Color.accentColor)
+                                    .frame(width: max(4, proxy.size.width * min(1, max(0, fraction))))
+                            }
                         }
+                        .frame(height: 3.5)
+                        .accessibilityHidden(true)
                     }
-                    .frame(height: 3.5)
-                    .clipShape(.rect(bottomLeadingRadius: 10, bottomTrailingRadius: 10, style: .continuous))
                 }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(
-                        isSelected == true ? Color.accentColor : (hovering ? Color.primary.opacity(0.25) : Color.cardBorder),
-                        lineWidth: isSelected == true ? 3 : 1,
-                    )
-            )
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: hovering)
+                .clipShape(.rect(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(
+                            isSelected == true ? Color.accentColor : (hovering ? Color.primary.opacity(0.25) : Color.cardBorder),
+                            lineWidth: isSelected == true ? 3 : 1,
+                        )
+                )
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: hovering)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -94,14 +96,26 @@ struct PosterCard: View {
                 }
             }
         }
+        .frame(width: layout.width(for: geometry), alignment: .topLeading)
+        .task(id: request) { await artworkLoader.load(request, cache: imageCache) }
+        .onChange(of: CardGeometryUpdate(request: request, geometry: asset?.geometry), initial: true) { _, update in
+            if let geometry = update.geometry { onGeometry?(geometry) }
+        }
         .contentShape(.rect(cornerRadius: 10, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityHint(subtitle ?? "")
+        // Titles are clamped to one line; the full text is a hover away.
+        .help(subtitle.map { $0.isEmpty ? title : "\(title) — \($0)" } ?? title)
         .onHover { hovering in
             self.hovering = hovering
         }
     }
+}
+
+private struct CardGeometryUpdate: Equatable {
+    let request: ArtworkRequest?
+    let geometry: ArtworkGeometry?
 }
 
 // MARK: - 16:9 Episode Card
@@ -126,7 +140,7 @@ struct EpisodeCard: View {
             // Ratio placeholder, as in PosterCard: the box comes from the proposal, not the bitmap.
             Color.clear
                 .aspectRatio(16 / 9, contentMode: .fit)
-                .overlay { PosterImage(url: thumbnailURL, placeholderIcon: "tv") }
+                .overlay { PosterImage(url: thumbnailURL, placeholderIcon: "tv", contentMode: .fit) }
                 .overlay(alignment: .bottom) {
                     if let fraction = progress?.fraction, !isWatched {
                         GeometryReader { proxy in
@@ -213,6 +227,7 @@ struct ContinueWatchingCard: View {
                 subtitle: subtitleText,
                 posterURL: item.posterURL ?? item.bannerURL,
                 progressFraction: item.displayProgress,
+                layout: .shelf(posterWidth: 168),
             )
         }
         .buttonStyle(PressFeedbackButtonStyle())
@@ -238,12 +253,7 @@ struct ContinueWatchingCard: View {
     }
 
     private var subtitleText: String? {
-        let position: String?
-        if let season = item.lastSeason, let episode = item.lastEpisode {
-            position = "S\(season):E\(episode)"
-        } else {
-            position = nil
-        }
+        let position = item.episodePositionLabel
         // Duration can be unknown (some providers) — then there is no honest
         // "left" figure to show and we render the position alone.
         switch (position, item.remainingLabel) {
@@ -254,7 +264,7 @@ struct ContinueWatchingCard: View {
         case let (nil, remaining?):
             return "\(remaining) left"
         case (nil, nil):
-            return item.mediaType
+            return MediaTypeDisplay.name(for: item.mediaType)
         }
     }
 }
@@ -270,7 +280,7 @@ struct RecentlySearchedCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                PosterImage(url: result.posterUrl, headers: result.posterHeaders)
+                PosterImage(url: result.posterUrl, headers: result.posterHeaders, contentMode: .fit)
                     .frame(width: 76, height: 46)
                     .clipShape(.rect(cornerRadius: 6, style: .continuous))
 

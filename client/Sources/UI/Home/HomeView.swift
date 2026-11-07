@@ -34,11 +34,6 @@ struct HomeView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Continue Watching")
                     .font(.title3.weight(.semibold))
-                if !items.isEmpty {
-                    Text("\(items.count)")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
                 Spacer()
             }
             .padding(.horizontal, 28)
@@ -53,7 +48,7 @@ struct HomeView: View {
                 .padding(.horizontal, 28)
             } else {
                 ScrollView(.horizontal) {
-                    LazyHStack(spacing: 16) {
+                    LazyHStack(alignment: .top, spacing: 16) {
                         ForEach(items) { item in
                             ContinueWatchingCard(
                                 item: item,
@@ -67,7 +62,6 @@ struct HomeView: View {
                                     LibraryStore.shared.perform { try LibraryStore.shared.removeProgress(id: item.id) }
                                 },
                             )
-                            .frame(width: 168)
                         }
                     }
                     .padding(.horizontal, 28)
@@ -134,12 +128,6 @@ struct HomeView: View {
                 .fixedSize()
                 .help("Choose what this row shows")
 
-                if content.count > 0 {
-                    Text("\(content.count)")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-
                 Spacer()
             }
             .padding(.horizontal, 28)
@@ -154,10 +142,10 @@ struct HomeView: View {
                             windowSession.openLibraryItem(id: item.id, provider: item.providerName,
                                                           providerID: item.providerID, url: item.providerURL)
                         } label: {
-                            PosterCard(title: item.title, subtitle: subtitle(for: item), posterURL: item.posterURL ?? item.bannerURL)
+                            PosterCard(title: item.title, subtitle: item.cardSubtitle, posterURL: item.posterURL ?? item.bannerURL,
+                                       layout: .shelf(posterWidth: 168))
                         }
                         .buttonStyle(.plain)
-                        .frame(width: 168)
                         .contextMenu { titleMenu(item) }
                     }
                 }
@@ -166,7 +154,7 @@ struct HomeView: View {
                            message: "Right-click a title or an episode and choose Add to Page.")
             case .page(_, let entries):
                 shelfRow {
-                    ForEach(entries.titles, id: \.id) { PageEntryCard(entry: $0, progress: nil).frame(width: 168) }
+                    ForEach(entries.titles, id: \.id) { PageEntryCard(entry: $0, progress: nil, layout: .shelf(posterWidth: 168)) }
                     ForEach(entries.episodes, id: \.id) { PageEntryCard(entry: $0, progress: entries.progress[$0.id]).frame(width: 280) }
                 }
             }
@@ -190,37 +178,13 @@ struct HomeView: View {
 
     @ViewBuilder
     private func titleMenu(_ item: StoredMediaItem) -> some View {
-        Menu("Watch Status") {
-            ForEach(WatchType.allCases) { type in
-                Button(type.label) { setWatchType(type, on: item) }
-            }
-        }
+        WatchStatusMenu(current: item.watchType) { LibraryStore.shared.setWatchType($0, on: item) }
         Button(item.isFavorite ? "Remove from Favorites" : "Add to Favorites") {
-            let store = LibraryStore.shared
-            store.perform { try store.toggleFavorite(details: store.detailsPreview(for: item)) }
+            LibraryStore.shared.toggleFavorite(item)
         }
         AddToPageMenu(details: LibraryStore.shared.detailsPreview(for: item))
         Divider()
-        Button("Remove from Library", role: .destructive) { remove(item) }
-    }
-
-    // MARK: - Helpers
-
-    private func subtitle(for item: StoredMediaItem) -> String? {
-        if let season = item.lastSeason, let episode = item.lastEpisode {
-            return "S\(season):E\(episode)"
-        }
-        return MediaTypeDisplay.name(for: item.mediaType)
-    }
-
-    private func setWatchType(_ type: WatchType, on item: StoredMediaItem) {
-        let store = LibraryStore.shared
-        store.perform { try store.upsertLibraryEntry(details: store.detailsPreview(for: item), watchType: type) }
-    }
-
-    private func remove(_ item: StoredMediaItem) {
-        let store = LibraryStore.shared
-        store.perform { try store.removeFromLibrary(details: store.detailsPreview(for: item)) }
+        Button("Remove from Library", role: .destructive) { LibraryStore.shared.removeFromLibrary(item) }
     }
 }
 
@@ -314,7 +278,9 @@ struct DiscoverSection: View {
             } description: {
                 Text(message)
             } actions: {
-                Button("Retry") { store.load(provider: appState.preferences.discoverProvider, force: true) }
+                Button("Retry") {
+                    store.load(provider: appState.preferences.discoverProvider, force: true, configuration: appState.providerDataGeneration)
+                }
                 Button("Network Settings…") { openSettings() }
             }
             .frame(height: 220)
@@ -351,10 +317,10 @@ struct DiscoverSection: View {
                                 subtitle: [item.year.map(String.init), item.quality, MediaTypeDisplay.name(for: item.type)].compactMap { $0 }.first,
                                 posterURL: item.posterUrl,
                                 posterHeaders: item.posterHeaders,
+                                layout: .shelf(posterWidth: 150, landscapeHint: row.isHorizontal),
                             )
                         }
                         .buttonStyle(.plain)
-                        .frame(width: 150)
                         .contextMenu { DiscoverItemMenu(item: item) }
                     }
                 }
@@ -389,8 +355,7 @@ struct DiscoverItemMenu: View {
     }
 }
 
-/// Placeholder shelves while a homepage loads (no spinners on Home).
-/// Placeholder shelves while the homepage loads. The pulse is driven by a
+/// Placeholder shelves while the homepage loads (no spinners on Home). The pulse is driven by a
 /// task that exists only while this view is on screen in an active window,
 /// and it settles after `maximumPulses` (Remediation 1.1): a load that never
 /// finishes, or a window in the background, no longer repaints forever.

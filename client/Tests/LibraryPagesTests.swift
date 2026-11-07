@@ -56,7 +56,6 @@ final class LibraryPagesTests: XCTestCase {
         let summary = try XCTUnwrap(store.page(id: page))
         XCTAssertEqual(summary.titleCount, 1)
         XCTAssertEqual(summary.episodeCount, 2, "adding an episode twice keeps one")
-        XCTAssertEqual(LibraryPageView.countLabel(summary), "1 title · 2 episodes")
         XCTAssertEqual(try store.pageIDs(containing: community, episode: episode(4)), [page])
         XCTAssertEqual(try store.pageIDs(containing: community), [page], "the whole title is its own entry")
         XCTAssertTrue(try store.pageIDs(containing: community, episode: episode(6)).isEmpty)

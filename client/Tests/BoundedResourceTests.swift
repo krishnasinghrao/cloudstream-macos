@@ -1,4 +1,6 @@
 import AppKit
+import ImageIO
+import SwiftUI
 import Synchronization
 import XCTest
 import zlib
@@ -184,7 +186,7 @@ final class BoundedResourceTests: XCTestCase {
         let page = await cache.image(for: server.url("/page"))
         XCTAssertNil(page)
         let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-        XCTAssertEqual(files.count, 1, "rejected bodies are not written to the disk cache")
+        XCTAssertEqual(files.filter { $0.hasSuffix(".img") }.count, 1, "rejected bodies are not written to the disk cache")
 
         // The same URL under different credentials is a different entry.
         server.set("/private.png", .init(body: poster, contentType: "image/png", requiredHeader: "Cookie: user=a"))
@@ -208,6 +210,172 @@ final class BoundedResourceTests: XCTestCase {
         cache.clearAll()
         XCTAssertNil(cache.synchronousMemoryImage(for: server.url("/poster.png")))
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
+
+    @MainActor
+    func testGeometryIndexSurvivesRelaunchWithoutImagesOrExtraNetworkRequests() async throws {
+        let cache = ImageCache(directory: directory)
+        server.set("/remember.png", .init(body: try png(width: 640, height: 360), contentType: "image/png"))
+        let url = server.url("/remember.png")
+        let headers = ["Cookie": "private-credential"]
+        _ = await cache.image(for: url, headers: headers, rendition: .thumbnail)
+        await cache.flushGeometryMetadata()
+        for file in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) where file.pathExtension == "img" {
+            try FileManager.default.removeItem(at: file)
+        }
+        let text = try String(contentsOf: directory.appendingPathComponent("artwork-layout.json"), encoding: .utf8)
+        XCTAssertFalse(text.contains(url))
+        XCTAssertFalse(text.contains("private-credential"))
+        let restored = ImageCache(directory: directory)
+        let requests = server.requests.count
+        await restored.prepareGeometryIndex()
+        let request = try XCTUnwrap(ArtworkRequest(url: url, headers: headers))
+        XCTAssertEqual(restored.geometry(for: request)?.aspectRatio, 16 / 9)
+        XCTAssertNil(restored.geometry(for: try XCTUnwrap(ArtworkRequest(url: url))))
+        XCTAssertEqual(server.requests.count, requests)
+        restored.clearAll()
+        XCTAssertNil(restored.geometry(for: request))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
+
+    func testArtworkClassificationUsesOrientationCorrectDimensions() throws {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: png(width: 200, height: 400)))
+        let buffer = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(buffer, "public.jpeg" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try XCTUnwrap(bitmap.cgImage), [kCGImagePropertyOrientation: 6] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        let decoded = try XCTUnwrap(BoundedImageDecoder.decode(buffer as Data))
+        let geometry = try XCTUnwrap(ArtworkGeometry(image: decoded.image))
+        XCTAssertEqual(geometry.width, 400)
+        XCTAssertEqual(geometry.height, 200)
+        XCTAssertTrue(geometry.isLandscape)
+    }
+
+    @MainActor
+    func testArtworkFailureCanBeRetriedAndResetForAnEmptyRequest() async throws {
+        let cache = ImageCache(directory: directory)
+        let loader = ArtworkLoader()
+        let request = try XCTUnwrap(ArtworkRequest(url: server.url("/retry.png")))
+        server.set("/retry.png", .init(body: Data("not an image".utf8), contentType: "image/png"))
+        await loader.load(request, cache: cache)
+        if case .failure = loader.phase(for: request, cache: cache) {} else { XCTFail("expected failed artwork") }
+        server.set("/retry.png", .init(body: try png(width: 640, height: 360), contentType: "image/png"))
+        await loader.load(request, cache: cache, force: true)
+        XCTAssertNotNil(loader.phase(for: request, cache: cache).asset)
+        await loader.load(nil, cache: cache)
+        if case .empty = loader.phase(for: nil, cache: cache) {} else { XCTFail("an empty request reused old artwork") }
+    }
+
+    @MainActor
+    func testArtworkLoadersFenceOldRequestsAndScopeCredentialsAndRenditions() async throws {
+        let cache = ImageCache(directory: directory)
+        let loader = ArtworkLoader()
+        let landscape = try png(width: 640, height: 360)
+        server.set("/private-art.png", .init(body: landscape, contentType: "image/png", requiredHeader: "Cookie: user=a"))
+        let allowed = try XCTUnwrap(ArtworkRequest(url: server.url("/private-art.png"), headers: ["Cookie": "user=a"]))
+        let denied = try XCTUnwrap(ArtworkRequest(url: allowed.url, headers: ["Cookie": "user=b"]))
+        await loader.load(allowed, cache: cache)
+        XCTAssertEqual(loader.phase(for: allowed, cache: cache).asset?.geometry.aspectRatio, 16 / 9)
+        XCTAssertNil(loader.phase(for: denied, cache: cache).asset, "credentials change before the replacement task runs")
+        await loader.load(denied, cache: cache)
+        if case .failure = loader.phase(for: denied, cache: cache) {} else { XCTFail("failed image must have a terminal phase") }
+        XCTAssertNil(cache.geometry(for: denied), "geometry is credential-scoped too")
+        let full = ArtworkRequest(url: allowed.url, headers: allowed.headers, rendition: .full)
+        XCTAssertNil(loader.phase(for: full, cache: cache).asset, "a thumbnail cannot masquerade as a full rendition")
+        XCTAssertEqual(cache.geometry(for: try XCTUnwrap(full))?.aspectRatio, 16 / 9,
+                       "…but its shape answers for the full rendition, so the details hero lays out landscape on frame zero")
+
+        // The first request finishes after its replacement. Clearing the shared
+        // cache proves that the loader retained the new result, not the old one.
+        server.set("/old.png", .init(body: landscape + Data(count: 262_144), contentType: "image/png", chunkDelay: 0.05))
+        server.set("/new.png", .init(body: try png(width: 200, height: 300), contentType: "image/png"))
+        let old = try XCTUnwrap(ArtworkRequest(url: server.url("/old.png")))
+        let new = try XCTUnwrap(ArtworkRequest(url: server.url("/new.png")))
+        let pending = Task { await loader.load(old, cache: cache) }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while !server.requests.contains(where: { $0.hasPrefix("GET /old.png") }), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(server.requests.contains(where: { $0.hasPrefix("GET /old.png") }))
+        await loader.load(new, cache: cache)
+        await pending.value
+        cache.clearAll()
+        XCTAssertEqual(loader.phase(for: new, cache: cache).asset?.geometry.aspectRatio ?? 0, 2 / 3, accuracy: 0.001)
+        XCTAssertNil(loader.phase(for: old, cache: cache).asset)
+    }
+
+    @MainActor
+    func testCancellingACardDoesNotCancelAnotherSubscriberOrPublishFailure() async throws {
+        let cache = ImageCache(directory: directory)
+        let first = ArtworkLoader()
+        let second = ArtworkLoader()
+        server.set("/subscribers.png", .init(body: try png(width: 640, height: 360) + Data(count: 262_144),
+                                             contentType: "image/png", chunkDelay: 0.05))
+        let request = try XCTUnwrap(ArtworkRequest(url: server.url("/subscribers.png")))
+        let cancelled = Task { await first.load(request, cache: cache) }
+        let survivor = Task { await second.load(request, cache: cache) }
+        cancelled.cancel()
+        await cancelled.value
+        await survivor.value
+        XCTAssertNotNil(second.phase(for: request, cache: cache).asset)
+        XCTAssertEqual(server.requests.filter { $0.hasPrefix("GET /subscribers.png") }.count, 1)
+        cache.clearAll()
+        if case .loading = first.phase(for: request, cache: cache) {} else { XCTFail("cancelled subscriber published a result") }
+        XCTAssertNotNil(second.phase(for: request, cache: cache).asset)
+    }
+
+    @MainActor
+    func testRenderedCardsPreserveThumbnailEdgesAndAdaptShelfAndGridGeometry() async throws {
+        let cache = ImageCache(directory: directory)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 640, pixelsHigh: 360,
+            bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0))
+        let bytes = try XCTUnwrap(bitmap.bitmapData)
+        for y in 0..<360 {
+            for x in 0..<640 {
+                let offset = y * bitmap.bytesPerRow + x * 3
+                bytes[offset] = x < 160 ? 255 : 0
+                bytes[offset + 1] = x >= 160 && x < 480 ? 255 : 0
+                bytes[offset + 2] = x >= 480 ? 255 : 0
+            }
+        }
+        server.set("/edges.png", .init(body: try XCTUnwrap(bitmap.representation(using: .png, properties: [:])), contentType: "image/png"))
+        server.set("/portrait.png", .init(body: try png(width: 200, height: 300), contentType: "image/png"))
+        let landscapeURL = server.url("/edges.png")
+        let portraitURL = server.url("/portrait.png")
+        _ = await cache.image(for: landscapeURL, rendition: .thumbnail)
+        _ = await cache.image(for: portraitURL, rendition: .thumbnail)
+        let landscape = PosterCard(title: "Landscape", subtitle: "Video", posterURL: landscapeURL,
+                                   progressFraction: 0.4, highlightBadge: "NEW", isSelected: true, layout: .shelf(posterWidth: 168), imageCache: cache)
+        let portrait = PosterCard(title: "Portrait", subtitle: "Movie", posterURL: portraitURL,
+                                  layout: .shelf(posterWidth: 168), imageCache: cache)
+        let wide = try renderArtwork(landscape)
+        let tall = try renderArtwork(portrait)
+        XCTAssertGreaterThan(wide.pixelsWide, tall.pixelsWide)
+        // Row-height parity: a 16:9 card in a shelf is exactly as tall as its
+        // 2:3 neighbours, so mixed rows line up.
+        XCTAssertEqual(wide.pixelsHigh, tall.pixelsHigh, "landscape and portrait shelf cards share one row height")
+        let mixed = try renderArtwork(HStack(alignment: .top, spacing: 16) { landscape; portrait })
+        // Neither selection nor progress may grow the landscape card past the row.
+        XCTAssertEqual(mixed.pixelsHigh, tall.pixelsHigh, "badges/progress must not stretch the landscape card")
+        let left = try XCTUnwrap(wide.colorAt(x: 16, y: 40)?.usingColorSpace(.deviceRGB))
+        let right = try XCTUnwrap(wide.colorAt(x: wide.pixelsWide - 17, y: 40)?.usingColorSpace(.deviceRGB))
+        XCTAssertGreaterThan(left.redComponent, 0.8, "left thumbnail text/subjects must survive")
+        XCTAssertGreaterThan(right.blueComponent, 0.8, "right thumbnail text/subjects must survive")
+        let grid = try renderArtwork(PosterCard(title: "Grid", subtitle: nil, posterURL: landscapeURL,
+                                                imageCache: cache).frame(width: 180))
+        XCTAssertEqual(grid.pixelsWide, 180)
+        XCTAssertLessThan(grid.pixelsHigh, 150, "the grid must use landscape geometry, not a portrait slot")
+        let requests = server.requests.count
+        _ = try renderArtwork(landscape)
+        XCTAssertEqual(server.requests.count, requests, "rendering does not request metadata over the network")
+    }
+
+    @MainActor
+    private func renderArtwork(_ view: some View) throws -> NSBitmapImageRep {
+        let renderer = ImageRenderer(content: view.environment(\.colorScheme, .dark))
+        renderer.scale = 1
+        return NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
     }
 
     /// Peak process memory while many large backdrops load at once (plan N01

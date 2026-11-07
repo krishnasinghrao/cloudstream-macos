@@ -9,7 +9,7 @@ import Synchronization
 /// points wide; decoding a 2000×3000 poster in full for them costs ~24 MB
 /// each, evicts its neighbours from the memory cache and makes every
 /// scrolled frame resample a huge bitmap.
-enum ArtworkRendition: Sendable {
+enum ArtworkRendition: Hashable, Sendable, CaseIterable {
     /// Cards, shelves, rows: sharp up to ~320 pt on a 2× display.
     case thumbnail
     /// Hero backdrops and anything shown near window size.
@@ -30,52 +30,14 @@ struct PosterImage: View {
     /// Referer/cookie headers some hosts require (provider `posterHeaders`).
     var headers: [String: String]? = nil
     var rendition: ArtworkRendition = .thumbnail
-    /// The loaded image and the URL it belongs to: a reused cell never shows
-    /// the previous title's poster.
-    @State private var loaded: (url: String, image: NSImage)?
+    var contentMode: ContentMode = .fill
+    @State private var loader = ArtworkLoader()
 
     var body: some View {
-        // A lazy container rebuilds cells as they scroll back in. Reading the
-        // memory cache here shows the poster in the cell's first frame; a
-        // `.task` would only deliver it a frame later, as a visible reload.
-        let image = url.flatMap { url -> NSImage? in
-            guard !url.isEmpty else { return nil }
-            if let loaded, loaded.url == url { return loaded.image }
-            return ImageCache.shared.synchronousMemoryImage(for: url, headers: headers, rendition: rendition)
-        }
-        Color.cardSurface
-            // `alignment` positions the artwork (the hero anchors faces to the
-            // top); the placeholder always sits in the middle of the frame.
-            .overlay(alignment: alignment) {
-                if let image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                }
-            }
-            .overlay {
-                if image == nil {
-                    Image(systemName: placeholderIcon)
-                        .font(.title3)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            // A fill-mode image overflows the proposal to keep its aspect;
-            // never let it bleed outside this view's bounds.
-            .clipped()
-            .task(id: url) {
-                guard let url, !url.isEmpty else { return }
-                if let cached = ImageCache.shared.synchronousMemoryImage(for: url, headers: headers, rendition: rendition) {
-                    // Already on screen from `body`; held so eviction cannot blank it.
-                    loaded = (url, cached)
-                    return
-                }
-                if let image = await ImageCache.shared.image(for: url, headers: headers, rendition: rendition), !Task.isCancelled {
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        loaded = (url, image)
-                    }
-                }
-            }
+        let request = ArtworkRequest(url: url, headers: headers, rendition: rendition)
+        ArtworkSurface(asset: loader.phase(for: request).asset, contentMode: contentMode,
+                       alignment: alignment, placeholderIcon: placeholderIcon)
+            .task(id: request) { await loader.load(request) }
     }
 }
 
@@ -151,7 +113,16 @@ final class ImageCache {
     static let shared = ImageCache()
 
     private let memory = ImageMemoryBox()
+    private final class GeometryBox: NSObject {
+        let value: ArtworkGeometry
+        init(_ value: ArtworkGeometry) { self.value = value }
+    }
+    private let geometries = NSCache<NSString, GeometryBox>()
     private let disk: URL
+    private let layoutMetadata: ArtworkMetadataStore
+    private var persistedGeometry: [String: ArtworkMetadataStore.Record] = [:]
+    private var restoreGeometry: Task<[String: ArtworkMetadataStore.Record], Never>?
+    private var geometrySave: Task<Void, Never>?
     private var inFlight: [String: Task<NSImage?, Never>] = [:]
 
     nonisolated static let activeMemoryBudget = 256 * 1024 * 1024
@@ -186,6 +157,7 @@ final class ImageCache {
     init(directory: URL? = nil, session: URLSession = BoundedHTTPResource.session, maxResponseBytes: Int = BoundedHTTPResource.imageBytes) {
         self.session = session
         self.maxResponseBytes = maxResponseBytes
+        geometries.countLimit = 2000
         memory.cache.countLimit = 600
         // Phase 10 memory budget: large backdrops cost far more than posters.
         memory.cache.totalCostLimit = Self.activeMemoryBudget
@@ -200,6 +172,9 @@ final class ImageCache {
             ?? FileManager.default.temporaryDirectory
         disk = directory ?? AppEnvironment.directory("Images") ?? caches.appendingPathComponent("CloudStreamMac/images", isDirectory: true)
         try? FileManager.default.createDirectory(at: disk, withIntermediateDirectories: true)
+        let store = ArtworkMetadataStore(directory: disk)
+        layoutMetadata = store
+        restoreGeometry = Task.detached(priority: .utility) { store.read() }
         let dir = disk
         Task.detached(priority: .utility) {
             Self.pruneDisk(at: dir)
@@ -219,13 +194,13 @@ final class ImageCache {
         let scoped = sanitizedHeaders(headers)
         guard !scoped.isEmpty else { return urlString }
         let fields = scoped.map { "\($0.key.lowercased()):\($0.value)" }.sorted().joined(separator: "\n")
-        let digest = SHA256.hash(data: Data(fields.utf8)).map { String(format: "%02x", $0) }.joined()
+        let digest = SHA256.hash(data: Data(fields.utf8)).hexString
         return urlString + "\n" + digest
     }
 
     private func diskURL(for key: String) -> URL {
         let hash = SHA256.hash(data: Data(key.utf8))
-        let hexString = hash.map { String(format: "%02x", $0) }.joined()
+        let hexString = hash.hexString
         return disk.appendingPathComponent("\(hexString).img")
     }
 
@@ -235,9 +210,65 @@ final class ImageCache {
         memory.object(forKey: Self.memoryKey(for: urlString, headers: headers, rendition: rendition))
     }
 
+    /// Lightweight layout metadata survives bitmap eviction. No disk reads,
+    /// extra image requests, or global observation invalidations during layout.
+    ///
+    /// Shape does not depend on rendition, so a bitmap of either rendition
+    /// answers: the details hero asks with `.full` while the card the user
+    /// just clicked holds `.thumbnail`, and must not lay out as a portrait
+    /// banner for a frame before snapping to landscape.
+    func geometry(for request: ArtworkRequest) -> ArtworkGeometry? {
+        for rendition in [request.rendition] + ArtworkRendition.allCases.filter({ $0 != request.rendition }) {
+            if let image = synchronousMemoryImage(for: request.url, headers: request.headers, rendition: rendition),
+               let geometry = ArtworkGeometry(image: image) { return geometry }
+        }
+        return geometries.object(forKey: Self.cacheKey(for: request.url, headers: request.headers) as NSString)?.value
+            ?? persistedGeometry[metadataKey(for: request)]?.geometry
+    }
+
+    /// Called once by library layouts before reading their cached ratios.
+    /// Loading the index never requests artwork or reads bitmap files.
+    func prepareGeometryIndex() async {
+        guard let task = restoreGeometry else { return }
+        let restored = await task.value
+        guard restoreGeometry == task else { return }
+        restoreGeometry = nil
+        persistedGeometry.merge(restored) { current, saved in
+            current.updated >= saved.updated ? current : saved
+        }
+    }
+
+    private func metadataKey(for request: ArtworkRequest) -> String {
+        diskURL(for: Self.cacheKey(for: request.url, headers: request.headers)).deletingPathExtension().lastPathComponent
+    }
+
+    private func rememberGeometry(_ image: NSImage?, url: String, headers: [String: String]?) {
+        guard let image, let geometry = ArtworkGeometry(image: image),
+              let request = ArtworkRequest(url: url, headers: headers) else { return }
+        geometries.setObject(GeometryBox(geometry), forKey: Self.cacheKey(for: url, headers: headers) as NSString)
+        let key = metadataKey(for: request)
+        guard persistedGeometry[key]?.geometry != geometry else { return }
+        persistedGeometry[key] = .init(geometry: geometry, updated: Date().timeIntervalSince1970)
+        if persistedGeometry.count > ArtworkMetadataStore.maximumRecords {
+            persistedGeometry = ArtworkMetadataStore.bounded(persistedGeometry)
+        }
+        geometrySave?.cancel()
+        geometrySave = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            let snapshot = persistedGeometry
+            let generation = layoutMetadata.generation
+            let store = layoutMetadata
+            await Task.detached(priority: .utility) { store.write(snapshot, generation: generation) }.value
+        }
+    }
+
+    func flushGeometryMetadata() async { await geometrySave?.value }
+
     /// nil when the artwork is unavailable: offline, rejected status or type,
     /// over the byte budget, or not a decodable image within the pixel budget.
     func image(for urlString: String, headers: [String: String]? = nil, rendition: ArtworkRendition = .full) async -> NSImage? {
+        await prepareGeometryIndex()
         let key = Self.memoryKey(for: urlString, headers: headers, rendition: rendition)
         if let cached = memory.object(forKey: key) {
             return cached
@@ -259,6 +290,7 @@ final class ImageCache {
                    guard let data = try? Data(contentsOf: diskURL) else { return nil }
                    return await Self.decode(data, maxDimension: maxDimension)
                })) ?? nil {
+                guard !Task.isCancelled else { return nil }
                 memoryCache.set(img, forKey: key)
                 // Pruning removes the least recently used file, not the oldest download.
                 try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: diskURL.path)
@@ -278,6 +310,7 @@ final class ImageCache {
                         DaemonLog.client("image.rejected", fields: ["reason": "undecodable_or_pixel_budget"])
                         return nil
                     }
+                    guard !Task.isCancelled else { return nil }
                     if (try? loaded.write(to: diskURL, options: .atomic)) != nil {
                         Self.recordWrite(bytes: Int64(loaded.count), in: diskURL.deletingLastPathComponent())
                     }
@@ -296,7 +329,10 @@ final class ImageCache {
         inFlight[key] = task
         let result = await task.value
         // A clear or a newer load may already own this key.
-        if inFlight[key] == task { inFlight.removeValue(forKey: key) }
+        if inFlight[key] == task {
+            rememberGeometry(result, url: urlString, headers: headers)
+            inFlight.removeValue(forKey: key)
+        }
         return result
     }
 
@@ -309,7 +345,14 @@ final class ImageCache {
 
     /// Clears memory and disk (Settings ▸ Clear Cache).
     func clearAll() {
+        geometrySave?.cancel()
+        geometrySave = nil
+        restoreGeometry?.cancel()
+        restoreGeometry = nil
+        layoutMetadata.invalidate()
+        persistedGeometry.removeAll()
         memory.removeAll()
+        geometries.removeAllObjects()
         inFlight.values.forEach { $0.cancel() }
         inFlight.removeAll()
         try? FileManager.default.removeItem(at: disk)
@@ -342,7 +385,7 @@ final class ImageCache {
     nonisolated private static func cachedFiles(in directory: URL) -> [(url: URL, size: Int64, modified: Date)] {
         let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey]
         let urls = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: Array(keys))) ?? []
-        return urls.map { url in
+        return urls.filter { $0.pathExtension == "img" }.map { url in
             let values = try? url.resourceValues(forKeys: keys)
             return (url, Int64(values?.fileSize ?? 0), values?.contentModificationDate ?? .distantPast)
         }

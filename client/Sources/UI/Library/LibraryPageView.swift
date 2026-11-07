@@ -23,10 +23,14 @@ struct LibraryPageView: View {
         private var key: Key?
         private(set) var page: LibraryPageSummary?
         private(set) var content = Content()
+        private(set) var artwork: [LibraryArtworkItem] = []
+        private(set) var entriesByID: [String: LibraryPageEntry] = [:]
 
         func update(_ key: Key, _ make: () -> (LibraryPageSummary?, Content)) {
             guard key != self.key else { return }
             (page, content) = make()
+            artwork = content.titles.map { LibraryArtworkItem(id: $0.id, url: $0.posterURL ?? $0.bannerURL) }
+            entriesByID = Dictionary(content.titles.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             self.key = key
         }
     }
@@ -48,7 +52,7 @@ struct LibraryPageView: View {
 
     var body: some View {
         let query = windowSession.libraryFilter
-        let _ = cache.update(.init(version: LibraryStore.shared.version, pageID: pageID, options: options, query: query)) {
+        let _ = cache.update(.init(version: LibraryStore.shared.version, pageID: pageID, options: options.orderingAndFilters, query: query)) {
             let store = LibraryStore.shared
             let page = store.readForDisplay(or: nil, { try store.page(id: pageID) })
             let entries = store.readForDisplay(or: [], { try store.pageEntries(pageID: pageID) })
@@ -89,12 +93,8 @@ struct LibraryPageView: View {
 
     private func header(_ page: LibraryPageSummary) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            if page.count > 0 {
-                Text(Self.countLabel(page))
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
             Spacer()
+            LibraryLayoutPicker(selection: Binding(get: { options.displayMode }, set: { update(\.displayMode, $0) }))
             sortMenu
             Menu {
                 Button("Rename Page…") {
@@ -144,16 +144,17 @@ struct LibraryPageView: View {
     @ViewBuilder
     private func sections(_ content: Content) -> some View {
         if !content.titles.isEmpty {
-            section("Titles", count: content.titles.count) {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)], spacing: 24) {
-                    ForEach(content.titles, id: \.id) { entry in
-                        PageEntryCard(entry: entry, progress: nil)
+            section("Titles") {
+                LibraryArtworkCollection(entries: cache.artwork, mode: options.displayMode) { entry, geometry, catalog in
+                    if let saved = cache.entriesByID[entry.id] {
+                        PageEntryCard(entry: saved, progress: nil, geometryHint: geometry,
+                                      onGeometry: { catalog.record($0, for: entry) })
                     }
                 }
             }
         }
         if !content.episodes.isEmpty {
-            section("Episodes", count: content.episodes.count) {
+            section("Episodes") {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 240, maximum: 320), spacing: 20)], spacing: 24) {
                     ForEach(content.episodes, id: \.id) { entry in
                         PageEntryCard(entry: entry, progress: content.progress[entry.id])
@@ -163,12 +164,9 @@ struct LibraryPageView: View {
         }
     }
 
-    private func section(_ title: String, count: Int, @ViewBuilder grid: () -> some View) -> some View {
+    private func section(_ title: String, @ViewBuilder grid: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(title).font(.title3.weight(.semibold))
-                Text("\(count)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
-            }
+            Text(title).font(.title3.weight(.semibold))
             grid()
         }
     }
@@ -180,13 +178,6 @@ struct LibraryPageView: View {
     }
 
     // MARK: - Pure helpers (unit-tested)
-
-    /// "2 titles · 5 episodes".
-    static func countLabel(_ page: LibraryPageSummary) -> String {
-        [page.titleCount > 0 ? "\(page.titleCount) \(page.titleCount == 1 ? "title" : "titles")" : nil,
-         page.episodeCount > 0 ? "\(page.episodeCount) \(page.episodeCount == 1 ? "episode" : "episodes")" : nil]
-            .compactMap { $0 }.joined(separator: " · ")
-    }
 
     /// Filters by title or episode name and sorts: newest first by default,
     /// or by name (episodes by show, then season and number).
@@ -226,6 +217,9 @@ struct LibraryPageView: View {
 struct PageEntryCard: View {
     let entry: LibraryPageEntry
     let progress: EpisodeProgressSnapshot?
+    var layout: ArtworkCardLayout = .grid
+    var geometryHint: ArtworkGeometry? = nil
+    var onGeometry: ((ArtworkGeometry) -> Void)? = nil
     @Environment(WindowSession.self) private var windowSession
     @Environment(AppState.self) private var appState
 
@@ -240,7 +234,8 @@ struct PageEntryCard: View {
                             isDub: entry.audio == "dub", progress: progress)
             } else {
                 PosterCard(title: entry.title, subtitle: MediaTypeDisplay.name(for: entry.mediaType),
-                           posterURL: entry.posterURL ?? entry.bannerURL)
+                           posterURL: entry.posterURL ?? entry.bannerURL, layout: layout,
+                           geometryHint: geometryHint, onGeometry: onGeometry)
             }
         }
         .buttonStyle(.plain)

@@ -13,6 +13,7 @@ struct MediaDetailView: View {
     let details: DetailsDto
     /// Re-fetches details bypassing the daemon cache (toolbar ⌘R).
     var onRefresh: (() -> Void)? = nil
+    var artworkReloadToken = 0
 
     @State private var selectedSeason = 1
     /// Season whose "Download from…" source picker is open.
@@ -43,6 +44,13 @@ struct MediaDetailView: View {
     /// The profile store the draft was loaded from; a save never lands in another profile.
     @State private var noteOwner: LibraryStore.ProfileOperationContext?
     @FocusState private var noteFocused: Bool
+    /// Reads the lone poster's shape for HeroArtwork.
+    @State private var posterShapeLoader = ArtworkLoader()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Heights of the synopsis as shown and at full length: "More" appears
+    /// only when the four-line clamp actually hides text.
+    @State private var plotShownHeight: CGFloat = 0
+    @State private var plotFullHeight: CGFloat = 0
 
     struct ResumePrompt: Identifiable {
         let episode: EpisodeDto
@@ -130,6 +138,13 @@ struct MediaDetailView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) { actionButtons }
         }
+        .focusedSceneValue(\.titlePage, TitlePageCommands(
+            name: details.name,
+            isFavorite: cachedIsFavorite,
+            reload: onRefresh,
+            play: { play() },
+            toggleFavorite: { LibraryStore.shared.perform { try LibraryStore.shared.toggleFavorite(details: details) } },
+        ))
     }
 
     @ViewBuilder
@@ -139,7 +154,7 @@ struct MediaDetailView: View {
                 Label("Reload", systemImage: "arrow.clockwise")
             }
             .labelStyle(.iconOnly)
-            .keyboardShortcut("r", modifiers: .command)
+            // ⌘R lives on View ▸ Reload Page.
             .help("Reload details from the provider (⌘R)")
         }
 
@@ -153,7 +168,7 @@ struct MediaDetailView: View {
             )
         }
         .labelStyle(.iconOnly)
-        .keyboardShortcut("d", modifiers: .command)
+        // ⌘D lives on Title ▸ Add to Favorites.
         .help(isFavorite ? "Remove from Favorites (⌘D)" : "Add to Favorites (⌘D)")
 
         AddToPageMenu(details: details)
@@ -314,20 +329,39 @@ struct MediaDetailView: View {
     /// the full-height banner; a lone portrait poster is centred over a
     /// blurred copy of itself instead of being stretched; with no artwork the
     /// banner collapses to a compact gradient instead of a vacant 580 pt box.
+    ///
+    /// The one exception to the lone-poster layout: a poster that is itself
+    /// landscape (a 16:9 video thumbnail, say) is a backdrop in all but name,
+    /// so it fills the full-height banner too. Its shape is read from the
+    /// decoded image (usually already known from the search or library card),
+    /// never guessed from the provider or URL. Titles with a backdrop, or with
+    /// a portrait or square poster, are unaffected.
     enum HeroArtwork: Equatable {
         case backdrop(String)
+        /// A landscape poster with no backdrop, shown as the banner.
+        case thumbnail(String)
         case poster(String)
         case none
 
-        init(details: DetailsDto) {
+        /// - Parameter posterShape: the poster's decoded shape, when known.
+        ///   Consulted only when there is no backdrop; unknown means portrait.
+        init(details: DetailsDto, posterShape: ArtworkGeometry? = nil) {
             if let banner = details.backgroundPosterUrl?.nonEmpty { self = .backdrop(banner) }
-            else if let poster = details.posterUrl?.nonEmpty { self = .poster(poster) }
+            else if let poster = details.posterUrl?.nonEmpty {
+                self = posterShape?.isLandscape == true ? .thumbnail(poster) : .poster(poster)
+            }
             else { self = .none }
+        }
+
+        /// The poster whose shape decides between `.thumbnail` and `.poster`:
+        /// nil whenever a backdrop exists, so those titles do no extra work.
+        static func posterToMeasure(in details: DetailsDto) -> String? {
+            details.backgroundPosterUrl?.nonEmpty == nil ? details.posterUrl?.nonEmpty : nil
         }
 
         var height: CGFloat {
             switch self {
-            case .backdrop: 580
+            case .backdrop, .thumbnail: 580
             case .poster: 440
             case .none: 260
             }
@@ -339,6 +373,13 @@ struct MediaDetailView: View {
         switch artwork {
         case .backdrop(let url):
             PosterImage(url: url, alignment: .top, headers: details.posterHeaders, rendition: .full)
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .clipped()
+        case .thumbnail(let url):
+            // Centred rather than top-aligned: many video thumbnails carry
+            // letterbox bars at the top and bottom.
+            PosterImage(url: url, alignment: .center, headers: details.posterHeaders, rendition: .full)
                 .frame(maxWidth: .infinity)
                 .frame(height: height)
                 .clipped()
@@ -369,12 +410,29 @@ struct MediaDetailView: View {
         }
     }
 
+    /// The lone poster's shape, read through the same shared cache request
+    /// the hero's PosterImage makes, so it never adds a download.
+    private var posterShapeRequest: ArtworkRequest? {
+        ArtworkRequest(url: HeroArtwork.posterToMeasure(in: details), headers: details.posterHeaders, rendition: .full)
+    }
+
+    private struct ShapeLoad: Hashable {
+        let request: ArtworkRequest?
+        let reloadToken: Int
+    }
+
     private var heroSection: some View {
-        let artwork = HeroArtwork(details: details)
+        let shapeRequest = posterShapeRequest
+        let posterShape = shapeRequest.flatMap {
+            posterShapeLoader.phase(for: $0).asset?.geometry ?? ImageCache.shared.geometry(for: $0)
+        }
+        let artwork = HeroArtwork(details: details, posterShape: posterShape)
         let heroHeight = artwork.height
 
         return ZStack(alignment: .bottomLeading) {
             heroArtwork(artwork, height: heroHeight)
+                // ⌘R retries artwork that failed to load (memory hits stay instant).
+                .id(artworkReloadToken)
 
             // Smooth bottom gradient transition into canvas behind the title, metadata, and buttons.
             // Upper 55% remains completely clear so artwork typography and faces are unobscured.
@@ -409,19 +467,19 @@ struct MediaDetailView: View {
             .padding(.bottom, 16)
         }
         .frame(height: heroHeight)
+        .task(id: ShapeLoad(request: shapeRequest, reloadToken: artworkReloadToken)) {
+            await posterShapeLoader.load(shapeRequest, force: artworkReloadToken > 0)
+        }
     }
 
     // MARK: - Metadata Badges
 
     private var metadataBadges: some View {
-        HStack(spacing: 8) {
+        DetailsControlFlow(spacing: 10, rowSpacing: 6) {
             if let year = details.year {
                 Text(String(year))
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white.opacity(0.85))
-                Text("•")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.35))
             }
 
             if let rating = details.score {
@@ -437,10 +495,6 @@ struct MediaDetailView: View {
                 .padding(.vertical, 2)
                 .background(Color.yellow.opacity(0.18), in: Capsule())
                 .overlay(Capsule().strokeBorder(Color.yellow.opacity(0.3), lineWidth: 0.5))
-
-                Text("•")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.35))
             }
 
             if let contentRating = details.contentRating, !contentRating.isEmpty {
@@ -453,10 +507,6 @@ struct MediaDetailView: View {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .strokeBorder(Color.white.opacity(0.4), lineWidth: 1)
                     )
-
-                Text("•")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.35))
             }
 
             Text(MediaTypeDisplay.name(for: details.type))
@@ -475,25 +525,17 @@ struct MediaDetailView: View {
             }
 
             if let duration = details.durationMinutes {
-                Text("•")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.35))
                 Text(MediaTypeDisplay.duration(minutes: duration))
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.white.opacity(0.85))
             }
 
             if !details.tags.isEmpty {
-                Text("•")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.35))
                 Text(details.tags.prefix(2).joined(separator: ", "))
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
             }
-
-            Spacer()
 
             Text(details.provider)
                 .font(.caption.weight(.semibold))
@@ -509,7 +551,7 @@ struct MediaDetailView: View {
         let label = nextAiring.season.map { "S\($0) · E\(nextAiring.episode)" } ?? "Episode \(nextAiring.episode)"
         return HStack(spacing: 6) {
             Image(systemName: "calendar.badge.clock")
-            Text("\(label) airs ") + Text(nextAiring.date, style: .relative).monospacedDigit()
+            Text("\(label) airs \(Text(nextAiring.date, style: .relative).monospacedDigit())")
             Text("·")
                 .foregroundStyle(.white.opacity(0.4))
             Text(nextAiring.date, format: .dateTime.weekday(.abbreviated).month().day().hour().minute())
@@ -525,24 +567,17 @@ struct MediaDetailView: View {
     private var actionBar: some View {
         let currentWatchType = cachedWatchType
 
-        return HStack(spacing: 12) {
+        return DetailsControlFlow {
             // Signature Apple TV Primary Play Pill (Solid white capsule with black text)
             Button {
                 play()
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "play.fill")
-                        .font(.body.weight(.bold))
                     Text(playButtonTitle)
-                        .font(.body.weight(.bold))
                 }
-                .foregroundStyle(.black)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 9)
-                .background(Capsule().fill(Color.white))
-                .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
             }
-            .buttonStyle(PressFeedbackButtonStyle())
+            .buttonStyle(HeroPillButtonStyle(prominent: true))
             .help(playButtonTitle)
 
             // Watch Status Capsule (Frosted Translucent)
@@ -571,14 +606,12 @@ struct MediaDetailView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.7))
                 }
-                .font(.body.weight(.medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Capsule().fill(Color.white.opacity(0.15)))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
             }
-            .buttonStyle(.plain)
+            // The label draws its own chevron; the button style draws the pill.
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(HeroPillButtonStyle())
+            .fixedSize()
             .help("Set watch status")
 
             // Download Capsule
@@ -628,14 +661,11 @@ struct MediaDetailView: View {
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.7))
                     }
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(Color.white.opacity(0.15)))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
                 }
-                .buttonStyle(.plain)
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .buttonStyle(HeroPillButtonStyle())
+                .fixedSize()
                 .help("Download or cancel a full season — right-click to choose a source")
                 .contextMenu {
                     Button("Download Season \(selectedSeason) from…") {
@@ -653,7 +683,7 @@ struct MediaDetailView: View {
                         seasonSourcePickerContent(season: season)
                     }
                 }
-                .animation(.spring(response: 0.35, dampingFraction: 0.75), value: activeCountInSeason)
+                .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75), value: activeCountInSeason)
             } else if let movieData = details.movieData {
                 movieDownloadCapsule(movieData: movieData)
             }
@@ -666,18 +696,11 @@ struct MediaDetailView: View {
                         Image(systemName: "film")
                         Text("Trailer")
                     }
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(Color.white.opacity(0.15)))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(HeroPillButtonStyle())
                 .help("Play the trailer")
             }
 
-            Spacer()
         }
         .padding(.top, 2)
     }
@@ -716,15 +739,30 @@ struct MediaDetailView: View {
                     .lineSpacing(4)
                     .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                     .lineLimit(isPlotExpanded ? nil : 4)
-
-                Button(isPlotExpanded ? "Less" : "More") {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isPlotExpanded.toggle()
+                    .textSelection(.enabled)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { plotShownHeight = $0 }
+                    .background(alignment: .topLeading) {
+                        // Unclamped twin, measured only.
+                        Text(cleanPlot)
+                            .font(.body)
+                            .lineSpacing(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .hidden()
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { plotFullHeight = $0 }
+                            .accessibilityHidden(true)
                     }
+
+                if isPlotExpanded || plotFullHeight > plotShownHeight + 1 {
+                    Button(isPlotExpanded ? "Less" : "More") {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                            isPlotExpanded.toggle()
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityLabel(isPlotExpanded ? "Show less of the synopsis" : "Show the full synopsis")
                 }
-                .buttonStyle(.borderless)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(Color.accentColor)
             }
             .frame(maxWidth: 860, alignment: .leading)
             .padding(.horizontal, 36)
@@ -875,10 +913,10 @@ struct MediaDetailView: View {
                                 subtitle: [item.year.map(String.init), MediaTypeDisplay.name(for: item.type)].compactMap { $0 }.first,
                                 posterURL: item.posterUrl,
                                 posterHeaders: item.posterHeaders,
+                                layout: .shelf(posterWidth: 150),
                             )
                         }
                         .buttonStyle(.plain)
-                        .frame(width: 150)
                         .help(item.name)
                     }
                 }
@@ -1004,16 +1042,10 @@ struct MediaDetailView: View {
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.8))
                 }
-                .font(.body.weight(.medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Capsule().fill(Color.white.opacity(0.15)))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
             }
-            .buttonStyle(.plain)
-            .help("Cancel download")
-            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: item.state)
+            .buttonStyle(HeroPillButtonStyle())
+            .help(item.state == .paused ? "Paused — click to cancel the download" : "Cancel download")
+            .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75), value: item.state)
         } else if let completed = completedRecord {
             Menu {
                 Button("Play Local File") {
@@ -1046,18 +1078,15 @@ struct MediaDetailView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.7))
                 }
-                .font(.body.weight(.medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Capsule().fill(Color.white.opacity(0.15)))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
             }
-            .menuStyle(.borderlessButton)
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(HeroPillButtonStyle())
+            .fixedSize()
             .help("Downloaded — click for actions")
         } else {
             Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
                     downloadMovie()
                 }
             } label: {
@@ -1065,14 +1094,8 @@ struct MediaDetailView: View {
                     Image(systemName: "arrow.down.circle")
                     Text("Download")
                 }
-                .font(.body.weight(.medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Capsule().fill(Color.white.opacity(0.15)))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(HeroPillButtonStyle())
             .help("Download this movie — right-click to choose a source")
             .contextMenu {
                 Button("Download from…") { showMovieSourcePicker = true }
@@ -1149,68 +1172,108 @@ struct MediaDetailView: View {
 
 // MARK: - Hero Title
 
-/// The title in the hero. Shows the provider's logo artwork (`logoUrl`) in
-/// place of the text, matching the Android app. While a logo is loading the
-/// title is held back so the text never flashes and then swaps; the text
-/// appears only when there is no logo, it fails, or it is slow to arrive.
-/// Whichever of the two appears first stays for the visit — a logo that
-/// lands after the text is only cached for next time.
+/// Keep a readable title and a stable title slot while optional logo artwork
+/// loads. Request identity includes credentials, and late completions cannot
+/// replace the title of a different item.
+///
+/// While a logo is loading the text is held back (it keeps its slot) so it
+/// never flashes and is then swapped for the logo; it appears when there is
+/// no logo, the logo fails, or it is slower than `patience`. Whichever shows
+/// first stays for the visit.
 private struct HeroTitle: View {
     let name: String
     let logoURL: String?
     var headers: [String: String]? = nil
-    @State private var logo: NSImage?
-    /// The logo failed or is taking too long; show the text instead.
+    @State private var loader = ArtworkLoader()
+    /// The logo failed or is taking too long; the text is shown instead.
     @State private var fellBack = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// How long a blank title is tolerated before the text steps in.
-    private static let patience: Duration = .seconds(1.5)
-
-    private var hasLogoURL: Bool {
-        logoURL?.isEmpty == false
-    }
+    private static let patience: Duration = .seconds(2.5)
 
     var body: some View {
-        // A cached logo is used on the very first frame, with no fade.
-        let shown = fellBack ? nil : logo ?? logoURL.flatMap { ImageCache.shared.synchronousMemoryImage(for: $0, headers: headers) }
-
+        let request = ArtworkRequest(url: logoURL, headers: headers)
+        let phase = loader.phase(for: request)
+        let asset = fellBack ? nil : phase.asset
+        let waitingForLogo: Bool = if request == nil || fellBack { false } else if case .failure = phase { false } else { true }
         ZStack(alignment: .bottomLeading) {
-            if let shown {
-                Image(nsImage: shown)
+            if let asset {
+                Image(nsImage: asset.image)
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 380, maxHeight: 130, alignment: .bottomLeading)
-                    .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 2)
-                    .accessibilityLabel(name)
-                    .accessibilityAddTraits(.isHeader)
+                    .scaledToFit()
+                    .frame(maxWidth: 380, maxHeight: 100, alignment: .bottomLeading)
                     .transition(.opacity)
             } else {
                 Text(name)
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.largeTitle.bold())
                     .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .shadow(color: .black.opacity(0.8), radius: 6, x: 0, y: 2)
-                    // Keeps its space while the logo loads, without showing.
-                    .opacity(hasLogoURL && !fellBack ? 0 : 1)
+                    .lineLimit(3)
+                    .opacity(waitingForLogo ? 0 : 1)
                     .transition(.opacity)
             }
         }
-        .task(id: logoURL) {
-            logo = nil
+        .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 100, alignment: .bottomLeading)
+        .shadow(color: .black.opacity(0.6), radius: 8, y: 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(.isHeader)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: asset != nil)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: waitingForLogo)
+        .task(id: request) {
             fellBack = false
-            guard let logoURL, !logoURL.isEmpty else { return }
-            let loaded = await ImageCache.shared.image(for: logoURL, headers: headers)
-            guard !Task.isCancelled, !fellBack else { return }
-            withAnimation(.easeOut(duration: 0.25)) {
-                logo = loaded
-                fellBack = loaded == nil
-            }
+            await loader.load(request)
         }
-        .task(id: logoURL) {
-            guard hasLogoURL else { return }
+        .task(id: request) {
+            guard request != nil else { return }
             try? await Task.sleep(for: Self.patience)
-            guard !Task.isCancelled, logo == nil else { return }
-            withAnimation(.easeOut(duration: 0.25)) { fellBack = true }
+            guard !Task.isCancelled, loader.phase(for: request).asset == nil else { return }
+            fellBack = true
+        }
+    }
+}
+
+// MARK: - Hero pill
+
+/// The hero's action capsules: one prominent white Play pill, the rest
+/// translucent. Hover and press feedback match the rest of the app, and
+/// the press never animates scale under Reduce Motion.
+private struct HeroPillButtonStyle: ButtonStyle {
+    var prominent = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        HeroPill(configuration: configuration, prominent: prominent)
+    }
+
+    private struct HeroPill: View {
+        let configuration: ButtonStyleConfiguration
+        let prominent: Bool
+        @State private var hovering = false
+        @Environment(\.isEnabled) private var isEnabled
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            configuration.label
+                .font(.body.weight(prominent ? .bold : .medium))
+                .foregroundStyle(prominent ? Color.black : Color.white)
+                .padding(.horizontal, prominent ? 22 : 14)
+                .padding(.vertical, 9)
+                .background {
+                    Capsule().fill(prominent
+                        ? Color.white.opacity(hovering ? 0.86 : 1)
+                        : Color.white.opacity(hovering ? 0.24 : 0.15))
+                }
+                .overlay {
+                    if !prominent {
+                        Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1)
+                    }
+                }
+                .shadow(color: .black.opacity(prominent ? 0.3 : 0), radius: 6, y: 2)
+                .contentShape(Capsule())
+                .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
+                .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+                .animation(.easeOut(duration: 0.12), value: hovering)
+                .onHover { hovering = $0 }
         }
     }
 }

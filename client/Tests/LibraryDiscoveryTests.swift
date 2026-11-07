@@ -674,6 +674,7 @@ final class LibraryDiscoveryTests: XCTestCase {
         preferences.homeShelf = .collection(.completed)
         var options = LibraryViewOptions()
         options.sort = .releaseYear
+        options.displayMode = .gallery
         options.reversed = true
         options.category = MediaCategory.anime.rawValue
         options.provider = "P"

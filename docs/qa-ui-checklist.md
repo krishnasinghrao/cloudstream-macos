@@ -46,6 +46,29 @@ U-75). Run before each release cut and after any player/settings change.
 - [ ] Results with non-ASCII titles (é, 中, emoji) render correctly.
 - [ ] Failed providers show a "Some providers failed: …" note.
 
+## Artwork in cards and details
+
+- [ ] Search a source with landscape thumbnails: the cards are wider and the complete thumbnail, including text at both edges, remains visible.
+- [ ] Mix portrait, landscape, square, and missing artwork in Home, Library, pages, and recommendations; cards keep their proportions, badges, selection borders, and progress bars.
+- [ ] A provider's horizontal homepage hint affects placeholders; actual image dimensions override it when artwork loads.
+- [ ] Open details with only a landscape (16:9) thumbnail: it fills the full-height 580 pt banner like a backdrop, whether the provider sent it as the poster, the backdrop, or both. A portrait or square poster is shown as before: a 2:3 poster on the right over a blurred copy of itself (440 pt banner); no artwork gives the compact banner.
+- [ ] Titles with a backdrop, or with a portrait/square poster, look exactly as before the artwork-aware cards. While a logo loads the title text stays hidden (up to 1.5 s) instead of flashing and swapping.
+- [ ] A failed backdrop uses working primary artwork. Failed image requests retain the reserved canvas; no supplied image URLs produce a compact header. Reload retries failed artwork.
+- [ ] At wide and narrow widths, the banner image reaches the trailing edge and fades smoothly into the page below; the upper half stays clear. Provider attribution stays with the metadata.
+- [ ] Narrow details wrap actions and metadata into readable rows; keyboard navigation retains the logical action order.
+- [ ] Resize details between a narrow window and full screen; artwork and controls remain usable. Check light/dark appearance, Reduce Motion, and Reduce Transparency.
+- [ ] Navigate quickly between titles while images load; an old image never appears on the new title. Cached artwork appears immediately when returning.
+
+## Library artwork layouts
+
+- [ ] Switch between Grid, By Artwork, and Gallery in a Library collection and a custom page. Each collection/page remembers its own choice after relaunch.
+- [ ] By Artwork separates landscape, portrait, square, and unclassified images. Unknown artwork is classified from measured dimensions as visible cards load; cached dimensions work offline after relaunch.
+- [ ] Outside the gallery (Grid, By Artwork, search, Home shelves, Continue Watching, More Like This) every card is exactly 2:3, 16:9 or 1:1: portrait artwork gets 2:3, landscape 16:9 and square 1:1, with the artwork filling the box. Cards in a row or grid share one size.
+- [ ] Gallery lays titles out in justified rows: every card in a row shares one height, full rows reach both edges with consistent gaps, and the last row is not stretched. A 16:9 card is as tall as the posters beside it and keeps its shape. Image completion resizes its own row without moving cards into other rows; resizing the window regroups rows in sort order.
+- [ ] Sorting, search, filters, selection, context menus, and navigation work in all modes. Custom-order dragging in By Artwork stays within the same artwork section.
+- [ ] A large collection stays lazy; switching display mode does not refetch or sort the underlying library, or download the entire collection's artwork.
+- [ ] Clear Image Cache removes the geometry index as well as image files; no delayed metadata write restores cleared entries.
+
 ## Downloads
 
 - [ ] Segmented control switches Queue / Downloaded Titles.

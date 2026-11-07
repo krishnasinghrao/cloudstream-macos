@@ -50,7 +50,7 @@ struct HistoryView: View {
                                     historyRow(row)
                                 }
                             } header: {
-                                Text(group.day, format: .dateTime.weekday(.wide).month().day().year())
+                                Self.dayTitle(group.day)
                                     .font(.headline)
                                     .foregroundStyle(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -77,7 +77,7 @@ struct HistoryView: View {
             windowSession.openLibraryItem(id: row.itemID, provider: row.provider, providerID: row.providerID, url: row.providerURL)
         } label: {
             HStack(spacing: 14) {
-                PosterImage(url: row.posterURL)
+                PosterImage(url: row.posterURL, contentMode: .fit)
                     .frame(width: 44, height: 66)
                     .clipShape(.rect(cornerRadius: 5, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
@@ -111,9 +111,9 @@ struct HistoryView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.vertical, 6)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(HoverRowButtonStyle())
+        .padding(.horizontal, -8)
         .contextMenu {
             Button("Open") { windowSession.openLibraryItem(id: row.itemID, provider: row.provider, providerID: row.providerID, url: row.providerURL) }
             if !row.isDownload, appState.isProviderMissing(row.providerID) {
@@ -163,6 +163,16 @@ struct HistoryView: View {
     }
 
     struct DayGroup { let day: Date; let rows: [Row] }
+
+    /// "Today" and "Yesterday" read faster than a full date for recent days.
+    static func dayTitle(_ day: Date, calendar: Calendar = .current) -> Text {
+        if calendar.isDateInToday(day) { return Text("Today") }
+        if calendar.isDateInYesterday(day) { return Text("Yesterday") }
+        let sameYear = calendar.isDate(day, equalTo: Date(), toGranularity: .year)
+        return sameYear
+            ? Text(day, format: .dateTime.weekday(.wide).month().day())
+            : Text(day, format: .dateTime.weekday(.wide).month().day().year())
+    }
 
     static func groupedByDay(_ rows: [Row], calendar: Calendar = .current) -> [DayGroup] {
         var order: [Date] = []

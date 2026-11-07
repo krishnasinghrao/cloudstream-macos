@@ -39,10 +39,16 @@ struct LibraryView: View {
         private var key: Key?
         private(set) var all: [StoredMediaItem] = []
         private(set) var arranged: [StoredMediaItem] = []
+        private(set) var artwork: [LibraryArtworkItem] = []
+        private(set) var artworkByID: [String: LibraryArtworkItem] = [:]
+        private(set) var itemsByID: [String: StoredMediaItem] = [:]
 
         func update(_ key: Key, _ make: () -> (all: [StoredMediaItem], arranged: [StoredMediaItem])) {
             guard key != self.key else { return }
             (all, arranged) = make()
+            artwork = arranged.map { LibraryArtworkItem(id: $0.id, url: $0.posterURL ?? $0.bannerURL) }
+            artworkByID = Dictionary(artwork.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            itemsByID = Dictionary(arranged.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             self.key = key
         }
     }
@@ -80,7 +86,7 @@ struct LibraryView: View {
     var body: some View {
         // At most one store read per library change: the menu, the filters
         // and every card's context menu share it.
-        let _ = arrangement.update(.init(version: storeVersion, collection: collection, options: options,
+        let _ = arrangement.update(.init(version: storeVersion, collection: collection, options: options.orderingAndFilters,
                                          query: windowSession.libraryFilter)) {
             let all = unfilteredItems()
             return (all, filteredAndSortedItems(all))
@@ -93,14 +99,9 @@ struct LibraryView: View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    if !items.isEmpty {
-                        Text("\(items.count) \(items.count == 1 ? "title" : "titles")")
-                            .font(.callout.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-
                     Spacer()
 
+                    LibraryLayoutPicker(selection: option(\.displayMode))
                     viewOptionsMenu(all)
 
                     Button(selection == nil ? "Select" : "Done") {
@@ -127,87 +128,13 @@ struct LibraryView: View {
                     )
                     .frame(maxWidth: .infinity, minHeight: 300)
                 } else {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)],
-                        spacing: 24,
-                    ) {
-                        ForEach(items) { item in
-                            Button {
-                                if selection != nil {
-                                    toggleSelection(item.id)
-                                } else {
-                                    windowSession.openLibraryItem(
-                                        id: item.id,
-                                        provider: item.providerName,
-                                        providerID: item.providerID,
-                                        url: item.providerURL,
-                                    )
-                                }
-                            } label: {
-                                PosterCard(
-                                    title: item.title,
-                                    subtitle: subtitle(for: item),
-                                    posterURL: item.posterURL ?? item.bannerURL,
-                                    progressFraction: item.displayProgress,
-                                    highlightBadge: item.newEpisodeCount > 0 ? "\(item.newEpisodeCount) NEW" : nil,
-                                    isSelected: selection.map { $0.contains(item.id) },
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            // The lifted card travels with the pointer; its slot stays open.
-                            .opacity(draggedID == item.id ? 0 : 1)
-                            .onDrag {
-                                guard canRearrange else { return NSItemProvider() }
-                                draggedID = item.id
-                                return NSItemProvider(object: item.id as NSString)
-                            } preview: {
-                                PosterCard(
-                                    title: item.title,
-                                    subtitle: subtitle(for: item),
-                                    posterURL: item.posterURL ?? item.bannerURL,
-                                )
-                                .frame(width: 170)
-                            }
-                            .onDrop(of: [.text], delegate: CardReorderDelegate(
-                                targetID: item.id,
-                                draggedID: draggedID,
-                                move: { dragged in move(dragged, onto: item.id, in: items) },
-                                finish: finishDrag,
-                            ))
-                            .contextMenu {
-                                Menu("Watch Status") {
-                                    ForEach(WatchType.allCases) { type in
-                                        Button(type.label) {
-                                            setWatchType(type, on: item)
-                                        }
-                                    }
-                                }
-                                Button {
-                                    toggleFavorite(item)
-                                } label: {
-                                    Label(item.isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                                          systemImage: item.isFavorite ? "heart.slash" : "heart")
-                                }
-                                AddToPageMenu(details: LibraryStore.shared.detailsPreview(for: item))
-                                if item.mediaType != "Download", appState.isProviderMissing(item.providerID) {
-                                    Button("Choose Provider…") {
-                                        providerAssignment = ProviderAssignment(id: item.id, title: item.title,
-                                            profileID: ProfileStore.shared.activeID,
-                                            owner: LibraryStore.shared.identityOwnerToken)
-                                    }
-                                }
-                                if rearrangeable, items.count > 1 {
-                                    Divider()
-                                    Button("Move to Beginning") { place(item, atFront: true, in: items) }
-                                        .disabled(items.first?.id == item.id)
-                                    Button("Move to End") { place(item, atFront: false, in: items) }
-                                        .disabled(items.last?.id == item.id)
-                                }
-                                Divider()
-                                Button("Remove from Library", role: .destructive) {
-                                    remove(item)
-                                }
-                            }
+                    LibraryArtworkCollection(
+                        entries: dragOrder == nil ? arrangement.artwork : items.compactMap { arrangement.artworkByID[$0.id] },
+                        mode: options.displayMode
+                    ) { entry, geometry, catalog in
+                        if let item = arrangement.itemsByID[entry.id] {
+                            libraryCard(item, entry: entry, geometry: geometry, catalog: catalog,
+                                        items: items, rearrangeable: rearrangeable)
                         }
                     }
                 }
@@ -238,7 +165,7 @@ struct LibraryView: View {
         }
         .onExitCommand { selection = nil }
         .confirmationDialog(
-            "Remove \(selection?.count ?? 0) titles from the library?",
+            (selection?.count ?? 0) == 1 ? "Remove 1 title from the library?" : "Remove \(selection?.count ?? 0) titles from the library?",
             isPresented: $confirmBulkRemove,
         ) {
             Button("Remove", role: .destructive) {
@@ -248,6 +175,90 @@ struct LibraryView: View {
         } message: {
             Text("Resume positions and favorites are kept.")
         }
+    }
+
+    private func libraryCard(_ item: StoredMediaItem, entry: LibraryArtworkItem, geometry: ArtworkGeometry?,
+                             catalog: LibraryArtworkCatalog, items: [StoredMediaItem], rearrangeable: Bool) -> some View {
+        Button {
+            if selection != nil {
+                toggleSelection(item.id)
+            } else {
+                windowSession.openLibraryItem(
+                    id: item.id,
+                    provider: item.providerName,
+                    providerID: item.providerID,
+                    url: item.providerURL,
+                )
+            }
+        } label: {
+            PosterCard(
+                title: item.title,
+                subtitle: item.cardSubtitle,
+                posterURL: item.posterURL ?? item.bannerURL,
+                progressFraction: item.displayProgress,
+                highlightBadge: item.newEpisodeCount > 0 ? "\(item.newEpisodeCount) NEW" : nil,
+                isSelected: selection.map { $0.contains(item.id) },
+                geometryHint: geometry,
+                onGeometry: { catalog.record($0, for: entry) },
+            )
+        }
+        .buttonStyle(.plain)
+        // The lifted card travels with the pointer; its slot stays open.
+        .opacity(draggedID == item.id ? 0 : 1)
+        .onDrag {
+            guard canRearrange else { return NSItemProvider() }
+            draggedID = item.id
+            return NSItemProvider(object: item.id as NSString)
+        } preview: {
+            PosterCard(
+                title: item.title,
+                subtitle: item.cardSubtitle,
+                posterURL: item.posterURL ?? item.bannerURL,
+            )
+            .frame(width: 170)
+        }
+        .onDrop(of: [.text], delegate: CardReorderDelegate(
+            targetID: item.id,
+            draggedID: draggedID,
+            move: { dragged in move(dragged, onto: item.id, in: items) },
+            finish: finishDrag,
+            accepts: acceptsDrop(on: entry, catalog: catalog),
+        ))
+        .contextMenu {
+            WatchStatusMenu(current: item.watchType) { LibraryStore.shared.setWatchType($0, on: item) }
+            Button {
+                LibraryStore.shared.toggleFavorite(item)
+            } label: {
+                Label(item.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                      systemImage: item.isFavorite ? "heart.slash" : "heart")
+            }
+            AddToPageMenu(details: LibraryStore.shared.detailsPreview(for: item))
+            if item.mediaType != "Download", appState.isProviderMissing(item.providerID) {
+                Button("Choose Provider…") {
+                    providerAssignment = ProviderAssignment(id: item.id, title: item.title,
+                        profileID: ProfileStore.shared.activeID,
+                        owner: LibraryStore.shared.identityOwnerToken)
+                }
+            }
+            if rearrangeable, items.count > 1 {
+                Divider()
+                Button("Move to Beginning") { place(item, atFront: true, in: items) }
+                    .disabled(items.first?.id == item.id)
+                Button("Move to End") { place(item, atFront: false, in: items) }
+                    .disabled(items.last?.id == item.id)
+            }
+            Divider()
+            Button("Remove from Library", role: .destructive) {
+                LibraryStore.shared.removeFromLibrary(item)
+            }
+        }
+    }
+
+    private func acceptsDrop(on entry: LibraryArtworkItem, catalog: LibraryArtworkCatalog) -> Bool {
+        guard options.displayMode == .categorized, let draggedID,
+              let dragged = arrangement.artworkByID[draggedID] else { return true }
+        return LibraryArtworkCategory(geometry: catalog.geometry(for: dragged))
+            == LibraryArtworkCategory(geometry: catalog.geometry(for: entry))
     }
 
     // MARK: - Filters & bulk actions
@@ -518,28 +529,6 @@ struct LibraryView: View {
                 + keyed.filter { $0.position != nil }.sorted { ($0.position ?? 0, $0.id) < ($1.position ?? 0, $1.id) }.map(\.item)
         }
     }
-
-    private func subtitle(for item: StoredMediaItem) -> String? {
-        if let season = item.lastSeason, let episode = item.lastEpisode {
-            return "S\(season):E\(episode)"
-        }
-        return MediaTypeDisplay.name(for: item.mediaType)
-    }
-
-    private func setWatchType(_ type: WatchType, on item: StoredMediaItem) {
-        let store = LibraryStore.shared
-        store.perform { try store.upsertLibraryEntry(details: store.detailsPreview(for: item), watchType: type) }
-    }
-
-    private func toggleFavorite(_ item: StoredMediaItem) {
-        let store = LibraryStore.shared
-        store.perform { try store.toggleFavorite(details: store.detailsPreview(for: item)) }
-    }
-
-    private func remove(_ item: StoredMediaItem) {
-        let store = LibraryStore.shared
-        store.perform { try store.removeFromLibrary(details: store.detailsPreview(for: item)) }
-    }
 }
 
 
@@ -550,25 +539,28 @@ private struct CardReorderDelegate: DropDelegate {
     let draggedID: String?
     let move: (String) -> Void
     let finish: () -> Void
+    var accepts = true
 
-    func validateDrop(info: DropInfo) -> Bool { draggedID != nil }
+    func validateDrop(info: DropInfo) -> Bool { draggedID != nil && accepts }
 
     func dropEntered(info: DropInfo) { shift() }
 
     /// Pointer movement keeps asking, so a card that slid under the pointer
     /// while another shift was settling is still acted on.
     func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard accepts else { return DropProposal(operation: .forbidden) }
         shift()
         return DropProposal(operation: .move)
     }
 
     func performDrop(info: DropInfo) -> Bool {
+        guard accepts else { return false }
         finish()
         return true
     }
 
     private func shift() {
-        guard let draggedID, let targetID, draggedID != targetID else { return }
+        guard accepts, let draggedID, let targetID, draggedID != targetID else { return }
         move(draggedID)
     }
 }

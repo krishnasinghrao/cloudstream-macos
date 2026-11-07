@@ -92,6 +92,18 @@ final class WindowSessionRegistry {
 
 extension FocusedValues {
     @Entry var windowSession: WindowSession?
+    /// The frontmost title page's commands, so the menu bar offers what its
+    /// toolbar does (View ▸ Reload Page, Title ▸ Play / Add to Favorites).
+    @Entry var titlePage: TitlePageCommands?
+}
+
+struct TitlePageCommands {
+    let name: String
+    let isFavorite: Bool
+    // Called from menu commands, which run on the main actor.
+    let reload: (() -> Void)?
+    let play: () -> Void
+    let toggleFavorite: () -> Void
 }
 
 /// Tracks the actual owning window rather than looking up NSApp.keyWindow.

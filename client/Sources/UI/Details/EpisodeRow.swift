@@ -25,8 +25,12 @@ struct EpisodeRow: View {
 
     private var isWatched: Bool { progress?.watched == true }
 
+    /// The thumbnail's play affordance and the row's hover fill track the
+    /// pointer separately: the row highlights anywhere over it.
     @State private var hovering = false
+    @State private var rowHovering = false
     @State private var showSourcePicker = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var queueItem: DownloadService.QueueItem? {
         DownloadService.shared.queueItem(forProvider: provider, episodeData: episode.data)
@@ -40,7 +44,7 @@ struct EpisodeRow: View {
         HStack(spacing: 16) {
             Button(action: onPlay) {
                 ZStack(alignment: .bottomLeading) {
-                    PosterImage(url: episode.posterUrl)
+                    PosterImage(url: episode.posterUrl, headers: title?.posterHeaders, contentMode: .fit)
                         .frame(width: 140, height: 80)
                         .clipShape(.rect(cornerRadius: 6, style: .continuous))
 
@@ -151,12 +155,14 @@ struct EpisodeRow: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(hovering ? Color.hoverFill : Color.cardSurface)
+                .fill(rowHovering ? Color.hoverFill : Color.cardSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color.cardBorder, lineWidth: 1)
         )
+        .contentShape(.rect(cornerRadius: 10, style: .continuous))
+        .onHover { rowHovering = $0 }
         .padding(.vertical, 1)
         .contextMenu { rowMenu }
     }
@@ -215,7 +221,9 @@ struct EpisodeRow: View {
                     DownloadService.shared.cancel(item)
                 } label: {
                     ZStack {
-                        if item.state == .downloading {
+                        // A paused transfer is not working: show where it
+                        // stopped rather than an indeterminate spinner.
+                        if item.state == .downloading || item.state == .paused {
                             ProgressView(value: item.progress)
                                 .progressViewStyle(.circular)
                                 .controlSize(.small)
@@ -231,11 +239,14 @@ struct EpisodeRow: View {
                     .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.borderless)
-                .help(item.state == .resolving ? "Resolving link… click to cancel" : (item.state == .queued ? "Queued… click to cancel" : "Downloading \(item.progressLabel)… click to cancel"))
+                .help(item.state == .resolving ? "Resolving link… click to cancel"
+                    : item.state == .queued ? "Queued… click to cancel"
+                    : item.state == .paused ? "Paused at \(item.progressLabel) — click to cancel"
+                    : "Downloading \(item.progressLabel)… click to cancel")
                 .accessibilityLabel("Cancel download of \(indexLabel)")
             } else {
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
                         onDownload()
                     }
                 } label: {
@@ -260,6 +271,6 @@ struct EpisodeRow: View {
                 )
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: queueItem?.state)
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75), value: queueItem?.state)
     }
 }

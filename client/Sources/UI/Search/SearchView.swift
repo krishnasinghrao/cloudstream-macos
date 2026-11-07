@@ -171,12 +171,12 @@ struct SearchView: View {
     private var resultsHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("\(windowSession.searchResults.count) Results")
+                Text(windowSession.searchResults.count == 1 ? "1 Result" : "\(windowSession.searchResults.count) Results")
                     .font(.title3.weight(.semibold))
 
                 if windowSession.isSearching {
                     ProgressView().controlSize(.small)
-                    Text("searching providers…")
+                    Text("Searching providers…")
                         .font(.callout)
                         .foregroundStyle(.tertiary)
                 }
@@ -218,7 +218,7 @@ struct SearchView: View {
                     .padding(.horizontal, 28)
 
                     ScrollView(.horizontal) {
-                        LazyHStack(spacing: 16) {
+                        LazyHStack(alignment: .top, spacing: 16) {
                             ForEach(group.results) { result in
                                 Button {
                                     appState.preferences.rememberSearch(result)
@@ -229,10 +229,10 @@ struct SearchView: View {
                                         subtitle: result.year.map(String.init) ?? MediaTypeDisplay.name(for: result.type),
                                         posterURL: result.posterUrl,
                                         posterHeaders: result.posterHeaders,
+                                        layout: .shelf(posterWidth: 168),
                                     )
                                 }
                                 .buttonStyle(.plain)
-                                .frame(width: 168)
                                 .contextMenu { DiscoverItemMenu(item: result) }
                             }
                         }

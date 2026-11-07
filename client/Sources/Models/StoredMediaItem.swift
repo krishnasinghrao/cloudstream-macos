@@ -124,13 +124,25 @@ final class StoredMediaItem {
     /// nil when unknown; sub-minute remains render as "<1m" instead of the
     /// dishonest "0m".
     var remainingLabel: String? {
-        guard totalDurationSeconds > 0 else { return nil }
+        guard totalDurationSeconds > 0, totalDurationSeconds.isFinite, progressSeconds.isFinite else { return nil }
         let remaining = max(0, totalDurationSeconds - progressSeconds)
-        let minutes = Int(remaining / 60)
+        let minutes = Int(min(remaining / 60, Double(Int32.max)))
         if minutes == 0 { return "<1m" }
         if minutes >= 60 {
             return "\(minutes / 60)h \(minutes % 60)m"
         }
         return "\(minutes)m"
     }
+}
+
+extension StoredMediaItem {
+    /// "S2 · E5" for the last watched episode (the format the title page,
+    /// history and player use), nil before any episode was played.
+    var episodePositionLabel: String? {
+        guard let lastSeason, let lastEpisode else { return nil }
+        return "S\(lastSeason) · E\(lastEpisode)"
+    }
+
+    /// Card subtitle: the episode position, else the media type.
+    var cardSubtitle: String? { episodePositionLabel ?? MediaTypeDisplay.name(for: mediaType) }
 }

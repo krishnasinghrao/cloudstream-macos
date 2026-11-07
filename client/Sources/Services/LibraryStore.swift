@@ -647,6 +647,20 @@ final class LibraryStore {
         try context.fetch(FetchDescriptor<StoredMediaItem>(predicate: #Predicate { $0.id == id })).first
     }
 
+    // MARK: Card actions (context menus on Home and Library)
+
+    func setWatchType(_ type: WatchType, on item: StoredMediaItem) {
+        perform { try upsertLibraryEntry(details: detailsPreview(for: item), watchType: type) }
+    }
+
+    func toggleFavorite(_ item: StoredMediaItem) {
+        perform { try toggleFavorite(details: detailsPreview(for: item)) }
+    }
+
+    func removeFromLibrary(_ item: StoredMediaItem) {
+        perform { try removeFromLibrary(details: detailsPreview(for: item)) }
+    }
+
     /// UI actions have no throwing event-handler signature. Keep their
     /// failure visible and return whether the action actually committed.
     @discardableResult

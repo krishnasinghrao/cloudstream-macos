@@ -130,9 +130,32 @@ enum LibrarySortOrder: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+enum LibraryDisplayMode: String, CaseIterable, Identifiable, Codable, Sendable {
+    case grid
+    case categorized
+    case gallery
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .grid: "Grid"
+        case .categorized: "By Artwork"
+        case .gallery: "Gallery"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .grid: "square.grid.2x2"
+        case .categorized: "rectangle.3.group"
+        case .gallery: "rectangle.grid.1x2"
+        }
+    }
+}
+
 /// What a library collection remembers between visits and launches.
 struct LibraryViewOptions: Codable, Equatable, Sendable {
     var sort: LibrarySortOrder = .recentActivity
+    var displayMode: LibraryDisplayMode = .grid
     var reversed = false
     /// `MediaCategory.rawValue`.
     var category: String?
@@ -140,10 +163,19 @@ struct LibraryViewOptions: Codable, Equatable, Sendable {
 
     init() {}
 
+    /// Layout is presentation state: switching it must not refetch or resort
+    /// the collection (which may contain thousands of SwiftData objects).
+    var orderingAndFilters: Self {
+        var value = self
+        value.displayMode = .grid
+        return value
+    }
+
     /// Tolerant: a value this build does not know falls back to its default.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         sort = (try? container.decode(LibrarySortOrder.self, forKey: .sort)) ?? .recentActivity
+        displayMode = (try? container.decode(LibraryDisplayMode.self, forKey: .displayMode)) ?? .grid
         reversed = (try? container.decode(Bool.self, forKey: .reversed)) ?? false
         category = try? container.decodeIfPresent(String.self, forKey: .category)
         provider = try? container.decodeIfPresent(String.self, forKey: .provider)

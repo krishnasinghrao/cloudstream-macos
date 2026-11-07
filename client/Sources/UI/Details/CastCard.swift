@@ -8,6 +8,25 @@ struct CastCard: View {
     @State private var isHovering = false
 
     var body: some View {
+        // A real button, so the card takes keyboard focus and Space/Return
+        // activate it like any other control.
+        Button(action: searchWeb) { card }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                isHovering = hovering
+            }
+            .help("Search the web for \(actor.name)")
+            .accessibilityHint("Searches the web for this person")
+            .contextMenu {
+                Button("Search the Web for \(actor.name)", action: searchWeb)
+                Button("Copy Name") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(actor.name, forType: .string)
+                }
+            }
+    }
+
+    private var card: some View {
         VStack(alignment: .center, spacing: 8) {
             ZStack {
                 Circle()
@@ -58,15 +77,7 @@ struct CastCard: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovering = hovering
-        }
-        .onTapGesture(perform: searchWeb)
-        .help("Search the web for \(actor.name)")
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Searches the web for this person")
-        .accessibilityAction(.default, searchWeb)
     }
 
     /// Opens a web search for the person in the default browser, as the

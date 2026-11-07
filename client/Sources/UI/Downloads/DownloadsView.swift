@@ -15,6 +15,7 @@ struct DownloadsView: View {
     @State private var diskName: String?
     @State private var diskIsInternal = true
     @State private var recordForDeletion: DownloadRecord?
+    @State private var confirmCancelAll = false
 
     /// Observation hooks: queue items are @Observable and the library store
     /// bumps `version` on every record mutation — no polling timer.
@@ -22,33 +23,32 @@ struct DownloadsView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            HStack(alignment: .firstTextBaseline) {
+            // One header row: the section switch leads, the queue's bulk
+            // actions trail it (no empty row when they do not apply).
+            HStack(spacing: 8) {
+                Picker("Section", selection: $tab) {
+                    Text("Active Queue").tag(Tab.queue)
+                    Text("Downloaded Titles").tag(Tab.completed)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+
                 Spacer()
+
                 if tab == .queue, !DownloadService.shared.queue.isEmpty {
-                    HStack(spacing: 8) {
-                        if activeOrQueuedCount > 0 {
-                            Button("Cancel All") {
-                                DownloadService.shared.cancelAll()
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        Button("Clear Finished") {
-                            DownloadService.shared.clearFinished()
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(finishedCount == 0)
+                    Button("Cancel All…") {
+                        confirmCancelAll = true
                     }
+                    .disabled(activeOrQueuedCount == 0)
+                    .help("Stop every queued and active download")
+                    Button("Clear Finished") {
+                        DownloadService.shared.clearFinished()
+                    }
+                    .disabled(finishedCount == 0)
+                    .help("Remove finished, failed and cancelled rows from the queue")
                 }
             }
-            .padding(.horizontal, 28)
-
-            Picker("Section", selection: $tab) {
-                Text("Active Queue").tag(Tab.queue)
-                Text("Downloaded Titles").tag(Tab.completed)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 340)
             .padding(.horizontal, 28)
 
             storageGauge
@@ -74,6 +74,18 @@ struct DownloadsView: View {
         }
         .onChange(of: UserPreferences.shared.downloadDirectory) { _, _ in
             refreshDisk()
+        }
+        .confirmationDialog(
+            activeOrQueuedCount == 1 ? "Cancel 1 download?" : "Cancel \(activeOrQueuedCount) downloads?",
+            isPresented: $confirmCancelAll,
+            titleVisibility: .visible,
+        ) {
+            Button("Cancel Downloads", role: .destructive) {
+                DownloadService.shared.cancelAll()
+            }
+            Button("Keep Downloading", role: .cancel) {}
+        } message: {
+            Text("Partially downloaded files are discarded.")
         }
         .confirmationDialog(
             "Delete “\(recordForDeletion?.title ?? "") — \(recordForDeletion?.episodeLabel ?? "")”?",
@@ -145,21 +157,21 @@ struct DownloadsView: View {
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.primary.opacity(0.08))
-                    let used = max(0, diskTotal - diskFree)
-                    Capsule()
-                        .fill(Color.accentColor)
-                        .frame(width: proxy.size.width * (diskTotal > 0 ? Double(used) / Double(diskTotal) : 0))
-                }
-            }
-            .frame(height: 6)
+            ProgressView(value: usedFraction)
+                .progressViewStyle(.linear)
+                .tint(usedFraction > 0.95 ? .orange : .accentColor)
+                .accessibilityLabel("Storage used")
+                .accessibilityValue("\(ByteCountFormatter.string(fromByteCount: diskFree, countStyle: .file)) free")
         }
         .padding(16)
         .background(Color.cardSurface, in: .rect(cornerRadius: 12, style: .continuous))
         .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.cardBorder, lineWidth: 1))
+    }
+
+    private var usedFraction: Double {
+        guard diskTotal > 0 else { return 0 }
+        return min(1, max(0, Double(diskTotal - diskFree) / Double(diskTotal)))
     }
 
     @ViewBuilder
@@ -185,15 +197,32 @@ struct DownloadsView: View {
                             onRemove: { DownloadService.shared.removeFromQueue(item) },
                         )
                         .contextMenu {
+                            // Every row button is also here, plus queue order.
+                            switch item.state {
+                            case .downloading:
+                                Button("Pause") { DownloadService.shared.pause(item) }
+                            case .paused where !item.resumeRequested:
+                                Button("Resume") { DownloadService.shared.resume(item) }
+                            default:
+                                EmptyView()
+                            }
                             if item.state == .queued {
                                 Button("Download Next") {
                                     DownloadService.shared.moveToFront(item)
                                 }
                             }
+                            if item.state == .failed || item.state == .cancelled {
+                                Button("Retry") { DownloadService.shared.retry(item) }
+                            }
                             if item.state == .completed || item.state == .failed || item.state == .cancelled {
                                 Button("Reveal in Finder") {
                                     NSWorkspace.shared.activateFileViewerSelecting([item.destinationURL.deletingLastPathComponent()])
                                 }
+                                Divider()
+                                Button("Remove from Queue") { DownloadService.shared.removeFromQueue(item) }
+                            } else if item.state != .finalizing {
+                                Divider()
+                                Button("Cancel Download", role: .destructive) { DownloadService.shared.cancel(item) }
                             }
                         }
                     }
@@ -251,6 +280,7 @@ struct QueueRow: View {
                 Text("\(item.title) — \(item.episodeLabel)")
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
+                    .help("\(item.title) — \(item.episodeLabel)")
                 HStack(spacing: 10) {
                     Text(stateLabel)
                         .foregroundStyle(item.state == .failed ? Color.red : Color.secondary)
@@ -264,7 +294,7 @@ struct QueueRow: View {
                         Text("ETA \(eta)")
                     }
                     if item.activeLinkIndex > 0 {
-                        Text("mirror #\(item.activeLinkIndex + 1)")
+                        Text("Mirror \(item.activeLinkIndex + 1)")
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -292,6 +322,7 @@ struct QueueRow: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Pause download")
+                .accessibilityLabel("Pause download")
             case .paused where item.resumeRequested:
                 Button {
                     onPause()
@@ -301,6 +332,7 @@ struct QueueRow: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Keep paused")
+                .accessibilityLabel("Keep paused")
             case .paused:
                 Button {
                     onResume()
@@ -310,6 +342,7 @@ struct QueueRow: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Resume download")
+                .accessibilityLabel("Resume download")
             default:
                 EmptyView()
             }
@@ -322,6 +355,7 @@ struct QueueRow: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Retry download")
+                .accessibilityLabel("Retry download")
             }
             if item.state == .finalizing {
                 EmptyView()
@@ -334,6 +368,7 @@ struct QueueRow: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Cancel download")
+                .accessibilityLabel("Cancel download")
             } else {
                 Button {
                     onRemove()
@@ -343,6 +378,7 @@ struct QueueRow: View {
                 }
                 .buttonStyle(.bordered)
                 .help(item.state == .completed ? "Remove from list (keeps the downloaded file)" : "Remove from queue")
+                .accessibilityLabel("Remove from queue")
             }
         }
         .padding(16)
@@ -386,12 +422,14 @@ struct DownloadedRow: View {
                 Text("\(record.title) — \(record.episodeLabel)")
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
+                    .help("\(record.title) — \(record.episodeLabel)")
                 HStack(spacing: 8) {
                     Text(record.provider)
                     Text(ByteCountFormatter.string(fromByteCount: record.fileByteSize, countStyle: .file))
                     Text(record.destinationPath)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .help(record.destinationPath)
                 }
                 .font(.caption)
                 .foregroundStyle(.tertiary)
@@ -413,11 +451,10 @@ struct DownloadedRow: View {
                 Button {
                     playLocalFile()
                 } label: {
-                    Image(systemName: "play.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(Color.accentColor)
+                    Image(systemName: "play.fill")
+                        .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
                 .help("Play downloaded file")
                 .accessibilityLabel("Play downloaded file")
 
@@ -429,6 +466,7 @@ struct DownloadedRow: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Reveal in Finder")
+                .accessibilityLabel("Reveal in Finder")
             }
 
             if availability == .missing {
@@ -447,13 +485,30 @@ struct DownloadedRow: View {
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityLabel("Delete download")
                 .disabled(availability == .volumeUnavailable)
                 .help(availability == .volumeUnavailable ? "Connect the disk to delete this download" : "Delete download and file")
             }
         }
         .contextMenu {
+            if record.existsOnDisk {
+                Button("Play", action: playLocalFile)
+                Button("Reveal in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([record.destinationURL])
+                }
+            }
             if availability == .present {
                 Button("Add to Library") { DownloadService.shared.addCompletedToCurrentLibrary(record) }
+            }
+            Divider()
+            if availability == .missing {
+                Button("Remove from List") {
+                    DownloadService.shared.forgetMissingDownload(recordID: record.id, provider: record.provider,
+                                                                 destinationURL: record.destinationURL)
+                }
+            } else {
+                Button("Delete Download…", role: .destructive, action: onDelete)
+                    .disabled(availability == .volumeUnavailable)
             }
         }
         .padding(16)

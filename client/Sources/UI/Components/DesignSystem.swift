@@ -50,3 +50,51 @@ struct LoadingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+// MARK: - Watch status menu
+
+/// The "Watch Status" submenu of a title's context menu. A picker, so the
+/// title's current status carries the native checkmark.
+struct WatchStatusMenu: View {
+    let current: WatchType?
+    let onSelect: (WatchType) -> Void
+
+    var body: some View {
+        Picker("Watch Status", selection: Binding<WatchType?>(
+            get: { current },
+            set: { if let type = $0, type != current { onSelect(type) } },
+        )) {
+            ForEach(WatchType.allCases) { type in
+                Text(type.label).tag(WatchType?.some(type))
+            }
+        }
+        .pickerStyle(.menu)
+    }
+}
+
+// MARK: - Hoverable row
+
+/// A full-width list row that is a button: a subtle rounded fill follows the
+/// pointer and the press dims it, as in Finder and Music lists.
+struct HoverRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HoverRow(configuration: configuration)
+    }
+
+    private struct HoverRow: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(hovering || configuration.isPressed ? Color.hoverFill : .clear)
+                )
+                .opacity(configuration.isPressed ? 0.75 : 1)
+                .contentShape(.rect(cornerRadius: 8, style: .continuous))
+                .onHover { hovering = $0 }
+        }
+    }
+}
