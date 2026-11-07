@@ -36,8 +36,9 @@ private func onMpvRenderUpdateCallback(_ rawContext: UnsafeMutableRawPointer?) {
 ///   frames are in flight; a buffer is only reused after the GPU finished
 ///   sampling it.
 /// * Pacing: a display link drives presentation; mpv's update callback only
-///   marks a frame as available, and `mpv_render_context_report_swap` feeds
-///   mpv's timing. Occluded windows consume frames without rendering them.
+///   marks a frame as available. Each render call is reported as a swap at
+///   once (`reportSwap`), so mpv's timing never waits for a GPU fence or a
+///   display tick. Occluded windows consume frames without rendering them.
 /// * Control: every mpv command/property write is asynchronous — the main
 ///   thread never waits on the playback core. Teardown runs off the main thread.
 @MainActor
@@ -1060,10 +1061,10 @@ final class MetalVideoView: NSView {
         }
 
         if let gl {
-            guard Self.renderGPU(ctx, gl: gl, buffer: buffer, poolChanged: buffers.takePoolChanged(), width: width, height: height),
-                  let fence = cs_gl_fence(gl) else {
+            let rendered = Self.renderGPU(ctx, gl: gl, buffer: buffer, poolChanged: buffers.takePoolChanged(), width: width, height: height)
+            Self.reportSwap(ctx)
+            guard rendered, let fence = cs_gl_fence(gl) else {
                 inFlightFrames.signal()
-                mpv_render_context_report_swap(ctx)
                 return
             }
             if cs_gl_fence_poll(gl, fence) == 1 {
@@ -1076,9 +1077,10 @@ final class MetalVideoView: NSView {
             }
             return
         }
-        guard Self.renderSoftware(ctx, buffer: buffer, width: width, height: height) else {
+        let rendered = Self.renderSoftware(ctx, buffer: buffer, width: width, height: height)
+        Self.reportSwap(ctx)
+        guard rendered else {
             inFlightFrames.signal()
-            mpv_render_context_report_swap(ctx)
             return
         }
         present(buffer, width: width, height: height, to: target)
@@ -1093,16 +1095,14 @@ final class MetalVideoView: NSView {
         let buffers: RenderBufferState
     }
 
-    /// Samples a finished frame into the next drawable and reports the swap.
-    /// Owns one `inFlightFrames` slot: released when the GPU completes, or at
-    /// once if the frame cannot be presented.
+    /// Samples a finished frame into the next drawable. The swap was already
+    /// reported right after the render call (`reportSwap`). Owns one
+    /// `inFlightFrames` slot: released when the GPU completes, or at once if
+    /// the frame cannot be presented.
     nonisolated private func present(_ buffer: CVPixelBuffer, width: Int, height: Int, to target: Presentation) {
         var frameSubmitted = false
         defer {
-            if !frameSubmitted {
-                inFlightFrames.signal()
-                mpv_render_context_report_swap(target.ctx)
-            }
+            if !frameSubmitted { inFlightFrames.signal() }
         }
         renderedFrameObserverForTesting?(buffer)
         guard let textureCache = target.buffers.textureCache else { return }
@@ -1135,7 +1135,6 @@ final class MetalVideoView: NSView {
         frameSubmitted = true
         commandBuffer.present(drawable)
         commandBuffer.commit()
-        mpv_render_context_report_swap(target.ctx)
         renderLock.lock()
         presentedFrames += 1
         renderLock.unlock()
@@ -1155,12 +1154,12 @@ final class MetalVideoView: NSView {
         setPendingPresentation(false)
     }
 
-    /// Render queue: a frame that failed or took too long is not shown.
+    /// Render queue: a frame that failed or took too long is not shown. Its
+    /// swap was reported when it was rendered.
     nonisolated private func dropPendingGPUFrame(gl: OpaquePointer, ctx: OpaquePointer?) {
         guard pendingGPU.frame != nil else { return }
         takePendingGPUFrame(gl: gl)
         inFlightFrames.signal()
-        if let ctx { mpv_render_context_report_swap(ctx) }
     }
 
     /// The GPU path's frame size: the drawable's, capped at `maxRenderDimension`.
@@ -1247,6 +1246,17 @@ final class MetalVideoView: NSView {
             ]
             _ = mpv_render_context_render(ctx, &params)
         }
+        reportSwap(ctx)
+    }
+
+    /// Render queue, exactly once after every `mpv_render_context_render`
+    /// call, drawn or skipped (from the sprint's 77c1ad1). mpv's video thread
+    /// waits for this before it handles the next frame (vo_libmpv flip_page).
+    /// A GPU frame whose fence has not passed is presented on a later display
+    /// tick; reporting only then put that wait inside mpv's frame timing, and
+    /// on a display whose refresh matches the frame rate the lag builds up
+    /// into dropped frames. Presentation still happens when the frame is ready.
+    nonisolated private static func reportSwap(_ ctx: OpaquePointer) {
         mpv_render_context_report_swap(ctx)
     }
 

@@ -149,6 +149,8 @@ final class PlayerViewModel {
     weak var windowController: PlayerWindowController?
 
     let preferences = UserPreferences.shared
+    /// Timeline thumbnails for the current file (none for live streams).
+    let scrubPreviews = ScrubPreviewStore()
 
     // MARK: Private bookkeeping
 
@@ -744,6 +746,11 @@ final class PlayerViewModel {
             usesQueuedNext: usesQueued,
             decryption: link.drm,
         )
+        // Exactly what the player loads: a relayed stream's resource is the
+        // relay and its headers are empty, so credentials never reach the
+        // preview decoder's direct connection.
+        scrubPreviews.configure(source: ScrubPreviewSource(
+            id: loadRequestCounter, resource: resource, headers: headers ?? link.headers, decryption: link.drm))
         pendingResumeCheck = startAt
         phase = .loading
         isBuffering = false
@@ -1840,6 +1847,7 @@ final class PlayerViewModel {
         nextEpisodeLinks = nil
         session = nil
         loadRequest = nil
+        scrubPreviews.configure(source: nil)
         pendingTitle = nil
         phase = .idle
         isBuffering = false

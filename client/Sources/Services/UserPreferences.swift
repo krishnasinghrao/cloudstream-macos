@@ -115,6 +115,12 @@ final class UserPreferences {
         didSet { defaults.set(rememberPlaybackPerTitle, forKey: "rememberPlaybackPerTitle") }
     }
 
+    /// Thumbnails above the timeline while hovering or dragging. Each new
+    /// position fetches a little of the stream over a second connection.
+    var showScrubPreviews: Bool {
+        didSet { defaults.set(showScrubPreviews, forKey: "showScrubPreviews") }
+    }
+
     var lastVolume: Double {
         didSet { defaults.set(lastVolume, forKey: "lastVolume") }
     }
@@ -262,6 +268,7 @@ final class UserPreferences {
         self.seekStepSeconds = (defaults.object(forKey: "seekStepSeconds") as? Double).flatMap { $0 > 0 ? $0 : nil } ?? 10
         self.manualSkipSeconds = (defaults.object(forKey: "manualSkipSeconds") as? Double).flatMap { $0 > 0 ? $0 : nil } ?? 85
         self.rememberPlaybackPerTitle = defaults.object(forKey: "rememberPlaybackPerTitle") as? Bool ?? true
+        self.showScrubPreviews = defaults.object(forKey: "showScrubPreviews") as? Bool ?? true
         self.lastVolume = min(100, max(0, defaults.object(forKey: "lastVolume") as? Double ?? 100))
         self.playbackMaxQuality = defaults.integer(forKey: "playbackMaxQuality")
         self.sourcePriority = defaults.stringArray(forKey: "sourcePriority") ?? []
@@ -378,6 +385,7 @@ final class UserPreferences {
         if let v = double("seekStepSeconds"), v > 0, v <= 300 { seekStepSeconds = v }
         if let v = double("manualSkipSeconds"), v > 0, v <= 600 { manualSkipSeconds = v }
         if let v = bool("rememberPlaybackPerTitle") { rememberPlaybackPerTitle = v }
+        if let v = bool("showScrubPreviews") { showScrubPreviews = v }
         if let v = int("playbackMaxQuality"), v >= 0 { playbackMaxQuality = v }
         if let v = strings("sourcePriority") { sourcePriority = v.map(LinkRanker.sourceKey) }
         if let v = strings("avoidedSources") { avoidedSources = v.map(LinkRanker.sourceKey) }

@@ -542,6 +542,7 @@ struct ClockedTimelineScrubber: View {
         PlayerTimelineScrubber(
             elapsed: clock.elapsed,
             duration: clock.duration,
+            previews: player.preferences.showScrubPreviews ? player.scrubPreviews : nil,
             onScrubStart: {
                 player.isInteractingWithHUD = true
             },
@@ -556,6 +557,8 @@ struct ClockedTimelineScrubber: View {
 struct PlayerTimelineScrubber: View {
     let elapsed: Double
     let duration: Double
+    /// Timeline thumbnails; nil shows the time alone.
+    var previews: ScrubPreviewStore? = nil
     var onScrubStart: () -> Void
     var onScrubEnd: (Double) -> Void
 
@@ -563,6 +566,14 @@ struct PlayerTimelineScrubber: View {
     @State private var isHovering = false
     @State private var hoverFraction: Double?
     @State private var dragPositionSeconds: Double = 0
+
+    /// The track's height in the HUD layout.
+    static let layoutHeight: CGFloat = 18
+    /// The band that accepts hover and drags. Wider than the drawn track so
+    /// ordinary vertical drift while scrubbing does not end the hover and
+    /// reset the preview; the overflow lands in the HUD's stack spacing.
+    static let hitHeight: CGFloat = 32
+    private static let hitOverflow = (hitHeight - layoutHeight) / 2
 
     private var currentPosition: Double {
         isDragging ? dragPositionSeconds : elapsed
@@ -604,7 +615,15 @@ struct PlayerTimelineScrubber: View {
                         .offset(x: max(0, min(width - 11, width * progressFraction - 5.5)))
                         .opacity((isHovering || isDragging) ? 1.0 : 0.0)
 
-                    if let hoverFraction, isHovering, !isDragging {
+                    if isDragging || isHovering, isDurationKnown, let previews, previews.isAvailable,
+                       let seconds = isDragging ? dragPositionSeconds : hoverFraction.map({ duration * $0 }) {
+                        // Bottom-anchored in a zero-height frame so the bubble
+                        // grows upwards from just above the track.
+                        let half = ScrubPreviewBubble.width / 2
+                        ScrubPreviewBubble(store: previews, time: Self.timeString(seconds))
+                            .frame(width: ScrubPreviewBubble.width, height: 0, alignment: .bottom)
+                            .position(x: width > half * 2 ? max(half, min(width - half, width * seconds / duration)) : width / 2, y: Self.hitOverflow - 6)
+                    } else if let hoverFraction, isHovering, !isDragging {
                         let hoverSeconds = duration * hoverFraction
                         let tipOffset = max(20, min(width - 20, width * hoverFraction))
 
@@ -614,10 +633,10 @@ struct PlayerTimelineScrubber: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2.5)
                             .background(Color.black.opacity(0.75), in: Capsule())
-                            .position(x: tipOffset, y: -14)
+                            .position(x: tipOffset, y: Self.hitOverflow - 14)
                     }
                 }
-                .frame(height: 18)
+                .frame(height: Self.hitHeight)
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
@@ -628,12 +647,14 @@ struct PlayerTimelineScrubber: View {
                             }
                             let fraction = max(0, min(1, value.location.x / width))
                             dragPositionSeconds = fraction * duration
+                            if isDurationKnown { previews?.preview(at: dragPositionSeconds, duration: duration) }
                         }
                         .onEnded { value in
                             let fraction = max(0, min(1, value.location.x / width))
                             let target = fraction * duration
                             dragPositionSeconds = target
                             isDragging = false
+                            if !isHovering { previews?.endPreview() }
                             onScrubEnd(target)
                         },
                 )
@@ -641,14 +662,18 @@ struct PlayerTimelineScrubber: View {
                     switch phase {
                     case .active(let location):
                         isHovering = true
-                        hoverFraction = max(0, min(1, location.x / width))
+                        let fraction = max(0, min(1, location.x / width))
+                        hoverFraction = fraction
+                        if !isDragging, isDurationKnown { previews?.preview(at: duration * fraction, duration: duration) }
                     case .ended:
                         isHovering = false
                         hoverFraction = nil
+                        if !isDragging { previews?.endPreview() }
                     }
                 }
             }
-            .frame(height: 18)
+            .frame(height: Self.hitHeight)
+            .padding(.vertical, -Self.hitOverflow)
             .allowsHitTesting(isDurationKnown)
             .animation(.easeInOut(duration: 0.15), value: isHovering)
             .accessibilityElement()
@@ -687,6 +712,53 @@ struct PlayerTimelineScrubber: View {
             return String(format: "%d:%02d:%02d", hours, minutes, secs)
         }
         return String(format: "%02d:%02d", minutes, secs)
+    }
+}
+
+/// Thumbnail and time above the scrubber. The only view that observes the
+/// preview frame, so arriving frames re-render nothing else (U1).
+struct ScrubPreviewBubble: View {
+    let store: ScrubPreviewStore
+    let time: String
+
+    static let width: CGFloat = 160
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        VStack(spacing: 5) {
+            // No frame yet (decoder still seeking): the time alone, never an
+            // empty black box. The thumbnail fades in when it arrives.
+            if let image = store.image {
+                Image(decorative: image, scale: 2)
+                    .resizable()
+                    .interpolation(.medium)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: Self.width, height: Self.height(for: image))
+                    .background(Color.black.opacity(0.7))
+                    .clipShape(shape)
+                    .overlay(shape.strokeBorder(Color.white.opacity(0.3), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.45), radius: 6, y: 2)
+                    .transition(.opacity)
+            }
+
+            Text(time)
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2.5)
+                .background(Color.black.opacity(0.75), in: Capsule())
+        }
+        .fixedSize()
+        .animation(.easeOut(duration: 0.12), value: store.image != nil)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// The frame's own aspect ratio, 16:9 until the first frame arrives;
+    /// bounded so portrait or very wide video cannot cover the HUD.
+    static func height(for image: CGImage?) -> CGFloat {
+        guard let image, image.width > 0 else { return width * 9 / 16 }
+        return max(width / 3, min(width, width * CGFloat(image.height) / CGFloat(image.width)))
     }
 }
 

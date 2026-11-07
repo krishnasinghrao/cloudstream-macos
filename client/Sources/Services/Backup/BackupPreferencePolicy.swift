@@ -15,7 +15,7 @@ enum BackupPreferencePolicy {
     private static let schema: [String: Kind] = {
         var result: [String: Kind] = [:]
         for key in ["continuousPlayback", "videoFillsScreen", "autoAddDownloadsToLibrary",
-                    "autoUpdateLibraryStatus", "rememberPlaybackPerTitle", "autoSelectSubtitles",
+                    "autoUpdateLibraryStatus", "rememberPlaybackPerTitle", "showScrubPreviews", "autoSelectSubtitles",
                     "subtitleBold", "showDiscoverOnHome", "checkForNewEpisodes", "notifyNewEpisodes",
                     "autoBackupEnabled", "indexInSpotlight", "showMenuBarExtra", "showDockBadge"] {
             result[key] = .bool

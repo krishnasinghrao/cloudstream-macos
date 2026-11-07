@@ -52,6 +52,8 @@ struct PlaybackSettingsView: View {
                     }
                 }
                 .help("Used when a file has no intro/credits chapters")
+                Toggle("Show thumbnail previews on the timeline", isOn: $preferences.showScrubPreviews)
+                    .help("Hovering over the timeline fetches small frames of the video over a second connection")
             }
 
             Section {
