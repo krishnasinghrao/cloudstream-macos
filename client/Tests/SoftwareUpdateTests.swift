@@ -235,6 +235,22 @@ final class UpdatePreparationTests: XCTestCase {
         XCTAssertEqual(finished.output.count, 1_048_576)
     }
 
+    /// `hdiutil attach` exits while the diskimages-helper it started keeps
+    /// its stdout open for as long as the image is mounted. The result must
+    /// arrive when the tool exits, not when every inheritor closes stdout.
+    func testToolWhoseChildKeepsStdoutOpenStillReturnsWhenItExits() async throws {
+        let result = try await withThrowingTaskGroup(of: (status: Int32, output: Data)?.self) { group in
+            group.addTask { try await UpdateInstaller.run("/bin/sh", ["-c", "sleep 60 & echo attached"]) }
+            group.addTask { try await Task.sleep(for: .seconds(10)); return nil }
+            let first = try await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+        let finished = try XCTUnwrap(result, "waited for the background child instead of the tool")
+        XCTAssertEqual(finished.status, 0)
+        XCTAssertEqual(String(decoding: finished.output, as: UTF8.self), "attached\n")
+    }
+
     override func setUpWithError() throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent("cs-update-prep-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

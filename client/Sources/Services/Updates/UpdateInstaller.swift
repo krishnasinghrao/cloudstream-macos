@@ -226,24 +226,39 @@ enum UpdateInstaller {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
         process.arguments = arguments
-        let output = Pipe()
+        // Stdout goes to a private temporary file, not a pipe. A pipe fails
+        // both ways: read after exit, a tool that writes more than its buffer
+        // (64 KiB) blocks and never exits; read to end of file, `hdiutil
+        // attach` never delivers one, because the diskimages-helper it starts
+        // inherits stdout and lives as long as the image is mounted. A file
+        // neither fills nor waits for other holders; it is read once the tool
+        // itself has exited.
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cloudstream-tool-\(UUID().uuidString).out")
+        guard FileManager.default.createFile(atPath: outputURL.path, contents: nil,
+                                             attributes: [.posixPermissions: 0o600]) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+        let output = try FileHandle(forWritingTo: outputURL)
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
-        return try await withTaskCancellationHandler {
+        let status: Int32 = try await withTaskCancellationHandler {
             try Task.checkCancellation()
-            try process.run()
-            // Drain stdout while the tool runs. Reading only after it exits
-            // deadlocks once it writes more than the pipe buffer (64 KiB): the
-            // tool blocks on the write and never exits. End of file arrives
-            // when the tool closes stdout, i.e. exits (or is terminated on cancel).
-            return await Task.detached(priority: .utility) {
-                let data = output.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-                return (process.terminationStatus, data)
-            }.value
+            return try await withCheckedThrowingContinuation { continuation in
+                process.terminationHandler = { finished in
+                    continuation.resume(returning: finished.terminationStatus)
+                }
+                do { try process.run() } catch {
+                    process.terminationHandler = nil
+                    continuation.resume(throwing: error)
+                }
+            }
         } onCancel: {
             if process.isRunning { process.terminate() }
         }
+        try? output.close()
+        return (status, (try? Data(contentsOf: outputURL)) ?? Data())
     }
 
     /// Free space needed beside the installed app: the disk image plus the

@@ -79,6 +79,7 @@ struct ProfileSwitcher: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .help("Switch profile")
+        .accessibilityIdentifier("Sidebar Profile")
         .accessibilityLabel("Profile: \(store.active.name). Switch profile")
         .sheet(isPresented: $showManager) { ProfileManagerView() }
     }
