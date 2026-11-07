@@ -366,7 +366,13 @@ struct SidebarView: View {
                 Label("Extensions", systemImage: "puzzlepiece.extension").tag(AppDestination.extensions)
             }
         }
+        // Native sidebar list (selection, materials, accent-tinted icons that
+        // grey out in inactive windows), with Apple TV for Mac's proportions:
+        // a 30 pt row rhythm and body-size labels.
         .listStyle(.sidebar)
+        .environment(\.defaultMinListRowHeight, 30)
+        .font(.body)
+        .imageScale(.medium)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 Divider()

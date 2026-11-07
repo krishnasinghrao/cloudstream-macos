@@ -41,6 +41,7 @@ struct LockView: View {
 /// Sidebar footer: current profile + switcher (Phase 7.2).
 struct ProfileSwitcher: View {
     @State private var showManager = false
+    @State private var isHovered = false
     private var store: ProfileStore { ProfileStore.shared }
 
     var body: some View {
@@ -61,24 +62,33 @@ struct ProfileSwitcher: View {
             }
         } label: {
             HStack(spacing: 8) {
+                // Circular avatar, as Apple TV for Mac's account button.
                 Image(systemName: store.active.symbol)
-                    .font(.title3)
-                    .foregroundStyle(Color.accentColor)
+                    .font(.title)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+                    .background(.quaternary, in: Circle())
+                    .overlay {
+                        Circle().strokeBorder(.primary.opacity(0.12), lineWidth: 1)
+                    }
+                    .accessibilityHidden(true)
                 Text(store.active.name)
-                    .font(.callout.weight(.medium))
+                    .font(.body)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
             .contentShape(Rectangle())
+            .background(isHovered ? Color.primary.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: 8))
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .help("Switch profile")
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .onHover { isHovered = $0 }
+        .help("Switch profile: \(store.active.name)")
         .accessibilityIdentifier("Sidebar Profile")
         .accessibilityLabel("Profile: \(store.active.name). Switch profile")
         .sheet(isPresented: $showManager) { ProfileManagerView() }
