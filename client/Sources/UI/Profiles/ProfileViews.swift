@@ -77,7 +77,7 @@ struct ProfileSwitcher: View {
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 2)
             .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
             .contentShape(Rectangle())
             .background(isHovered ? Color.primary.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: 8))
@@ -85,7 +85,8 @@ struct ProfileSwitcher: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .padding(.horizontal, 10)
+        // The sidebar's shared column: the avatar centres on the row icons.
+        .padding(.horizontal, SidebarLayout.edgeInset)
         .padding(.vertical, 8)
         .onHover { isHovered = $0 }
         .help("Switch profile: \(store.active.name)")

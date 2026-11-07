@@ -4,7 +4,7 @@ import SwiftUI
 /// list: the row sits in the sidebar's bottom inset, outside the list cells.
 private enum UpdateRowLayout {
     /// Matches ProfileSwitcher's horizontal padding below it.
-    static let horizontalInset: CGFloat = 10
+    static let horizontalInset: CGFloat = SidebarLayout.edgeInset
     static let iconWidth: CGFloat = 20
 }
 

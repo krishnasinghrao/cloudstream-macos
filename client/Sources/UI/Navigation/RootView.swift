@@ -292,6 +292,7 @@ struct DetailsDestinationView: View {
 /// and the user's pages in their own section with a + in its header.
 struct SidebarView: View {
     @Environment(WindowSession.self) private var windowSession
+    @FocusState private var isListFocused: Bool
 
     /// Observation hooks: selection drives the highlight; the store version
     /// drives the badges (one fetch per render, not six).
@@ -311,68 +312,58 @@ struct SidebarView: View {
         let pages = pages
         let activeDownloads = DownloadService.shared.totalActiveOrQueuedCount
 
-        List(selection: $windowSession.selection) {
+        // A native sidebar list (materials, sections, page reordering) whose
+        // selection is drawn here: the system's blue sidebar selection cannot
+        // be recoloured from SwiftUI, and the Apple TV look uses a neutral
+        // pill. Rows set the destination on click; arrow keys move it
+        // (onKeyPress); VoiceOver reads the current row as selected.
+        List {
             Section {
-                Label("Home", systemImage: "house").tag(AppDestination.home)
-                Label("Search", systemImage: "magnifyingglass").tag(AppDestination.search)
+                destination("Home", symbol: "house", tag: .home)
+                destination("Search", symbol: "magnifyingglass", tag: .search)
             }
 
-            Section("Library") {
-                Label("Watching", systemImage: "play.circle").badge(counts.watching).tag(AppDestination.watching)
-                Label("Plan to Watch", systemImage: "bookmark").badge(counts.planToWatch).tag(AppDestination.planToWatch)
-                Label("Favorites", systemImage: "heart").badge(counts.favorites).tag(AppDestination.favorites)
-                Label("Completed", systemImage: "checkmark.circle").badge(counts.completed).tag(AppDestination.completed)
-                Label("On Hold", systemImage: "pause.circle").badge(counts.onHold).tag(AppDestination.onHold)
-                Label("Dropped", systemImage: "xmark.circle").badge(counts.dropped).tag(AppDestination.dropped)
-                Label("Downloaded", systemImage: "arrow.down.circle")
-                    .badge(activeDownloads > 0 ? Text("\(activeDownloads)").foregroundStyle(Color.accentColor) : nil)
-                    .tag(AppDestination.downloaded)
-                Label("History", systemImage: "clock.arrow.circlepath").tag(AppDestination.history)
+            Section {
+                destination("Watching", symbol: "play.circle", count: counts.watching, tag: .watching)
+                destination("Plan to Watch", symbol: "bookmark", count: counts.planToWatch, tag: .planToWatch)
+                destination("Favorites", symbol: "heart", count: counts.favorites, tag: .favorites)
+                destination("Completed", symbol: "checkmark.circle", count: counts.completed, tag: .completed)
+                destination("On Hold", symbol: "pause.circle", count: counts.onHold, tag: .onHold)
+                destination("Dropped", symbol: "xmark.circle", count: counts.dropped, tag: .dropped)
+                destination("Downloaded", symbol: "arrow.down.circle", count: activeDownloads, tag: .downloaded)
+                destination("History", symbol: "clock.arrow.circlepath", tag: .history)
+            } header: {
+                sectionHeader("Library", identifier: "SidebarHeader-Library")
             }
 
             Section {
                 ForEach(pages) { page in
-                    Label(page.name, systemImage: "rectangle.stack")
-                        .badge(page.count)
-                        .tag(AppDestination.page(page.id))
+                    destination(Text(page.name), symbol: "rectangle.stack", count: page.count, tag: .page(page.id))
                         .contextMenu { pageMenu(page) }
                 }
                 .onMove { source, destination in
                     LibraryStore.shared.perform { try LibraryStore.shared.movePages(fromOffsets: source, toOffset: destination) }
                 }
             } header: {
-                HStack {
-                    Text("Pages")
-                    Spacer()
-                    Button {
-                        windowSession.pageEditor = PageEditorRequest(mode: .create(adding: nil))
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 20, height: 20)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    // Centres the button over the rows' count badges.
-                    .padding(.trailing, 10)
-                    .disabled(AppLock.shared.isLocked)
-                    .accessibilityLabel("New Page")
-                    .help("New Page (⌥⌘N)")
-                }
+                sectionHeader("Pages", identifier: "SidebarHeader-Pages", allowsCreation: true)
             }
 
             Section {
-                Label("Extensions", systemImage: "puzzlepiece.extension").tag(AppDestination.extensions)
+                destination("Extensions", symbol: "puzzlepiece.extension", tag: .extensions)
             }
         }
-        // Native sidebar list (selection, materials, accent-tinted icons that
-        // grey out in inactive windows), with Apple TV for Mac's proportions:
-        // a 30 pt row rhythm and body-size labels.
         .listStyle(.sidebar)
-        .environment(\.defaultMinListRowHeight, 30)
-        .font(.body)
-        .imageScale(.medium)
+        .environment(\.defaultMinListRowHeight, SidebarLayout.rowHeight)
+        // Rows do not use the List's own selection, so the list takes keyboard
+        // focus itself (a row click gives it focus) and handles ↑/↓.
+        .focusable()
+        .focused($isListFocused)
+        .focusEffectDisabled()
+        .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+            moveSelection(by: press.key == .upArrow ? -1 : 1, pages: pages)
+            return .handled
+        }
+        .accessibilityIdentifier("Main Sidebar")
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 Divider()
@@ -388,6 +379,88 @@ struct SidebarView: View {
         }
     }
 
+    /// Sidebar order, for arrow-key movement.
+    private func destinations(pages: [LibraryPageSummary]) -> [AppDestination] {
+        [.home, .search, .watching, .planToWatch, .favorites, .completed, .onHold, .dropped, .downloaded, .history]
+            + pages.map { .page($0.id) } + [.extensions]
+    }
+
+    private func moveSelection(by offset: Int, pages: [LibraryPageSummary]) {
+        let order = destinations(pages: pages)
+        guard let index = order.firstIndex(of: windowSession.selection) else { return }
+        let next = min(max(0, index + offset), order.count - 1)
+        if next != index { windowSession.selection = order[next] }
+    }
+
+    /// A section title on the destinations' icon column.
+    private func sectionHeader(_ title: LocalizedStringKey, identifier: String, allowsCreation: Bool = false) -> some View {
+        HStack(spacing: 0) {
+            Text(title)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier(identifier)
+            Spacer(minLength: 0)
+            if allowsCreation {
+                Button {
+                    windowSession.pageEditor = PageEditorRequest(mode: .create(adding: nil))
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: SidebarLayout.trailingControlWidth, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(AppLock.shared.isLocked)
+                .accessibilityLabel("New Page")
+                .help("New Page (⌥⌘N)")
+            }
+        }
+        .padding(.leading, SidebarLayout.headerLeadingAdjustment)
+    }
+
+    private func destination(_ title: LocalizedStringKey, symbol: String, count: Int = 0, tag: AppDestination) -> some View {
+        destination(Text(title), symbol: symbol, count: count, tag: tag)
+    }
+
+    /// One destination: softened accent icon, label (semibold when
+    /// selected), a plain count, and the neutral selection pill.
+    private func destination(_ title: Text, symbol: String, count: Int = 0, tag: AppDestination) -> some View {
+        let isSelected = windowSession.selection == tag
+        return Button {
+            windowSession.selection = tag
+            isListFocused = true
+        } label: {
+            HStack(spacing: SidebarLayout.iconSpacing) {
+                SidebarSymbol(name: symbol)
+                title
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .foregroundStyle(Color(nsColor: .labelColor))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if count > 0 {
+                    Text(count, format: .number)
+                        .font(.subheadline)
+                        .monospacedDigit()
+                        .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                        .fixedSize()
+                        .frame(minWidth: SidebarLayout.trailingControlWidth)
+                }
+            }
+            .font(.body)
+            .padding(.horizontal, SidebarLayout.pillPadding)
+            .frame(maxWidth: .infinity, minHeight: SidebarLayout.rowHeight, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor) : .clear)
+            )
+            .contentShape(.rect(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityIdentifier("SidebarRow")
+        .help(title)
+    }
+
     @ViewBuilder
     private func pageMenu(_ page: LibraryPageSummary) -> some View {
         Button("Rename…") {
@@ -399,12 +472,57 @@ struct SidebarView: View {
     }
 }
 
+/// One geometry for the sidebar's rows and headers.
+enum SidebarLayout {
+    static let rowHeight: CGFloat = 30
+    static let iconWidth: CGFloat = 20
+    static let iconSpacing: CGFloat = 8
+    /// Inside the selection pill, before the icon.
+    static let pillPadding: CGFloat = 8
+    /// Native section headers start left of the rows; this puts their text
+    /// on the destinations' icon column.
+    static let headerLeadingAdjustment: CGFloat = 11
+    /// The pill's distance from the sidebar's edges; the footer controls
+    /// (update row, profile button) use it too, so everything shares one column.
+    static let edgeInset: CGFloat = 16
+    static let trailingControlWidth: CGFloat = 28
+}
+
+/// A destination's icon, tinted like a native Mac sidebar: the accent colour
+/// while the window is active, grey once it isn't. The tint is a softened
+/// accent that follows the user's own accent choice; Increase Contrast gets
+/// the full accent. Its own view so focus changes re-render only the icons.
+private struct SidebarSymbol: View {
+    let name: String
+    @Environment(\.appearsActive) private var appearsActive
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    private var tint: Color {
+        guard appearsActive else { return Color(nsColor: .secondaryLabelColor) }
+        guard contrast != .increased else { return .accentColor }
+        // Light sidebars need more of the accent to stay legible.
+        return Color.accentColor.mix(with: .white, by: colorScheme == .dark ? 0.35 : 0.2)
+    }
+
+    var body: some View {
+        Image(systemName: name)
+            .font(.title2)
+            .imageScale(.medium)
+            .symbolRenderingMode(.monochrome)
+            .frame(width: SidebarLayout.iconWidth, alignment: .leading)
+            .foregroundStyle(tint)
+            .animation(.easeOut(duration: 0.15), value: appearsActive)
+            .accessibilityHidden(true)
+    }
+}
+
 /// Locks the sidebar's NSSplitViewItem: not collapsible (by divider drag,
 /// window resize or double-click) and a bounded thickness.
 struct SidebarPin: NSViewRepresentable {
-    static let minWidth: CGFloat = 190
-    static let idealWidth: CGFloat = 220
-    static let maxWidth: CGFloat = 280
+    static let minWidth: CGFloat = 230
+    static let idealWidth: CGFloat = 240
+    static let maxWidth: CGFloat = 300
 
     func makeNSView(context: Context) -> PinView { PinView() }
 
