@@ -460,3 +460,35 @@ final class PlayerFeatureTests: XCTestCase {
         XCTAssertEqual(fake.screenshots.first?.pathExtension, "png")
     }
 }
+
+@MainActor
+final class UnseekableResumeTests: XCTestCase {
+    private func movie() -> DetailsDto {
+        DetailsDto(provider: "fixture", url: "u/unseekable", name: "Fixture", type: "movie", posterUrl: nil, backgroundPosterUrl: nil,
+                   logoUrl: nil, plot: nil, year: nil, durationMinutes: nil, score: nil, tags: [], actors: [],
+                   contentRating: nil, comingSoon: false, episodes: [], movieData: nil)
+    }
+
+    /// Mirrors that all report `seekable = false` used to fail over one after
+    /// another (the `player.unseekable_failover` cascade). One hop is allowed;
+    /// after that the source plays from the start and the user is told.
+    func testUnseekableResumeFailsOverOnceThenStartsOver() {
+        let vm = PlayerViewModel()
+        let links = (0..<4).map { StreamLinkDto(url: "https://cdn\($0)/a.mp4", name: "M\($0)", source: "s\($0)", quality: 1080, type: "video") }
+        vm.playResolved(details: movie(), episode: nil, links: links, resumeAt: 300, persistsProgress: false)
+        let fake = FakeTransport()
+        vm.videoView = fake
+        defer { withExtendedLifetime(fake) { vm.close() } }
+        XCTAssertEqual(vm.loadRequest?.startAt, 300)
+
+        vm.handleSeekable(false)
+        XCTAssertEqual(vm.session?.selectedLinkIndex, 1, "the first unseekable mirror may hand over to the next")
+        XCTAssertEqual(vm.loadRequest?.startAt, 300, "…keeping the resume point")
+
+        vm.handleSeekable(false)
+        XCTAssertEqual(vm.session?.selectedLinkIndex, 1, "a second unseekable report must not cascade through the list")
+        XCTAssertNotNil(vm.notice)
+        vm.handleSeekable(false)
+        XCTAssertEqual(vm.session?.selectedLinkIndex, 1)
+    }
+}

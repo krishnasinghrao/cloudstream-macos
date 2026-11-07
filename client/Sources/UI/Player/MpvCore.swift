@@ -49,12 +49,29 @@ struct MpvTrack: Identifiable, Sendable, Hashable {
     let title: String?
     let lang: String?
     let codec: String?
+    var isDefault = false
+    var isSelected = false
+    var isCommentary = false
+    var isAudioDescription = false
+    var channels: Int64? = nil
+
+    /// Identifies "the same track" across mirrors and reloads, where native
+    /// IDs change: language, title, codec, channel count and role.
+    var preferenceKey: String {
+        let fields = [LanguageMatcher.code(lang) ?? lang ?? "", title?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? "",
+                      codec ?? "", channels.map(String.init) ?? "", isAudioDescription ? "description" : isCommentary ? "commentary" : "main"]
+        return (try? String(data: JSONEncoder().encode(fields), encoding: .utf8)) ?? ""
+    }
 
     var label: String {
         var parts: [String] = []
         if let title, !title.isEmpty { parts.append(title) }
         if let lang, !lang.isEmpty { parts.append(lang) }
         if let codec, !codec.isEmpty { parts.append(codec) }
+        if let channels { parts.append("\(channels) channels") }
+        if isCommentary, !(title?.localizedCaseInsensitiveContains("commentary") ?? false) { parts.append("Commentary") }
+        if isAudioDescription { parts.append("Audio description") }
+        if isDefault { parts.append("Default") }
         let joined = parts.joined(separator: " · ")
         return joined.isEmpty ? "Track \(id)" : joined
     }
@@ -154,12 +171,21 @@ enum MpvNodeReader {
                 }
                 return nil
             }
+            func flag(_ key: String) -> Bool {
+                if case .flag(true) = map[key] { return true }
+                return false
+            }
             return MpvTrack(
                 id: id,
                 type: type,
                 title: string("title"),
                 lang: string("lang"),
                 codec: string("codec"),
+                isDefault: flag("default"),
+                isSelected: flag("selected"),
+                isCommentary: string("title")?.lowercased().contains("commentary") == true || flag("commentary"),
+                isAudioDescription: flag("visual-impaired"),
+                channels: { if case .int(let count) = map["demux-channel-count"] { return count }; return nil }(),
             )
         }
     }

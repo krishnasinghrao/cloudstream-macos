@@ -1217,7 +1217,11 @@ final class PlayerViewModel {
         guard let resumeAt = pendingResumeCheck, phase == .loading || phase == .ready else { return }
         pendingResumeCheck = nil
         guard !seekable else { return }
-        if hasNextMirror {
+        // One hop per play request. Mirrors of one title usually share a CDN
+        // and report the same thing; failing over from each in turn walked
+        // the whole list and abandoned sources that were playing fine.
+        if hasNextMirror, unseekableFailoverGeneration != playGeneration {
+            unseekableFailoverGeneration = playGeneration
             DaemonLog.client("player.unseekable_failover", fields: ["resumeAt": String(Int(resumeAt))])
             // Resume at the intended point, not wherever the unseekable
             // source's clock got to.
@@ -1225,9 +1229,13 @@ final class PlayerViewModel {
                 failover(to: session.selectedLinkIndex + 1, startAt: resumeAt)
             }
         } else {
+            DaemonLog.client("player.unseekable_start_over", fields: ["resumeAt": String(Int(resumeAt))])
             showNotice("This source can't resume playback — starting from the beginning.")
         }
     }
+
+    /// The play request that already spent its unseekable-resume failover.
+    @ObservationIgnored private var unseekableFailoverGeneration: Int?
 
     func showNotice(_ message: String) {
         notice = message
@@ -1418,8 +1426,8 @@ final class PlayerViewModel {
         trackPrefsAppliedForLoad = loadRequest?.id
         activeAudioTrackId = id
         videoView?.selectAudioTrack(id)
-        if let language = audioTracks.first(where: { $0.id == id })?.lang {
-            rememberForTitle { $0.audioLanguage = language }
+        if let track = audioTracks.first(where: { $0.id == id }) {
+            rememberForTitle { $0.audioLanguage = track.lang; $0.audioTrackKey = track.preferenceKey }
         }
     }
 

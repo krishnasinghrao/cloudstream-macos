@@ -10,6 +10,8 @@ final class TitlePlaybackPrefs {
     /// `StoredMediaItem.id` ("provider|url").
     @Attribute(.unique) var itemID: String
     var audioLanguage: String?
+    /// Stable role/codec/layout identity; language remains the cross-mirror fallback.
+    var audioTrackKey: String?
     var subtitleLanguage: String?
     /// true = user turned subtitles off for this title.
     var subtitlesOff: Bool = false
@@ -30,6 +32,7 @@ final class TitlePlaybackPrefs {
     var snapshot: TitlePlaybackSnapshot {
         TitlePlaybackSnapshot(
             audioLanguage: audioLanguage,
+            audioTrackKey: audioTrackKey,
             subtitleLanguage: subtitleLanguage,
             subtitlesOff: subtitlesOff,
             subtitleDelay: subtitleDelay,
@@ -44,6 +47,8 @@ final class TitlePlaybackPrefs {
 
 struct TitlePlaybackSnapshot: Sendable, Equatable {
     var audioLanguage: String?
+    /// Stable role/codec/layout identity; language remains the cross-mirror fallback.
+    var audioTrackKey: String?
     var subtitleLanguage: String?
     var subtitlesOff = false
     var subtitleDelay: Double = 0

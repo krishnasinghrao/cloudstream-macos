@@ -188,12 +188,34 @@ enum TrackSelectionPolicy {
     ) -> Plan {
         var plan = Plan(audioTrack: nil, subtitleTrack: nil, isComplete: true)
 
-        if let wanted = remembered?.audioLanguage {
-            if let track = audio.first(where: { LanguageMatcher.matches($0.lang, wanted) }) {
+        if let key = remembered?.audioTrackKey, let exact = audio.first(where: { $0.preferenceKey == key }) {
+            // The exact track picked for this title (role, codec, channels),
+            // not just its language: a stereo dub is not the 5.1 original.
+            plan.audioTrack = exact.id
+        } else if let wanted = remembered?.audioLanguage {
+            // The language's main track: never commentary or audio
+            // description when a main track exists; the default one first.
+            if let track = audio.filter({ LanguageMatcher.matches($0.lang, wanted) }).sorted(by: { lhs, rhs in
+                let lhsAlternate = lhs.isCommentary || lhs.isAudioDescription
+                let rhsAlternate = rhs.isCommentary || rhs.isAudioDescription
+                if lhsAlternate != rhsAlternate { return !lhsAlternate }
+                return lhs.isDefault && !rhs.isDefault
+            }).first {
                 plan.audioTrack = track.id
-            } else if audio.isEmpty {
+            } else {
+                // Keep looking: external audio tracks arrive after the file opens.
                 plan.isComplete = false
             }
+        } else if let selected = audio.first(where: { $0.isSelected && ($0.isCommentary || $0.isAudioDescription) }),
+                  let main = audio.filter({ !$0.isCommentary && !$0.isAudioDescription }).sorted(by: { lhs, rhs in
+                      let lhsLanguage = LanguageMatcher.matches(lhs.lang, selected.lang)
+                      let rhsLanguage = LanguageMatcher.matches(rhs.lang, selected.lang)
+                      if lhsLanguage != rhsLanguage { return lhsLanguage }
+                      return lhs.isDefault && !rhs.isDefault
+                  }).first {
+            // Nothing remembered, but the file opened on commentary or audio
+            // description: switch to a main track, same language first.
+            plan.audioTrack = main.id
         }
 
         if remembered?.subtitlesOff == true {

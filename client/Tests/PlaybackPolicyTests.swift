@@ -39,6 +39,17 @@ final class PlaybackPolicyTests: XCTestCase {
         XCTAssertFalse(LinkRanker.isDolbyVisionOnly(named("Server DVD-Rip", 720)), "words containing dv are not Dolby Vision")
     }
 
+    func testDolbyVisionOnlyLinksFollowCompatibleOnesAcrossSourceTiersAndMemory() {
+        let dolbyOnly = StreamLinkDto(url: "https://cdn/fav-dv", name: "Fav 2160p DV", source: "Fav", quality: 2160, type: "video")
+        let other = link("Other", 1080)
+        let preferFav = SourcePreferences(priority: ["fav"], avoided: [], maxQuality: 0)
+        // A preferred source's Dolby Vision-only stream shows green or purple:
+        // a compatible stream from any other source plays first.
+        XCTAssertEqual(LinkRanker.rank([dolbyOnly, other], preferFav).map(\.url), [other.url, dolbyOnly.url])
+        let remembered = LinkRanker.rank([dolbyOnly, other], .none, remembered: RememberedSource(key: LinkRanker.sourceKey(dolbyOnly), quality: 2160))
+        XCTAssertEqual(remembered.map(\.url), [other.url, dolbyOnly.url], "a remembered DV-only mirror still goes last")
+    }
+
     func testDefaultOrderIsBestQualityFirstAndStable() {
         let links = [link("A", 720), link("B", 1080), link("C", 720), link("D", 0)]
         XCTAssertEqual(LinkRanker.rank(links, .none).map(\.source), ["B", "A", "C", "D"])
@@ -180,6 +191,48 @@ final class PlaybackPolicyTests: XCTestCase {
             autoSelectSubtitles: false,
         )
         XCTAssertEqual(plan, .init(audioTrack: 2, subtitleTrack: 4, isComplete: true))
+    }
+
+    func testNonmatchingAudioKeepsWaitingAndMainDefaultWinsOverCommentary() {
+        var remembered = TitlePlaybackSnapshot()
+        remembered.audioLanguage = "ja"
+        let early = TrackSelectionPolicy.plan(audio: [track(1, "audio", lang: "en")], subtitles: [], remembered: remembered, preferredSubtitleLanguages: [], autoSelectSubtitles: false)
+        XCTAssertFalse(early.isComplete)
+        var commentary = track(2, "audio", lang: "ja")
+        commentary.isCommentary = true
+        var main = track(3, "audio", lang: "ja")
+        main.isDefault = true
+        let late = TrackSelectionPolicy.plan(audio: [commentary, main], subtitles: [], remembered: remembered, preferredSubtitleLanguages: [], autoSelectSubtitles: false)
+        XCTAssertTrue(late.isComplete)
+        XCTAssertEqual(late.audioTrack, 3)
+    }
+
+    func testExplicitCommentaryIdentitySurvivesNativeTrackIDChanges() {
+        var commentary = track(2, "audio", lang: "ja", title: "Commentary")
+        commentary.isCommentary = true
+        var remembered = TitlePlaybackSnapshot()
+        remembered.audioLanguage = "ja"
+        remembered.audioTrackKey = commentary.preferenceKey
+        let plan = TrackSelectionPolicy.plan(audio: [track(1, "audio", lang: "ja"), commentary], subtitles: [], remembered: remembered, preferredSubtitleLanguages: [], autoSelectSubtitles: false)
+        XCTAssertEqual(plan.audioTrack, 2)
+    }
+
+    func testAudioDescriptionRoleIsDistinctAndManualChoiceIsRemembered() {
+        var description = track(2, "audio", lang: "en")
+        description.isAudioDescription = true
+        let main = track(1, "audio", lang: "en")
+        description.isSelected = true
+        let defaultPlan = TrackSelectionPolicy.plan(audio: [description, main], subtitles: [], remembered: nil, preferredSubtitleLanguages: [], autoSelectSubtitles: false)
+        XCTAssertEqual(defaultPlan.audioTrack, 1, "Native automatic selection must not prefer description when main audio is offered")
+        var remembered = TitlePlaybackSnapshot()
+        remembered.audioLanguage = "en"
+        let automatic = TrackSelectionPolicy.plan(audio: [description, main], subtitles: [], remembered: remembered, preferredSubtitleLanguages: [], autoSelectSubtitles: false)
+        XCTAssertEqual(automatic.audioTrack, 1)
+        XCTAssertTrue(description.label.contains("Audio description"))
+        XCTAssertFalse(description.label.contains("Commentary"))
+        remembered.audioTrackKey = description.preferenceKey
+        let manual = TrackSelectionPolicy.plan(audio: [description, main], subtitles: [], remembered: remembered, preferredSubtitleLanguages: [], autoSelectSubtitles: false)
+        XCTAssertEqual(manual.audioTrack, 2)
     }
 
     func testSubtitlesOffIsRemembered() {

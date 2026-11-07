@@ -1942,6 +1942,7 @@ final class LibraryStore {
             var snapshot = row.snapshot
             mutate(&snapshot)
             row.audioLanguage = snapshot.audioLanguage
+            row.audioTrackKey = snapshot.audioTrackKey
             row.subtitleLanguage = snapshot.subtitleLanguage
             row.subtitlesOff = snapshot.subtitlesOff
             row.subtitleDelay = snapshot.subtitleDelay
@@ -2191,7 +2192,7 @@ final class LibraryStore {
                 itemID: row.itemID, audioLanguage: row.audioLanguage, subtitleLanguage: row.subtitleLanguage,
                 subtitlesOff: row.subtitlesOff, subtitleDelay: row.subtitleDelay, speed: row.speed,
                 introStart: row.introStart, introEnd: row.introEnd, updatedAt: row.updatedAt == .distantPast ? nil : row.updatedAt,
-                source: row.source, sourceQuality: row.sourceQuality,
+                source: row.source, sourceQuality: row.sourceQuality, audioTrackKey: row.audioTrackKey,
             )
         }
         return LibrarySnapshot(items: items, episodes: episodes, playback: playback, pages: try pageSnapshot(in: context))
@@ -2537,7 +2538,7 @@ final class LibraryStore {
             if !owners.contains(itemID) { report.unownedEntries += 1 }
             let incomingDate = snapshot.formatVersion >= 2 ? entry.updatedAt : nil
             if let existing = existingPrefs[itemID] {
-                let incoming = TitlePlaybackSnapshot(audioLanguage: entry.audioLanguage, subtitleLanguage: entry.subtitleLanguage,
+                let incoming = TitlePlaybackSnapshot(audioLanguage: entry.audioLanguage, audioTrackKey: entry.audioTrackKey, subtitleLanguage: entry.subtitleLanguage,
                     subtitlesOff: entry.subtitlesOff, subtitleDelay: entry.subtitleDelay, speed: entry.speed,
                     introStart: entry.introStart, introEnd: entry.introEnd,
                     source: entry.source, sourceQuality: entry.sourceQuality)
@@ -2548,6 +2549,7 @@ final class LibraryStore {
             let row = existingPrefs[itemID] ?? TitlePlaybackPrefs(itemID: itemID)
             if row.modelContext == nil { context.insert(row); existingPrefs[itemID] = row }
             row.audioLanguage = entry.audioLanguage
+            row.audioTrackKey = entry.audioTrackKey
             row.subtitleLanguage = entry.subtitleLanguage
             row.subtitlesOff = entry.subtitlesOff
             row.subtitleDelay = entry.subtitleDelay

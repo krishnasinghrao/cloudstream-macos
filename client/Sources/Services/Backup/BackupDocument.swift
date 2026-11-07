@@ -130,6 +130,8 @@ struct BackupDocument: Codable, Sendable, Equatable {
         var updatedAt: Date? = nil
         var source: String? = nil
         var sourceQuality: Int? = nil
+        /// The exact audio track picked for the title; older backups omit it.
+        var audioTrackKey: String? = nil
     }
 
     struct Summary: Equatable, Sendable {

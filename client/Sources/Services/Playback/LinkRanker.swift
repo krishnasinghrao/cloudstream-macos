@@ -54,7 +54,7 @@ enum LinkRanker {
 
     /// A Dolby Vision stream without an HDR10 base layer (profile 5). The
     /// player's renderer does not apply Dolby Vision reshaping, so these show
-    /// green or purple; they go after the other links of the same source tier.
+    /// green or purple; compatible streams precede them across source tiers.
     /// Recognised by the link name ("DV", "DoVi", "Dolby Vision") without an
     /// HDR/HDR10 marker, since DV releases with an HDR10 base play correctly.
     static func isDolbyVisionOnly(_ link: StreamLinkDto) -> Bool {
@@ -73,7 +73,7 @@ enum LinkRanker {
         links.enumerated().map { offset, link in
             let tier = sourceTier(link, prefs)
             let quality = qualityRank(link.quality, cap: prefs.maxQuality)
-            let key = (tier.0, tier.1, isDolbyVisionOnly(link) ? 1 : 0, quality.0, quality.1, offset)
+            let key = (isDolbyVisionOnly(link) ? 1 : 0, tier.0, tier.1, quality.0, quality.1, offset)
             return (link: link, key: key)
         }.sorted { $0.key < $1.key }.map(\.link)
     }
@@ -93,6 +93,7 @@ enum LinkRanker {
             else if link.quality == remembered.quality { exact.append(link) }
             else { sameSource.append(link) }
         }
-        return exact + sameSource + others
+        let rememberedOrder = exact + sameSource + others
+        return rememberedOrder.filter { !isDolbyVisionOnly($0) } + rememberedOrder.filter(isDolbyVisionOnly)
     }
 }
