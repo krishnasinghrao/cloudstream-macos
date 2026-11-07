@@ -165,6 +165,8 @@ data class LaunchOptions(
     val safeMode: Boolean = false,
     /** `worker` (one sandboxed process per extension, production) or `in-process` (development, tests). */
     val isolation: String = ISOLATION_IN_PROCESS,
+    /** PEM file of the roots the Mac trusts beyond the JDK's (SystemTrust); null trusts `cacerts` only. */
+    val systemTrustAnchors: String? = null,
 ) {
     companion object {
         private val json = Json { ignoreUnknownKeys = true }

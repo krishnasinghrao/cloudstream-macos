@@ -182,6 +182,8 @@ internal object WorkerMain {
         check(installationId.isEmpty() && providers.isEmpty()) { "Worker already initialized" }
         // Before any client is built: every connection goes through the engine's egress proxy.
         request.egress?.let(WorkerEgress::install)
+        // The roots the Mac trusts, from the one file the sandbox lets it read.
+        com.lagradost.macos.SystemTrust.install(System.getProperty(com.lagradost.macos.SystemTrust.ANCHORS_PROPERTY))
         NetworkSetup.apply(request.network.copy(httpCacheMb = 0))
         ProviderRuntimeBootstrap.initialize()
         val prepared = PluginBridge.prepare(request.record, File(request.artifactPath), request.reuseTranslation)

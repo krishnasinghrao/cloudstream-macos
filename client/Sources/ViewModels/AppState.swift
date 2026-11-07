@@ -248,6 +248,7 @@ final class AppState {
         WebViewSolverService.shared.reset()
         MediaResolverService.shared.reset()
         WebViewSessionService.shared.reset()
+        WebContentNetworkPolicy.shared.reset()
         solvePollTask?.cancel()
         mediaPollTask?.cancel()
         webViewPollTask?.cancel()

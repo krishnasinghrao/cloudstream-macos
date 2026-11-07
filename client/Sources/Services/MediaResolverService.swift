@@ -31,7 +31,8 @@ final class MediaResolverService {
     func start(_ task: MediaPendingDto, client: MediaResolveClient = DaemonClient.shared) {
         guard sessions[task.taskId] == nil, sessions.count < Self.maxConcurrent, task.timeoutMs > 0,
               let url = URL(string: task.url), ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
-              url.host != nil, url.user == nil, url.password == nil else { return }
+              url.host != nil, url.user == nil, url.password == nil,
+              WebContentNetworkPolicy.shared.allowsNavigation(to: url) else { return }
         let session = Session(task: task, url: url, client: client) { [weak self] id in self?.sessions[id] = nil }
         sessions[task.taskId] = session
         session.begin()
@@ -68,9 +69,26 @@ final class MediaResolverService {
         }
 
         func begin() {
+            let timeout = Double(task.timeoutMs) / 1000
+            deadlineTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(timeout))
+                guard let self, !Task.isCancelled else { return }
+                await self.complete()
+            }
+            Task { [weak self] in await self?.load() }
+        }
+
+        /// The page loads only once its network is confined (H1); otherwise
+        /// the engine hears at once that nothing was found.
+        private func load() async {
             let configuration = WKWebViewConfiguration()
             configuration.websiteDataStore = store
             configuration.mediaTypesRequiringUserActionForPlayback = []
+            guard await WebContentNetworkPolicy.shared.prepare(configuration) else {
+                await complete()
+                return
+            }
+            guard !finished else { return }
             let handler = MessageHandler { [weak self] url, method in self?.observe(url, method: method) }
             configuration.userContentController.add(handler, name: MessageHandler.name)
             configuration.userContentController.addUserScript(WKUserScript(
@@ -92,12 +110,6 @@ final class MediaResolverService {
                     guard let self, !self.finished else { return }
                     await self.flush()
                 }
-            }
-            let timeout = Double(task.timeoutMs) / 1000
-            deadlineTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(timeout))
-                guard let self, !Task.isCancelled else { return }
-                await self.complete()
             }
         }
 
@@ -173,8 +185,10 @@ final class MediaResolverService {
                 let method = navigationAction.request.httpMethod ?? "GET"
                 let scheme = url?.scheme?.lowercased() ?? ""
                 if let url { self.observe(url.absoluteString, method: method) }
-                // Pages may not hand off to other apps or local files.
-                decisionHandler(["http", "https", "about", "blob", "data"].contains(scheme) ? .allow : .cancel)
+                // Pages may not hand off to other apps or local files, nor
+                // navigate to this Mac or the local network (H1).
+                decisionHandler(["http", "https", "about", "blob", "data"].contains(scheme) &&
+                    WebContentNetworkPolicy.shared.allowsNavigation(to: url) ? .allow : .cancel)
             }
         }
 

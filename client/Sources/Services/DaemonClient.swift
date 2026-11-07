@@ -590,6 +590,11 @@ extension DaemonClient: WebViewSessionClient {
     func reportWebView(_ event: WebViewEventDto) async throws {
         let _: Acknowledgement = try await post("webview/event", body: event)
     }
+
+    /// The proxy every extension-driven WebKit page must use (H1).
+    func webContentEgress() async throws -> WebContentEgressDto {
+        try await get("webview/egress")
+    }
 }
 
 extension DaemonClient: ExtensionPreferencesClient {

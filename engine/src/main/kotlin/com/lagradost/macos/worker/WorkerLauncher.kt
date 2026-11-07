@@ -18,6 +18,8 @@ internal class WorkerLauncher(
     private val extraReadPaths: List<String> = emptyList(),
     /** The loopback port of the engine's egress proxy, the worker's only network destination. */
     private val egressPort: () -> Int = { WorkerEgressProxy.active.port },
+    /** The engine's exported keychain roots (SystemTrust), the one file outside its home a worker reads besides code. */
+    private val trustAnchors: () -> File? = { com.lagradost.macos.SystemTrust.anchorsFile },
 ) {
     /** [heapMb] overrides the launcher's cap for one start (an extension that ran out of memory, W2). */
     fun command(workerHome: File, artifact: File, heapMb: Int = this.heapMb): List<String> {
@@ -40,6 +42,9 @@ internal class WorkerLauncher(
             // that fails to map) must go to stderr, never corrupt a frame.
             add("-Xlog:disable")
             add("-Xlog:all=warning:stderr")
+            // HotSpot's own messages (ExitOnOutOfMemoryError's notice, VM
+            // warnings outside unified logging) go to its tty, stdout by default.
+            add("-XX:+DisplayVMOutputToStderr")
             // The same module options as the engine: workers map its AppCDS
             // archive, which was recorded with them.
             parentArguments().filter { it.startsWith("--add-modules=") || it.startsWith("--enable-native-access=") }.forEach(::add)
@@ -48,6 +53,14 @@ internal class WorkerLauncher(
             sharedArchive()?.let { add("-XX:SharedArchiveFile=$it"); add(if (parentArguments().contains("-Xshare:on")) "-Xshare:on" else "-Xshare:auto") }
             add("-XX:ErrorFile=$home/tmp/hs_err_pid%p.log")
             add("-Djava.awt.headless=true")
+            // Provider hosts often omit their intermediate certificate. Browsers
+            // (and Android's network stack for many hosts) fetch it from the
+            // certificate's AIA address; the JVM refuses the chain unless told
+            // to. The fetched certificate must still chain to a trusted root,
+            // and the fetch goes through the egress proxy (public addresses only).
+            add("-Dcom.sun.security.enableAIAcaIssuers=true")
+            // The roots the Mac trusts beyond the JDK's (SystemTrust).
+            trustAnchors()?.let { add("-D${com.lagradost.macos.SystemTrust.ANCHORS_PROPERTY}=${canonical(it.path)}") }
             // Extension traffic goes only through the engine's egress proxy
             // (installed at INIT), which connects to public addresses directly.
             add("-Djava.io.tmpdir=$home/tmp")
@@ -113,7 +126,8 @@ internal class WorkerLauncher(
         val reads = (listOf(canonical(runtimeRoot)) + classpathEntries().map { canonical(it) } +
             extraReadPaths.map { canonical(it) } + archive).distinct()
         val workingDirectory = if (classpathEntries().any { !File(it).isAbsolute }) canonical(System.getProperty("user.dir")) else null
-        val metadata = metadataPaths(reads + listOfNotNull(home, artifact, workingDirectory, canonical(java)))
+        val anchors = trustAnchors()?.let { canonical(it.path) }
+        val metadata = metadataPaths(reads + listOfNotNull(home, artifact, workingDirectory, canonical(java), anchors))
         return buildString {
             appendLine("(version 1)")
             appendLine("(deny default)")
@@ -121,6 +135,8 @@ internal class WorkerLauncher(
             appendLine("(allow process-exec (literal ${quote(canonical(java))}))")
             appendLine("(allow file-read* ${reads.joinToString(" ") { "(subpath ${quote(it)})" }} (literal ${quote(artifact)}))")
             appendLine("(allow file-read* file-write* (subpath ${quote(home)}))")
+            // Read-only, that one file: the exported trust anchors (public certificates).
+            if (anchors != null) appendLine("(allow file-read* (literal ${quote(anchors)}))")
             // The JVM resolves its working directory at startup; a packaged
             // worker runs in the engine's (Contents/Resources). Only that
             // directory entry is readable, not what is in it.

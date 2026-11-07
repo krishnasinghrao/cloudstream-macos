@@ -12,6 +12,12 @@ final class WebViewSessionServiceTests: XCTestCase {
         func reportWebView(_ event: WebViewEventDto) async throws { events.append(event.event) }
     }
 
+    override func setUp() async throws {
+        // No engine here: pages that need the network would fail closed.
+        WebContentNetworkPolicy.shared.egressSource = { WebContentEgressDto(host: "127.0.0.1", port: 1, username: "t", password: "t") }
+        WebContentNetworkPolicy.shared.reset()
+    }
+
     private func waitUntil(_ timeout: TimeInterval = 10, _ condition: () async -> Bool) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(timeout))
         while ContinuousClock.now < deadline {

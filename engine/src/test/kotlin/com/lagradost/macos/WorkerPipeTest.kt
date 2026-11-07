@@ -163,10 +163,11 @@ class WorkerPipeTest {
             FrameCodec.json.parseToJsonElement("""{"targetUrl":"https://fixture.invalid"}"""))))
         val script = """
             import base64,struct,sys,time
+            sys.stdin.buffer.read(4)
             size=struct.unpack('>i',sys.stdin.buffer.read(4))[0]
             sys.stdin.buffer.read(size)
             frame=base64.b64decode(sys.argv[1])
-            sys.stdout.buffer.write(struct.pack('>i',len(frame))+frame)
+            sys.stdout.buffer.write(b'\xfe\xc53F'+struct.pack('>i',len(frame))+frame)
             sys.stdout.buffer.flush()
             time.sleep(60)
         """.trimIndent()
@@ -227,6 +228,51 @@ class WorkerPipeTest {
             }
             assertNull(FrameCodec.read(input))
         } finally { writer.close() }
+    }
+
+    @Test fun `stray output between frames is skipped, not read as a frame length`() {
+        val first = FrameCodec.encode(Frame(1, Op.RESULT, JsonPrimitive("one")))
+        val second = FrameCodec.encode(Frame(2, Op.RESULT, JsonPrimitive("two")))
+        val bytes = ByteArrayOutputStream()
+        val out = java.io.DataOutputStream(bytes)
+        // "Warn" read as a length is 1.4 GB; a lone 0xFE and a partial marker must not confuse the scan.
+        bytes.write("Warning: extension printed to stdout\n".toByteArray())
+        FrameCodec.write(out, first)
+        bytes.write(byteArrayOf(0xFE.toByte(), 0x00, 0xFE.toByte(), 0xC5.toByte(), 0x41))
+        bytes.write("Terminating due to java.lang.OutOfMemoryError\n".toByteArray())
+        FrameCodec.write(out, second)
+        bytes.write("trailing noise".toByteArray())
+        val skipped = mutableListOf<Long>()
+        val input = DataInputStream(ByteArrayInputStream(bytes.toByteArray()))
+        assertEquals(JsonPrimitive("one"), assertNotNull(FrameCodec.read(input) { skipped += it }).payload)
+        assertEquals(JsonPrimitive("two"), assertNotNull(FrameCodec.read(input) { skipped += it }).payload)
+        assertNull(FrameCodec.read(input) { skipped += it })
+        assertEquals(listOf(37L, 5L + 46L, 14L), skipped)
+    }
+
+    @Test fun `a worker printing to stdout keeps serving calls`() = runBlocking<Unit> {
+        val home = Files.createTempDirectory("worker-stray-").toFile()
+        val exited = CompletableDeferred<Unit>()
+        val script = """
+            import json,struct,sys
+            sys.stdin.buffer.read(4)
+            size=struct.unpack('>i',sys.stdin.buffer.read(4))[0]
+            frame=json.loads(sys.stdin.buffer.read(size))
+            data=json.dumps({'id':frame['id'],'type':'result','payload':'ok','protocolVersion':2}).encode()
+            sys.stdout.buffer.write(b'Warn: noisy extension\n'+b'\xfe\xc53F'+struct.pack('>i',len(data))+data)
+            sys.stdout.buffer.flush()
+            sys.stdin.buffer.read()
+        """.trimIndent()
+        val client = WorkerClient("stray-output", listOf("python3", "-c", script), home,
+            solve = { null }, onExit = { _, _, _ -> exited.complete(Unit) })
+        try {
+            assertEquals(JsonPrimitive("ok"), client.call(Op.SEARCH, JsonNull, 5_000))
+            assertTrue(client.alive)
+        } finally {
+            client.kill("test cleanup")
+            withTimeout(5_000) { exited.await() }
+            home.deleteRecursively()
+        }
     }
 
     @Test fun `outbound byte budget includes the in flight write`() {

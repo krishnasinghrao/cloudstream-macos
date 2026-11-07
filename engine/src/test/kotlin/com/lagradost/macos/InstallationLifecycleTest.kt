@@ -232,6 +232,51 @@ class InstallationLifecycleTest {
         assertNull(runtime.generation(id))
     }
 
+    @Test fun `garbage collection never removes the worker home of an install in flight or a fresh one`() = runBlocking<Unit> {
+        publish(v1, 1)
+        val workers = File(CloudDirs.home, "workers")
+        fun home(name: String, ageMs: Long) = File(workers, name).apply {
+            mkdirs()
+            setLastModified(System.currentTimeMillis() - ageMs)
+        }
+        val old = InstallationManager.WORKER_HOME_GRACE_MS + 60_000
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        runtime.onPrepare = { entered.complete(Unit); runBlocking { release.await() } }
+        val manager = manager()
+        val installing = async(Dispatchers.IO) { manager.install(repo.url, "Ext") }
+        withTimeout(5000) { entered.await() }
+        val inFlight = home(id, old)
+        val orphan = home("a".repeat(64), old)
+        val booting = home("b".repeat(64), 1_000)
+        manager.collectGarbage()
+        assertTrue(inFlight.isDirectory, "the home of an install still running is kept")
+        assertTrue(booting.isDirectory, "a home younger than the grace period is kept")
+        assertFalse(orphan.exists(), "an old home of nothing installed is removed")
+        release.complete(Unit)
+        installing.await()
+        manager.collectGarbage()
+        assertTrue(inFlight.isDirectory, "an installed extension keeps its home")
+    }
+
+    @Test fun `many installs at once download at most four artifacts at a time and all install`() = runBlocking<Unit> {
+        val names = (1..12).map { "Bulk$it" }
+        val served = repo.publish(names.associateWith { "artifact $it".toByteArray() }, 1)
+        val running = java.util.concurrent.atomic.AtomicInteger()
+        val peak = java.util.concurrent.atomic.AtomicInteger()
+        val fetcher = RepositoryFetcher { url, max ->
+            if (!url.endsWith(".cs3")) return@RepositoryFetcher served.fetch(url, max)
+            val now = running.incrementAndGet()
+            peak.accumulateAndGet(now, ::maxOf)
+            try { delay(50); served.fetch(url, max) } finally { running.decrementAndGet() }
+        }
+        val manager = ExtensionTestSupport.use(InstallationManager(runtime, fetcher))
+        val results = names.map { name -> async(Dispatchers.IO) { runCatching { manager.install(repo.url, name) } } }.map { it.await() }
+        assertEquals(emptyList(), results.mapNotNull { it.exceptionOrNull()?.toString() })
+        assertEquals(names.size, DaemonState.snapshot().installations.size)
+        assertTrue(peak.get() in 2..InstallationManager.MAX_CONCURRENT_DOWNLOADS, "peak concurrent downloads: ${peak.get()}")
+    }
+
     @Test fun `enable is idempotent and a toggle never cancels an update`() = runBlocking<Unit> {
         publish(v1, 1)
         val manager = manager()

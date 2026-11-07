@@ -35,6 +35,9 @@ enum HTMLStringSanitizer {
         text = text.replacingOccurrences(of: "</p>", with: "\n\n", options: .caseInsensitive)
         text = text.replacingOccurrences(of: "<p>", with: "\n\n", options: .caseInsensitive)
 
+        // Strip script and style blocks completely, including their contents
+        text = text.replacingOccurrences(of: "(?is)<(script|style)[^>]*>.*?</\\1>", with: "", options: .regularExpression)
+
         // Strip remaining HTML tags
         text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
 

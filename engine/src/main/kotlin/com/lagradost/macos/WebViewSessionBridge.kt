@@ -115,6 +115,10 @@ internal object WebViewSessionBridge {
                 "WebView load needs a web URL or a page"
             }
             require(request.baseUrl == null || web(request.baseUrl)) { "WebView base URL must be a web URL" }
+            // The page runs in the app's WebKit, outside the worker sandbox: never
+            // this Mac or the local network, as a page or as a page's origin (H1).
+            request.url?.let { WebDestination.requireRemote(it, "WebView URL") }
+            request.baseUrl?.let { WebDestination.requireRemote(it, "WebView base URL") }
         }
         val session = when (request.op) {
             "load" -> sessions[request.session]?.takeIf { it.owner == owner } ?: create(owner, request.session) ?: return WebViewResponse(alive = false)

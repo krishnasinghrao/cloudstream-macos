@@ -12,6 +12,13 @@ internal class ProviderNoDataException : RuntimeException()
 /** A non-success HTTP answer; [url] is the address that answered, when known. */
 internal class RemoteHttpException(val status: Int, val url: String? = null) :
     java.io.IOException("HTTP $status" + (url?.let { " from $it" } ?: ""))
+/**
+ * A repository request that failed below HTTP (DNS, connect, TLS, reset), with
+ * the address it was for, so the user-facing message can name the host and
+ * the matching remedy. [cause] is the transport's own exception.
+ */
+internal class RepositoryNetworkException(val url: String, override val cause: java.io.IOException) :
+    java.io.IOException(cause.message, cause)
 /** Too many extension processes or routed extractions are busy to admit more work. */
 internal class WorkerCapacityException : RuntimeException()
 
@@ -34,6 +41,7 @@ internal object OperationFailures {
             thrown is ProviderNoDataException -> "provider_no_data"
             causes.any { it is WorkerCapacityException } -> "capacity"
             remote != null -> "remote_http_failure"
+            causes.any(::isLocalStorageFailure) -> "worker_storage_error"
             else -> causes.firstOrNull { it is java.io.IOException }?.let(::networkCode) ?: "provider_failure"
         }
         val stage = when {
@@ -57,11 +65,12 @@ internal object OperationFailures {
             "capacity" -> "Too many extensions are busy right now. Try again shortly."
             "remote_http_failure" -> "The provider's server returned HTTP ${remote!!.status}."
             "dns_failure" -> "The provider's server address could not be found. The site may be blocked on your network; try another DNS server in Settings ▸ Network, or a VPN."
-            "tls_failure" -> "A secure connection to the provider's server could not be established."
+            "tls_failure" -> "A secure connection to the provider's server could not be established. The site's certificate may be invalid, or your network may be blocking it; try another DNS server in Settings ▸ Network, or a VPN."
             "network_timeout" -> "The provider's server did not respond in time."
             "connection_refused" -> "The provider's server refused the connection. The site may be down."
             "connection_reset" -> "The connection to the provider's server was cut off. The site may be blocking this network; a VPN may help."
             "network_failure" -> "The provider could not connect to its server."
+            "worker_storage_error" -> "The extension's files on this Mac were missing or could not be read. Try again."
             else -> "The extension failed during $stage."
         }
         // Linkage messages can contain URLs or user data. Extract only the
@@ -102,14 +111,14 @@ internal object OperationFailures {
     fun status(failure: OperationFailureDto): Int = when (failure.code) {
         in INCOMPATIBLE, "unsupported_capability", "rejected_media_resource", "unsupported_sources" -> 422
         "timeout" -> 504
-        "worker_terminated", "worker_out_of_memory", "capacity" -> 503
+        "worker_terminated", "worker_out_of_memory", "capacity", "worker_storage_error" -> 503
         "provider_no_data" -> 404
         else -> 502
     }
 
     /** Codes that mean the extension's code does not fit this host (formerly one `runtime_incompatibility`). */
     val INCOMPATIBLE = setOf("missing_host_class", "missing_host_member", "translation_rejected", "host_abi_mismatch")
-    private val RETRYABLE = setOf("timeout", "worker_terminated", "worker_out_of_memory", "capacity", "network_failure",
+    private val RETRYABLE = setOf("timeout", "worker_terminated", "worker_out_of_memory", "capacity", "worker_storage_error", "network_failure",
         "dns_failure", "network_timeout", "connection_refused", "connection_reset")
 
     /**
@@ -128,6 +137,19 @@ internal object OperationFailures {
         // dex2jar output the verifier refuses, or a malformed/too-new class file.
         is VerifyError, is ClassFormatError -> "translation_rejected"
         else -> "host_abi_mismatch"
+    }
+
+    /**
+     * A local file that is missing or unreadable (e.g. a worker home removed
+     * under a running operation) is not a network failure, though both are
+     * IOExceptions. `java.net.URL` also reports an HTTP 404 as
+     * [java.io.FileNotFoundException], with the address as its message: that
+     * one stays remote.
+     */
+    internal fun isLocalStorageFailure(error: Throwable): Boolean = when (error) {
+        is java.nio.file.FileSystemException -> true
+        is java.io.FileNotFoundException -> error.message?.let { Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://").containsMatchIn(it) } != true
+        else -> false
     }
 
     private fun networkCode(error: Throwable): String = when (error) {

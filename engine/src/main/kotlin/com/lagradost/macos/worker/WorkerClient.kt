@@ -186,11 +186,20 @@ internal class WorkerClient(
 
     private fun send(frame: Frame) = output.send(frame)
 
+    private val strayOutputReported = AtomicBoolean(false)
+
+    /** Output that reached the protocol pipe outside a frame was skipped; worth one warning per worker. */
+    private fun reportStrayOutput(bytes: Long) {
+        if (strayOutputReported.compareAndSet(false, true)) {
+            DaemonLog.warn("worker.stray_output", mapOf("installation" to installationId, "bytes" to bytes))
+        }
+    }
+
     private fun readLoop() {
         val input = DataInputStream(BufferedInputStream(process.inputStream))
         try {
             while (true) {
-                val frame = FrameCodec.read(input) ?: break
+                val frame = FrameCodec.read(input, ::reportStrayOutput) ?: break
                 when {
                     frame.type == Op.SOLVE && frame.id < 0 -> scope.launch { answerSolve(frame) }
                     frame.type == Op.EXTRACT && frame.id < 0 -> scope.launch { answerExtract(frame) }

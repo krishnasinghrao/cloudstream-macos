@@ -41,20 +41,63 @@ internal object FrameCodec {
     /** Callers serialize writes on [out]. */
     fun write(out: DataOutputStream, frame: Frame) = write(out, encode(frame))
 
+    /**
+     * Marks the start of every frame. 0xFE never occurs in UTF-8 text, so
+     * output that reaches the pipe outside the protocol (a JVM message, a
+     * native library writing to fd 1) can never look like a frame start and
+     * is skipped instead of being read as a length.
+     */
+    val MAGIC = byteArrayOf(0xFE.toByte(), 0xC5.toByte(), 0x33, 0x46)
+
     fun write(out: DataOutputStream, bytes: ByteArray) {
+        out.write(MAGIC)
         out.writeInt(bytes.size)
         out.write(bytes)
         out.flush()
     }
 
-    /** Returns null at end of stream; throws on a malformed or oversized frame. */
-    fun read(input: DataInputStream): Frame? {
-        val size = try { input.readInt() } catch (_: EOFException) { return null }
+    /**
+     * Returns null at end of stream; throws on a malformed or oversized frame.
+     * Bytes before a frame's [MAGIC] are discarded and their count reported
+     * to [onSkipped]; damage after the marker is still a protocol error.
+     */
+    fun read(input: DataInputStream, onSkipped: (Long) -> Unit = {}): Frame? {
+        if (!synchronize(input, onSkipped)) return null
+        val size = input.readInt()
         require(size in 0..MAX_FRAME_BYTES) { "Invalid frame length $size" }
         val bytes = ByteArray(size)
         input.readFully(bytes)
         return json.decodeFromString(Frame.serializer(), bytes.toString(Charsets.UTF_8)).also {
             require(it.protocolVersion == 2) { "Incompatible worker protocol" }
+        }
+    }
+
+    /** Consumes input through the next [MAGIC]; false at end of stream. */
+    private fun synchronize(input: DataInputStream, onSkipped: (Long) -> Unit): Boolean {
+        var matched = 0
+        var skipped = 0L
+        try {
+            while (matched < MAGIC.size) {
+                val value = input.read()
+                if (value < 0) {
+                    skipped += matched
+                    return false
+                }
+                if (value.toByte() == MAGIC[matched]) {
+                    matched++
+                } else {
+                    // The marker's first byte occurs only once in it, so a
+                    // mismatch restarts the match at this byte.
+                    skipped += matched
+                    matched = if (value.toByte() == MAGIC[0]) 1 else 0
+                    if (matched == 0) skipped++
+                }
+            }
+            return true
+        } catch (_: EOFException) {
+            return false
+        } finally {
+            if (skipped > 0) onSkipped(skipped)
         }
     }
 }

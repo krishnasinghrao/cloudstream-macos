@@ -3,7 +3,17 @@ import Foundation
 
 extension Sequence where Element == UInt8 {
     /// Lowercase hexadecimal, two digits per byte: digests, MACs and tokens.
-    var hexString: String { map { String(format: "%02x", $0) }.joined() }
+    var hexString: String {
+        let lookup: [UInt8] = Array("0123456789abcdef".utf8)
+        var bytes: [UInt8] = []
+        let estimatedCount = underestimatedCount
+        if estimatedCount > 0 { bytes.reserveCapacity(estimatedCount * 2) }
+        for byte in self {
+            bytes.append(lookup[Int(byte >> 4)])
+            bytes.append(lookup[Int(byte & 0x0F)])
+        }
+        return String(decoding: bytes, as: UTF8.self)
+    }
 }
 
 extension SHA256 {

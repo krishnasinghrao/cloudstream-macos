@@ -12,6 +12,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.HexFormat
@@ -38,6 +39,8 @@ internal class WorkerEgressProxy(
     private val addressAllowed: (InetAddress) -> Boolean = RepositoryTransport::isPublicAddress,
     private val resolve: (String) -> List<InetAddress> = { host -> app.baseClient.dns.lookup(host) },
     private val maxConnections: Int = MAX_CONNECTIONS,
+    /** A tunnel with no bytes in either direction for this long is closed, freeing its slot. */
+    private val idleTimeoutMs: Long = TUNNEL_IDLE_MS,
 ) : AutoCloseable {
     private val server = ServerSocket().apply { bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 128) }
     private val username = "worker"
@@ -46,6 +49,7 @@ internal class WorkerEgressProxy(
     private val pool = Executors.newCachedThreadPool { task -> Thread(task, "worker-egress").apply { isDaemon = true } }
     /** Refusals since start (diagnostics and tests). */
     val refused = AtomicLong()
+    private val lastSaturationLog = AtomicLong(0)
     val port: Int get() = server.localPort
     val settings: EgressSettings get() = EgressSettings(InetAddress.getLoopbackAddress().hostAddress, port, username, password)
 
@@ -58,6 +62,12 @@ internal class WorkerEgressProxy(
             val client = try { server.accept() } catch (_: IOException) { break }
             if (!slots.tryAcquire()) {
                 runCatching { client.close() }
+                // Callers only see a connection closed at once; say why, at most once a minute.
+                val now = System.currentTimeMillis()
+                val last = lastSaturationLog.get()
+                if (now - last >= 60_000 && lastSaturationLog.compareAndSet(last, now)) {
+                    DaemonLog.warn("worker.egress_saturated", mapOf("slots" to maxConnections))
+                }
                 continue
             }
             pool.execute {
@@ -81,10 +91,20 @@ internal class WorkerEgressProxy(
             }
             upstream.use { remote ->
                 reply(output, REPLY_SUCCEEDED)
-                socket.soTimeout = 0
-                remote.soTimeout = 0
-                val back = pool.submit { pipe(remote.getInputStream(), output, socket) }
-                pipe(input, remote.getOutputStream(), remote)
+                // A tunnel used to hold its slot until both peers closed it, so
+                // an upstream that vanished (a NAT or Wi-Fi drop, no FIN) kept
+                // it forever and enough of them refused every new connection.
+                // Reads now wake up periodically; the tunnel closes once neither
+                // direction has moved for idleTimeoutMs. Keepalive detects dead
+                // peers below that.
+                val poll = idleTimeoutMs.coerceIn(1, IDLE_POLL_MS).toInt()
+                socket.soTimeout = poll
+                remote.soTimeout = poll
+                runCatching { socket.keepAlive = true }
+                runCatching { remote.keepAlive = true }
+                val activity = AtomicLong(System.currentTimeMillis())
+                val back = pool.submit { pipe(remote.getInputStream(), output, socket, activity) }
+                pipe(input, remote.getOutputStream(), remote, activity)
                 runCatching { back.get() }
             }
         }
@@ -158,12 +178,19 @@ internal class WorkerEgressProxy(
         }
     }
 
-    private fun pipe(from: InputStream, to: OutputStream, toSocket: Socket) {
+    /** One direction of a tunnel. [activity] is shared by both: a busy download keeps an idle upload alive. */
+    private fun pipe(from: InputStream, to: OutputStream, toSocket: Socket, activity: AtomicLong) {
         val buffer = ByteArray(BUFFER_BYTES)
         try {
             while (true) {
-                val read = from.read(buffer)
+                val read = try {
+                    from.read(buffer)
+                } catch (_: SocketTimeoutException) {
+                    if (System.currentTimeMillis() - activity.get() >= idleTimeoutMs) break
+                    continue
+                }
                 if (read < 0) break
+                activity.set(System.currentTimeMillis())
                 to.write(buffer, 0, read)
                 to.flush()
             }
@@ -182,6 +209,9 @@ internal class WorkerEgressProxy(
         const val MAX_CONNECTIONS = 256
         private const val HANDSHAKE_TIMEOUT_MS = 10_000
         private const val CONNECT_TIMEOUT_MS = 15_000
+        /** Longer than any keep-alive OkHttp or WebKit holds an idle connection for (5 min). */
+        const val TUNNEL_IDLE_MS = 10 * 60_000L
+        private const val IDLE_POLL_MS = 30_000L
         private const val BUFFER_BYTES = 32 * 1024
         private const val CONNECT = 1
         private const val USER_PASSWORD: Byte = 2
@@ -199,5 +229,20 @@ internal class WorkerEgressProxy(
 
         /** The proxy new workers are pointed at. */
         val active: WorkerEgressProxy get() = testOverride ?: shared
+
+        /**
+         * The proxy the app routes extension-driven WebKit content through
+         * (security audit 2026-11, H1): page loads an extension asks for run in
+         * the app, outside the worker sandbox, so they get the same public-only
+         * address rule. Its own instance, so a busy page cannot use up the
+         * workers' connection budget, with its own password (sent only to the
+         * authenticated app).
+         */
+        private val webContentShared: WorkerEgressProxy by lazy { WorkerEgressProxy() }
+
+        /** Tests only. */
+        @Volatile internal var webContentTestOverride: WorkerEgressProxy? = null
+
+        val webContent: WorkerEgressProxy get() = webContentTestOverride ?: webContentShared
     }
 }

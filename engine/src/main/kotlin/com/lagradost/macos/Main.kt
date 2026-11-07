@@ -36,8 +36,6 @@ import java.security.MessageDigest
  * Usage: `java -jar daemon.jar <port> [token]` (token via stdin when omitted)
  *        (env fallback: CS_DAEMON_PORT / CS_DAEMON_TOKEN)
  */
-private const val TAG = "Daemon"
-
 /** Bearer token; constant-time compared on every request. Never logged. */
 @Volatile
 private var bearerToken: String = ""
@@ -109,6 +107,9 @@ fun main(args: Array<String>) {
         DaemonLog.info("extensions.isolation", mapOf("mode" to "worker", "sandboxed" to runtime.sandboxed))
     }
 
+    // TLS trust: the JDK's roots plus those the Mac trusts, before any client is built.
+    SystemTrust.install(DaemonRuntime.options.systemTrustAnchors)
+
     // HTTP stack: DoH resolver, response cache, anti-bot circuit, retries —
     // after state load so the persisted network settings apply at boot.
     NetworkSetup.install()
@@ -156,6 +157,15 @@ fun Application.module() {
         // Nothing the engine answers may be kept in an HTTP cache: responses
         // carry links, per-link headers, keys and viewing history (audit M3).
         call.response.headers.append(io.ktor.http.HttpHeaders.CacheControl, "no-store")
+        // DNS rebinding (security audit 2026-11, L1): a web page whose name
+        // re-resolves to 127.0.0.1 reaches this listener as a same-origin
+        // request, with its own name in Host. Only loopback names are answered,
+        // before anything (including /health and relay reads) is served.
+        if (!LoopbackHost.allowed(call.request.headers[io.ktor.http.HttpHeaders.Host])) {
+            call.respond(HttpStatusCode.Forbidden, ErrorResponseDto(error = "forbidden", detail = "unexpected Host"))
+            finish()
+            return@intercept
+        }
         val path = call.request.path()
         if (path == "/health") return@intercept
         // A relayed media resource is read by the native player, which sends
@@ -296,6 +306,24 @@ internal fun isolationHealth(): com.lagradost.macos.models.IsolationHealthDto {
         sandboxed = runtime.sandboxed,
         runningWorkers = com.lagradost.macos.worker.WorkerPool.runningCount(),
     )
+}
+
+/**
+ * The Host values the loopback listener answers (DNS-rebinding defence): the
+ * app, the native player, ffmpeg and external players all address it as
+ * `127.0.0.1:<port>`; `localhost` and `[::1]` are loopback spellings too.
+ */
+internal object LoopbackHost {
+    private val names = setOf("127.0.0.1", "localhost", "[::1]")
+
+    fun allowed(header: String?): Boolean {
+        val value = header?.trim()?.lowercase(java.util.Locale.ROOT) ?: return false
+        if (value.isEmpty() || value.length > 64) return false
+        val name = if (value.startsWith("[")) value.substringBefore(']') + "]" else value.substringBefore(':')
+        val rest = value.removePrefix(name)
+        if (rest.isNotEmpty() && !(rest.startsWith(":") && rest.length in 2..6 && rest.drop(1).all { it in '0'..'9' })) return false
+        return name in names
+    }
 }
 
 /**

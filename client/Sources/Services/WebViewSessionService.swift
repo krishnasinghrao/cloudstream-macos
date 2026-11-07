@@ -74,29 +74,73 @@ final class WebViewSessionService {
         let id: String
         private let client: WebViewSessionClient
         private var webView: WKWebView?
+        /// Builds the view once its network is confined (H1); nil when it may not exist.
+        private var preparation: Task<Bool, Never>?
+        /// The last queued page operation: an `eval` runs after the `load` before it.
+        private var tail: Task<Void, Never>?
+        private var closed = false
 
         init(id: String, client: WebViewSessionClient) {
             self.id = id
             self.client = client
         }
 
-        /// Returns an error message, or nil when the load started.
+        /// Returns an error message, or nil when the load was accepted. The
+        /// page itself loads once the view's network is confined.
         func load(_ command: WebViewCommandDto) -> String? {
-            let view = webView ?? makeView()
-            install(interfaces: command.interfaces, in: view)
-            if let agent = command.userAgent, !agent.isEmpty { view.customUserAgent = agent }
-            if let html = command.html {
-                let base = command.baseUrl.flatMap(URL.init(string:)).flatMap(Self.web)
-                view.loadHTMLString(html, baseURL: base)
-                return nil
+            let base: URL?
+            if let raw = command.baseUrl {
+                // The base URL is the page's origin: same-origin requests go there.
+                guard let url = URL(string: raw).flatMap(Self.web), WebContentNetworkPolicy.shared.allowsNavigation(to: url) else {
+                    return "WebView base URL must be a public web address"
+                }
+                base = url
+            } else { base = nil }
+            let target: URL?
+            if command.html == nil {
+                guard let url = command.url.flatMap(URL.init(string:)).flatMap(Self.web) else { return "WebView load needs a web URL" }
+                guard WebContentNetworkPolicy.shared.allowsNavigation(to: url) else { return "WebView URL must be a public web address" }
+                target = url
+            } else { target = nil }
+            enqueue { [weak self] in
+                guard let self, let view = await self.view() else { return }
+                self.install(interfaces: command.interfaces, in: view)
+                if let agent = command.userAgent, !agent.isEmpty { view.customUserAgent = agent }
+                if let html = command.html { view.loadHTMLString(html, baseURL: base) }
+                else if let target { view.load(URLRequest(url: target)) }
             }
-            guard let url = command.url.flatMap(URL.init(string:)).flatMap(Self.web) else { return "WebView load needs a web URL" }
-            view.load(URLRequest(url: url))
             return nil
         }
 
+        private func enqueue(_ operation: @escaping @MainActor () async -> Void) {
+            let previous = tail
+            tail = Task { @MainActor in
+                _ = await previous?.value
+                await operation()
+            }
+        }
+
+        /// The view, created on first use once ``WebContentNetworkPolicy`` confined it.
+        private func view() async -> WKWebView? {
+            if let webView { return webView }
+            if preparation == nil {
+                let configuration = WKWebViewConfiguration()
+                configuration.websiteDataStore = .nonPersistent()
+                configuration.mediaTypesRequiringUserActionForPlayback = .all
+                preparation = Task { @MainActor [weak self] in
+                    guard await WebContentNetworkPolicy.shared.prepare(configuration), let self, !self.closed else { return false }
+                    self.makeView(configuration)
+                    return true
+                }
+            }
+            guard await preparation?.value == true else { return nil }
+            return webView
+        }
+
         func evaluate(_ script: String) async -> (result: String?, error: String?) {
-            guard let webView else { return (nil, "The page is not loaded") }
+            // After every operation queued before it (the load it belongs to).
+            _ = await tail?.value
+            guard !closed, let webView else { return (nil, "The page is not loaded") }
             // Global scope (indirect eval) and the completion value of the
             // script, JSON-encoded; a throwing script yields null, as on Android.
             guard let literal = String(data: (try? JSONEncoder().encode(script)) ?? Data(), encoding: .utf8) else { return (nil, "Invalid script") }
@@ -112,21 +156,19 @@ final class WebViewSessionService {
         }
 
         func close() {
+            closed = true
+            tail?.cancel()
             webView?.navigationDelegate = nil
             webView?.stopLoading()
             webView?.configuration.userContentController.removeScriptMessageHandler(forName: Self.messageHandler)
             webView = nil
         }
 
-        private func makeView() -> WKWebView {
-            let configuration = WKWebViewConfiguration()
-            configuration.websiteDataStore = .nonPersistent()
-            configuration.mediaTypesRequiringUserActionForPlayback = .all
+        private func makeView(_ configuration: WKWebViewConfiguration) {
             configuration.userContentController.add(WeakMessageHandler(self), name: Self.messageHandler)
             let view = WKWebView(frame: CGRect(x: 0, y: 0, width: 1280, height: 800), configuration: configuration)
             view.navigationDelegate = self
             webView = view
-            return view
         }
 
         /// One object per registered name; each method call is reported.
@@ -159,7 +201,9 @@ final class WebViewSessionService {
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
             guard let url = navigationAction.request.url else { return .cancel }
             let scheme = url.scheme?.lowercased() ?? ""
-            return ["http", "https", "about", "data", "blob"].contains(scheme) ? .allow : .cancel
+            // Never this Mac or the local network, whatever the page navigates to (H1).
+            return ["http", "https", "about", "data", "blob"].contains(scheme) &&
+                WebContentNetworkPolicy.shared.allowsNavigation(to: url) ? .allow : .cancel
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

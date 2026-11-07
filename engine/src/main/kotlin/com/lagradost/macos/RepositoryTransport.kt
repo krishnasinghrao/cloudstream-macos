@@ -148,7 +148,9 @@ internal class RepositoryTransport(
         val call = client.newCall(request)
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) { continuation.resumeWithException(e) }
+            override fun onFailure(call: Call, e: IOException) {
+                continuation.resumeWithException(if (call.isCanceled()) e else RepositoryNetworkException(url.toString(), e))
+            }
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val reply = response.use {
@@ -179,7 +181,11 @@ internal class RepositoryTransport(
                         }
                     }
                     continuation.resume(reply)
-                } catch (failure: Exception) { continuation.resumeWithException(failure) }
+                } catch (failure: Exception) {
+                    // A reset or TLS failure while reading the body names its address too.
+                    continuation.resumeWithException(if (failure is IOException && failure !is RemoteHttpException && !call.isCanceled())
+                        RepositoryNetworkException(url.toString(), failure) else failure)
+                }
             }
         })
     }

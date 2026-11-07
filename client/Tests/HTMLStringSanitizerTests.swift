@@ -35,6 +35,12 @@ final class HTMLStringSanitizerTests: XCTestCase {
         XCTAssertEqual(HTMLStringSanitizer.sanitize("<b>Bold</b> and <i>italic</i>"), "Bold and italic")
     }
 
+    func testScriptAndStyleBlocksAreRemovedWithContents() {
+        XCTAssertEqual(HTMLStringSanitizer.sanitize("<script>alert('xss');</script><p>Hello</p>"), "Hello")
+        XCTAssertEqual(HTMLStringSanitizer.sanitize("<style>body { color: red; }</style><span>World</span>"), "World")
+        XCTAssertEqual(HTMLStringSanitizer.sanitize("<SCRIPT type=\"text/javascript\">\nconsole.log(1);\n</SCRIPT>Movie synopsis"), "Movie synopsis")
+    }
+
     func testLineBreaks() {
         XCTAssertEqual(HTMLStringSanitizer.sanitize("one<br>two<br/>three<p>four</p>"), "one\ntwo\nthree\n\nfour")
     }

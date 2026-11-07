@@ -113,6 +113,8 @@ internal object MediaResolveBridge {
         require(spec.url.length <= MAX_URL && target?.scheme?.lowercase() in setOf("http", "https") && target?.host != null) {
             "WebViewResolver needs an http(s) URL"
         }
+        // Loaded in the app's WebKit, outside the worker sandbox (H1).
+        WebDestination.requireRemote(spec.url, "WebViewResolver URL")
         require(spec.method.uppercase() in setOf("GET", "POST")) { "Unsupported WebViewResolver method" }
         require(spec.additional.size <= MAX_PATTERNS && spec.headers.size <= 32) { "Too many WebViewResolver patterns or headers" }
         val task = Task(UUID.randomUUID().toString(), spec.copy(

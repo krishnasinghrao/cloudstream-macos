@@ -1,6 +1,6 @@
 # CloudStream macOS — Security Model
 
-Status: runtime remediation in progress (IPC v5, per-extension workers); release requires the verification gates listed in [Extensions-Remediation-Plan](archive/plans/Extensions-Remediation-Plan.md) (§ Status). See [REMEDIATION.md](archive/audit/extensions-repository/REMEDIATION.md) for evidence.
+Status: describes the current engine (IPC v7, per-extension sandboxed workers). The remediation that produced this model is recorded in [Extensions-Remediation-Plan](archive/plans/Extensions-Remediation-Plan.md), with evidence in [REMEDIATION.md](archive/audit/extensions-repository/REMEDIATION.md). The latest security audit and its fixes: [macos-security-audit-2026-11](archive/audit/macos-security-audit-2026-11.md).
 
 ## Assets
 
@@ -17,7 +17,9 @@ Internet ⇄ [worker sandbox: one extension each]   — outbound TCP/UDP to remo
 Engine (control plane) ⇄ workers                   — stdin/stdout frames; engine runs no extension code
 UI ⇄ engine                                        — loopback + bearer token (constant-time); the engine
                                                      proves the token first (HMAC handshake, port from its stdout)
-Internet ⇄ [WebKit solver (client)]                — only for parked challenge URLs
+Internet ⇄ [app WebKit for extensions]            — solver, WebViewResolver pages, extension WebViews;
+                                                     only through the web-content egress proxy (public
+                                                     addresses only); loopback/link-local blocked in WebKit
 UI ⇄ ffmpeg / libmpv                               — sanitized URLs + headers only
 Organization ⇄ app                                 — managed preferences (configuration profile)
 ```
@@ -26,7 +28,7 @@ Organization ⇄ app                                 — managed preferences (co
 
 The engine is a **control plane that runs no extension code**. Each installed extension runs in its own worker JVM, launched by the engine through the macOS sandbox with a per-worker deny-by-default profile. A worker can:
 
-- read only the bundled runtime, the daemon jar, its one verified artifact file, and system TLS/DNS configuration;
+- read only the bundled runtime, the daemon jar, its one verified artifact file, the exported keychain roots file (public certificates, read-only), and system TLS/DNS configuration;
 - read and write only its own home, `workers/<installationId>/` (its translation cache, its `Context` storage, its temp directory);
 - reach the network only through the engine's egress proxy. The profile denies every outbound TCP and UDP connection except TCP to that proxy's one loopback port, and every Unix-domain socket (Docker, ssh-agent, 1Password, gpg-agent) except mDNSResponder. The proxy (`WorkerEgressProxy`, SOCKS5 with a per-engine password sent in INIT, never on argv) resolves names with the engine's resolver and connects only to public addresses, so loopback, private, link-local, CGNAT, multicast and documentation ranges (this Mac's services and the local network) are refused. A worker cannot listen and talks to the engine over its stdin/stdout pipes;
 - read sysctl values only for hardware, CPU and OS version (never `kern.proc*`/`kern.procargs*`, which expose other processes' command lines), inspect only its own process, and see file metadata only for the paths it may read and their parent directories (so it cannot probe whether other files exist).
@@ -43,11 +45,23 @@ If the sandbox launcher is unavailable, extensions do not run: `requireSandbox` 
 
 **Requests a worker may make to the engine** (ADR-0016 amendment). Workers never reach each other directly. A worker can ask the engine to (1) solve an anti-bot challenge, (2) route a video-host URL to the extension that registered a matching extractor, and (3) load a page in the app's WebKit for `WebViewResolver`. Each is bounded in count and by the deadline of the call the worker is serving. Routed extraction cannot loop (visited installations, three hops; the engine does not trust the worker's own route state) and returns only sanitized links. Page loads run in a per-task non-persistent WebKit data store, accept only http(s) URLs, block hand-offs to other apps and local files, and report only request URLs; the engine matches the extension's regular expressions itself under a per-match time budget, so neither a crafted pattern nor a crafted URL can hang it.
 
+**WebKit content an extension asks for** (security audit 2026-11, H1). Challenge solves, `WebViewResolver` pages and extension WebViews load in the app's WebKit, outside the worker sandbox, and the extension reads what they return (script results, page events, cookies). Without confinement an extension could open `http://127.0.0.1:<port>/`, a router or `169.254.169.254` there and read the answer. Three layers keep that content on the public internet:
+
+1. **Proxy.** Every request goes through the engine's web-content SOCKS5 proxy (`WorkerEgressProxy.webContent`, `GET /webview/egress`), the same public-only address rule as the workers' proxy, in its own instance with its own password and connection budget. WebKit sends host names to the proxy, which resolves them itself and connects to exactly the address it checked, so a name that resolves (or re-resolves, DNS rebinding) to a local address is refused. `allowFailover` is off: without the proxy nothing loads. `WebContentNetworkPolicy.prepare` refuses to configure a view when the proxy settings or the rule list are unavailable.
+2. **Content rule list.** WebKit connects to loopback (`127/8`, `localhost`, `::1`) and link-local (`169.254/16`, `fe80::/10`) destinations without asking a proxy (measured on macOS 27). A compiled `WKContentRuleList` blocks every request, of every resource type (pages, frames, fetch/XHR, media), to those addresses in every spelling WebKit accepts (`2130706433`, `0x7f.1`, `[::ffff:7f00:1]`, user-info prefixes) and to other local spellings (private ranges, `.local`, `.lan`, `.internal`, `.home.arpa`, single-label names).
+3. **Refusal before loading.** The engine refuses load, resolve and worker-solve requests whose URL or HTML base URL names a local destination by spelling (`WebDestination`), and the app's navigation delegates refuse the same hosts (`LocalDestination`).
+
+The engine's connectivity test applies the same rule to the site URLs extensions declare, and the app's artwork and subtitle loader refuses local hosts on every redirect.
+
 **Extension settings.** The engine derives an extension's preference keys and types from its translated code without running it, and edits only those keys with those types, inside the process hosting the extension. Values never appear in logs, audit records (keys only) or the diagnostics export; the app hides text values by default.
 
 **Translation.** DEX translation runs inside the worker under its heap limit. Methods beyond a fixed size bound are replaced by a stub that throws a named error, so an oversized or crafted method cannot exhaust the worker.
 
 **Android compatibility types** the engine provides describe the Mac truthfully (`Build` reports Apple/Mac with no Android SDK level; `ActivityManager` reports real memory) and never widen access: `ApplicationInfo.dataDir` is the extension's own private directory, `PluginManager` lists nothing and ignores unload requests, and UI base classes are inert.
+
+**Provider TLS.** As on Android (upstream #2655, stable since 4.8.0), `app` verifies certificates and `insecureApp` does not; an extension opts into the latter (`@UnsafeSSL`) for provider hosts with broken certificates. Repository traffic and the DoH resolver never use the insecure client; which client an extension uses for its own logins is its choice, as on Android. Workers fetch a missing intermediate certificate from its AIA address (`com.sun.security.enableAIAcaIssuers`) through the egress proxy, so the fetch obeys the public-address rule and the result must still chain to a trusted root.
+
+**Keychain roots.** JDK 17 cannot read macOS keychain trust settings (`KeychainStore` is empty and there is no `KeychainStore-ROOT`), so a network whose TLS is inspected by a root installed in the keychain (antivirus HTTPS scanning, company proxies, MDM profiles) used to fail every engine connection while Safari worked. At each engine start the app (`SystemTrustAnchors`) exports the certificates the user and admin trust domains mark as trusted roots for SSL (an empty trust-settings array, or an entry for the SSL policy or for every policy, not limited to one application or host name). A certificate the user domain marks as never trusted is left out even when the admin domain trusts it. Apple's built-in system roots are not exported. The PEM file is `trust/system-anchors.pem` under the engine data root, owner-only (0600 in a 0700 folder), rewritten each launch and removed when there is nothing to export; its path reaches the engine in the stdin launch options, never argv. The engine (`SystemTrust`) reads at most 1 MiB and 256 certificates, skips malformed blocks and expired certificates, and builds one trust manager whose anchors are the JDK's `cacerts` plus those roots. It is used by `app`, repository traffic, the DoH resolver and the JDK default `SSLContext` (URLConnection); hostname verification is unchanged. Workers receive the file's path as a system property and their sandbox profile allows reading that one file. `insecureApp` is unaffected (it verifies nothing), and repository signing does not depend on TLS trust. A root added to the keychain is picked up at the next engine start.
 
 Residual: a compromised extension can still use the network as its own origin, and all workers run as the same user, so they are not protected from other processes of that user. A routed extractor runs with the target extension's identity, not the caller's.
 
@@ -55,7 +69,8 @@ Residual: a compromised extension can still use the network as its own origin, a
 
 | Invariant | Enforcement point |
 |---|---|
-| SEC-01 loopback-only | `Main.kt` `embeddedServer(Netty, host = "127.0.0.1", …)`; sandbox allows inbound only on loopback |
+| SEC-01 loopback-only | `Main.kt` `embeddedServer(Netty, host = "127.0.0.1", …)`; sandbox allows inbound only on loopback; a non-loopback `Host` header answers 403 before any route (`LoopbackHost`, DNS-rebinding defence) |
+| SEC-06a extension WebKit confinement | `WebContentNetworkPolicy` (proxy without failover, content rule list, navigation checks), `WorkerEgressProxy.webContent`, `WebDestination` on `WebViewSessionBridge`, `MediaResolveBridge`, `SolveBridge.solveForWorker` (audit 2026-11 H1) |
 | SEC-02 ephemeral bearer auth | `Main.kt` interceptor (constant-time compare), `DaemonSupervisor` stdin delivery. Relay resource reads (`/media/relay/{id}`) are authorized by their 256-bit id instead; see below |
 | SEC-02a engine authentication | The engine binds port 0 and announces the port on its stdout pipe (`EngineHandshake`); the app checks the port is the child's own listening socket, then sends a nonce to `/health` and accepts only `HMAC-SHA256(token, "cloudstream-health-v1:" + nonce)`. The token is never sent to `/health`; provider credentials are sent only after the proof (`EngineHealthProbe`, `EngineSocketOwnership`) |
 | SEC-02b no IPC caching | Every engine response carries `Cache-Control: no-store`; the app's engine sessions are ephemeral with no URL cache, cookies or proxy (`EngineTransport`); engine responses left in the shared cache by older builds are purged once |
@@ -128,11 +143,12 @@ Repository HTTP uses `RepositoryTransport`: verified TLS, explicit HTTPS redirec
 ## Residual risks
 
 1. **Extensions are arbitrary code.** Workers confine them to their own directory and to public internet hosts reached through the engine's egress proxy; a signature gives key continuity only (trust on first use), so every repository whose key no policy pins needs the user's consent.
-2. **Loopback authentication** — local processes of the same user can reach the listener; routes require the bearer token except `/health` and reads of a relay resource by its id.
+2. **Loopback authentication** — local processes of the same user can reach the listener; routes require the bearer token except `/health` and reads of a relay resource by its id. Web pages cannot use it through DNS rebinding (Host check).
 3. **ffmpeg/libmpv** execute remote-controlled URLs; protocol whitelists, scheme checks and header sanitization apply. ffmpeg and external players receive only Referer and User-Agent as arguments; any other header (credentials, custom tokens), and every header for QuickTime, sends the stream through the relay instead, and a relayed external player gets a `127.0.0.1` URL and no headers at all.
 4. **Sandbox launcher** — `sandbox-exec` is deprecated by Apple but present on supported macOS versions; without it extensions are refused unless policy allows them unsandboxed. The engine process itself is not sandboxed (ADR-0016).
 5. **Logs** — extension stderr is not persisted unless `-Dcs.extensionLogs=verbose`; every engine log value is redacted at write time, and logs and engine folders are owner-only.
 6. **Keychain** — items use the data protection keychain where the build has an access group; the file-keychain fallback (ad-hoc builds) never writes into an item another process created.
+7. **Blind requests from native media consumers.** libmpv, ffmpeg and external players open the stream URLs an extension returns directly. Their protocol whitelists keep them on HTTP(S), but they can still be pointed at a LAN address; a request is sent and its answer is played or discarded, never returned to the extension. Engine-side relayed fetches and the app's artwork loader refuse local addresses.
 
 ## Accepted exposures
 

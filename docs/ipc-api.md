@@ -7,7 +7,10 @@ unguessable id is the credential.
 daemon. The client never sends the token to `/health`: it sends
 `X-CloudStream-Nonce: <64 hex>` and accepts the engine only when `proof` equals
 `hex(HMAC-SHA256(token, "cloudstream-health-v1:" + nonce))`. Every response
-carries `Cache-Control: no-store`. The schema source of truth is the domain files in
+carries `Cache-Control: no-store`. Requests whose `Host` is not a loopback
+name (`127.0.0.1`, `localhost` or `[::1]`, any port) answer 403 before any
+route, `/health` and relay reads included, so a DNS-rebinding web page cannot
+use the listener. The schema source of truth is the domain files in
 `engine/src/main/kotlin/com/lagradost/macos/models/`
 with a Swift mirror in `client/Sources/Models/IPC/`.
 
@@ -139,6 +142,7 @@ retries by `retryable` only; codes are added without a version bump.
 | `/lock` | GET, POST | yes | App lock state: `GET` → `{locked}`; `POST {"locked": bool}` sets it and returns `{locked}`. Locking drops solved challenge cookies and pending solves. While locked, every route except `/health`, `/lock`, relay reads and the download routes (`/links`, `/links/verify/start`, `/links/verify/stop`, `/media/relay`, `/media/relay/revoke`) answers 423 `{"error":"locked"}`. A new engine starts unlocked; the client re-sends the state once it is ready |
 | `/diagnostics/export` | GET | yes | Redacted support bundle (extensions, repositories, audit, recent engine log) |
 | `/extract` | POST | yes | Built-in extractors first, then the installed extension whose extractor matches the URL (its worker starts on demand); failures of routed calls are reported in `failures` |
+| `/webview/egress` | GET | yes | `{host, port, username, password}`: the engine's web-content SOCKS5 proxy (security audit 2026-11). The app sends every WebKit page an extension asked for (WebViewResolver, extension WebViews, challenge solves) through it, with failover off; it connects only to public addresses. The password lasts for one engine. Load, resolve and worker-solve requests naming a local address by spelling (loopback, private, link-local, `localhost`, `.local`, single-label names, any IPv4 spelling) are refused with 400 before they reach the app |
 | `/solve/*`, `/diagnostics`, `/settings/network*`, `/network/test`, `/test/run` | | yes | Unchanged from v3; network settings changes are pushed to running workers. `/settings/network` also carries `githubMirror` (fetch GitHub-hosted repositories through jsDelivr); a request without it keeps the current value |
 
 ## Worker protocol (engine ⇄ extension worker, ADR-0016)

@@ -72,3 +72,13 @@ struct MediaCompleteRequestDto: Codable, Sendable {
     let userAgent: String?
     let pageUrl: String?
 }
+
+/// `GET /webview/egress`: the engine's SOCKS5 proxy for WebKit content an
+/// extension asked for (security audit 2026-11, H1). It connects only to
+/// public addresses; its password exists for the life of one engine.
+struct WebContentEgressDto: Codable, Sendable, Hashable {
+    let host: String
+    let port: Int
+    let username: String
+    let password: String
+}

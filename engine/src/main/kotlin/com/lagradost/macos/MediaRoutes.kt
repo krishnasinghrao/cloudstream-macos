@@ -440,6 +440,17 @@ internal fun Route.mediaRoutes() {
 
     // ---- Extension-created WebViews (RT-14): the app runs them in WebKit.
 
+    /**
+     * Where the app sends the network traffic of WebKit content an extension
+     * asked for (security audit 2026-11, H1): a SOCKS5 proxy that connects only
+     * to public addresses. Bearer-authenticated like every route; the app
+     * refuses to load such content without it.
+     */
+    get("/webview/egress") {
+        Metrics.recordRequest("webview/egress")
+        call.respond(com.lagradost.macos.worker.WorkerEgressProxy.webContent.settings)
+    }
+
     get("/webview/pending") {
         Metrics.recordRequest("webview/pending")
         val waitMs = call.request.queryParameters["waitMs"]?.toLongOrNull() ?: 0

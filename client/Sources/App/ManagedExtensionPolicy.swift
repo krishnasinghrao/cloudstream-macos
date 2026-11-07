@@ -80,6 +80,8 @@ struct DaemonLaunchOptions: Encodable, Sendable {
     let safeMode: Bool
     /// One sandboxed worker process per extension (ADR-0016).
     var isolation = "worker"
+    /// PEM file of the roots this Mac trusts beyond the JDK's (SystemTrustAnchors); omitted when none.
+    var systemTrustAnchors: String?
 
     func encodedLine() -> Data {
         let encoder = JSONEncoder()

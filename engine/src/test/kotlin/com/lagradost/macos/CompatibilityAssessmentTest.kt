@@ -52,6 +52,40 @@ class CompatibilityAssessmentTest {
         assertTrue(report.missing.none { it.type.startsWith("ext/") }, "the extension's own classes are not host types")
     }
 
+    @Test fun `Android UI listener types link at startup`() {
+        val listeners = listOf("android/content/DialogInterface", "android/content/DialogInterface\$OnClickListener",
+            "android/content/DialogInterface\$OnCancelListener", "android/content/DialogInterface\$OnDismissListener",
+            "android/view/View", "android/view/View\$OnClickListener", "android/view/View\$OnLongClickListener")
+        val report = CompatibilityAssessment.assess(listOf(jar(mapOf("ext/Entry" to classBytes("ext/Entry", "java/lang/Object", *listeners.toTypedArray())))), "ext.Entry")
+        assertEquals(emptyList(), report.missing.map { it.type }, "no listener type is a missing host class")
+
+        // A plugin class that implements both click listeners, loaded through the host loader as a worker would.
+        val writer = ClassWriter(ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES)
+        writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "ext/Listener", null, "java/lang/Object",
+            arrayOf("android/content/DialogInterface\$OnClickListener", "android/view/View\$OnClickListener"))
+        writer.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null).apply {
+            visitCode(); visitVarInsn(Opcodes.ALOAD, 0)
+            visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+            visitInsn(Opcodes.RETURN); visitMaxs(0, 0); visitEnd()
+        }
+        writer.visitMethod(Opcodes.ACC_PUBLIC, "onClick", "(Landroid/content/DialogInterface;I)V", null, null).apply {
+            visitCode(); visitInsn(Opcodes.RETURN); visitMaxs(0, 0); visitEnd()
+        }
+        writer.visitMethod(Opcodes.ACC_PUBLIC, "onClick", "(Landroid/view/View;)V", null, null).apply {
+            visitCode(); visitInsn(Opcodes.RETURN); visitMaxs(0, 0); visitEnd()
+        }
+        writer.visitEnd()
+        val bytes = writer.toByteArray()
+        val loader = object : ClassLoader(CompatibilityAssessmentTest::class.java.classLoader) {
+            fun define(): Class<*> = defineClass("ext.Listener", bytes, 0, bytes.size)
+        }
+        val instance = loader.define().getDeclaredConstructor().newInstance()
+        (instance as android.content.DialogInterface.OnClickListener).onClick(null, android.content.DialogInterface.BUTTON_POSITIVE)
+        val view = android.view.View(null)
+        view.setOnClickListener(instance as android.view.View.OnClickListener)
+        assertTrue(view.performClick())
+    }
+
     /** A provider class whose one method calls [calls] (owner, name, descriptor, static) and reads [reads]. */
     private fun callerBytes(name: String, calls: List<List<Any>>, reads: List<Triple<String, String, String>> = emptyList()): ByteArray {
         val writer = ClassWriter(ClassWriter.COMPUTE_MAXS)

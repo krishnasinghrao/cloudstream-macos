@@ -40,7 +40,8 @@ final class WebViewSolverService: NSObject, WKNavigationDelegate {
 
     func canSolve(targetUrl: String) -> Bool {
         guard let url = URL(string: targetUrl), url.scheme == "https",
-              url.host != nil, url.user == nil, url.password == nil else { return false }
+              url.host != nil, url.user == nil, url.password == nil,
+              WebContentNetworkPolicy.shared.allowsNavigation(to: url) else { return false }
         return true
     }
 
@@ -66,13 +67,21 @@ final class WebViewSolverService: NSObject, WKNavigationDelegate {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = websiteDataStore
 
-        let webView = WKWebView(frame: .init(x: 0, y: 0, width: 1280, height: 800), configuration: configuration)
-        webView.navigationDelegate = self
-        webView.customUserAgent = agent
-        self.webView = webView
-
-        webView.load(URLRequest(url: url))
+        // The page loads only through the confined network (H1); the attempt
+        // ends at once when that is unavailable.
         pollForClearance(taskId: taskId, targetUrl: targetUrl, agent: agent, attempt: attempt)
+        Task { [weak self] in
+            guard await WebContentNetworkPolicy.shared.prepare(configuration) else {
+                self?.finish(attempt: attempt, outcome: "unconfined")
+                return
+            }
+            guard let self, self.attempt == attempt else { return }
+            let webView = WKWebView(frame: .init(x: 0, y: 0, width: 1280, height: 800), configuration: configuration)
+            webView.navigationDelegate = self
+            webView.customUserAgent = agent
+            self.webView = webView
+            webView.load(URLRequest(url: url))
+        }
         return true
     }
 
@@ -144,8 +153,10 @@ final class WebViewSolverService: NSObject, WKNavigationDelegate {
                              decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
         MainActor.assumeIsolated {
             let scheme = navigationAction.request.url?.scheme?.lowercased() ?? ""
-            // SEC-05: Offscreen challenge solver may only navigate to HTTPS or about: URLs, preventing external app handoffs
-            decisionHandler(["https", "about"].contains(scheme) ? .allow : .cancel)
+            // SEC-05: Offscreen challenge solver may only navigate to HTTPS or about: URLs, preventing external app handoffs,
+            // and never to this Mac or the local network (H1).
+            decisionHandler(["https", "about"].contains(scheme) &&
+                WebContentNetworkPolicy.shared.allowsNavigation(to: navigationAction.request.url) ? .allow : .cancel)
         }
     }
 

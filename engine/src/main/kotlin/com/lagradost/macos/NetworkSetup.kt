@@ -7,6 +7,7 @@ import com.lagradost.macos.DaemonState.NetworkSettings
 import com.lagradost.macos.network.DnsResolverFactory
 import com.lagradost.macos.network.DohProvider
 import com.lagradost.macos.network.RetryInterceptor
+import com.lagradost.nicehttp.ignoreAllSSLErrors
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import java.io.File
@@ -57,7 +58,20 @@ object NetworkSetup {
     @OptIn(UnsafeSSL::class) // the engine owns the insecure client and applies the same DNS/cache/retry stack to it
     fun apply(settings: NetworkSettings): NetworkSettings {
         val normalized = normalize(settings)
-        val (verified, insecure) = pristine ?: (app.baseClient to insecureApp.baseClient).also { pristine = it }
+        // Android parity (upstream #2655, stable since 4.8.0): `app` verifies
+        // certificates and `insecureApp` does not. Extensions opt into the
+        // insecure client (@UnsafeSSL) for provider hosts with broken
+        // certificates; without this it verified too, and those providers
+        // failed with a TLS error. Repository traffic and the DoH resolver
+        // never use it: both are built from `verified`.
+        val (pristineVerified, insecure) = pristine ?: (app.baseClient to
+            insecureApp.baseClient.newBuilder().ignoreAllSSLErrors().build()).also { pristine = it }
+        // Verified traffic also trusts the roots the Mac trusts (SystemTrust):
+        // a keychain root of a TLS-inspecting proxy or antivirus. The insecure
+        // client needs no anchors; it accepts any certificate by design.
+        val verified = SystemTrust.current?.let { trust ->
+            pristineVerified.newBuilder().sslSocketFactory(trust.sslContext.socketFactory, trust.trustManager).build()
+        } ?: pristineVerified
 
         val cacheBytes = normalized.httpCacheMb * MB
         if (cache?.maxSize() != cacheBytes) {

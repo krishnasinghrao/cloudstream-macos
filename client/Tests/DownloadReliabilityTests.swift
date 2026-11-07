@@ -371,6 +371,8 @@ final class RangeHTTPServer: @unchecked Sendable {
     private(set) var port: Int = 0
 
     init() throws {
+        // Fixtures stand in for remote hosts on loopback (LocalDestination).
+        LocalDestination.testingAllowsLoopback.store(true, ordering: .relaxed)
         listener = try NWListener(using: .tcp, on: .any)
         let ready = DispatchSemaphore(value: 0)
         listener.stateUpdateHandler = { [weak self] state in

@@ -92,11 +92,11 @@ class ParserFuzzTest {
             FrameCodec.read(DataInputStream(ByteArrayInputStream(bytes)))
         }
         // A length prefix beyond the limit is refused before reading.
-        val huge = java.nio.ByteBuffer.allocate(4).putInt(Int.MAX_VALUE).array()
+        val huge = java.nio.ByteBuffer.allocate(8).put(FrameCodec.MAGIC).putInt(Int.MAX_VALUE).array()
         assertFailsWith<IllegalArgumentException> { FrameCodec.read(DataInputStream(ByteArrayInputStream(huge))) }
         fuzz(seed = 5, iterations = 2_000) { random ->
             val json = mutate("""{"id":1,"type":"result","payload":{"results":[]}}""", random).toByteArray()
-            val framed = java.nio.ByteBuffer.allocate(4 + json.size).putInt(json.size).put(json).array()
+            val framed = java.nio.ByteBuffer.allocate(8 + json.size).put(FrameCodec.MAGIC).putInt(json.size).put(json).array()
             FrameCodec.read(DataInputStream(ByteArrayInputStream(framed)))
         }
     }

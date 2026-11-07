@@ -487,6 +487,8 @@ final class DaemonSupervisor {
         let root = EngineDataRoot.url()
         let temporary = root.appendingPathComponent("tmp", isDirectory: true)
         try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        // The roots this Mac trusts (keychain trust settings), which the JVM cannot read itself.
+        let trustAnchors = await Task.detached(priority: .utility) { SystemTrustAnchors.export(to: root) }.value
         let process = Process()
         process.executableURL = URL(fileURLWithPath: java)
         // Nothing from the app's own environment reaches the engine, and so its
@@ -534,7 +536,7 @@ final class DaemonSupervisor {
         process.standardError = ownedHandles.count == 2 ? ownedHandles[1] : FileHandle.nullDevice
         return EngineLaunchConfiguration(process: process, endpoint: .init(port: 0, token: token),
             announcement: announcement, verifiesSocketOwner: true, stdin: input,
-            inputLine: Data((token + "\n").utf8) + DaemonLaunchOptions(policy: policy, safeMode: activeSafeMode).encodedLine(),
+            inputLine: Data((token + "\n").utf8) + DaemonLaunchOptions(policy: policy, safeMode: activeSafeMode, systemTrustAnchors: trustAnchors).encodedLine(),
             outputHandles: ownedHandles, safeMode: activeSafeMode, policySafeMode: policy.safeModeOnly, logID: logID)
     }
 

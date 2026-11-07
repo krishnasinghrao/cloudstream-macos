@@ -23,6 +23,8 @@ class RepositoryTransportTest {
     private lateinit var client: OkHttpClient
     private lateinit var transport: RepositoryTransport
     private val base get() = "https://localhost:${server.address.port}"
+    /** The listening address itself: `localhost` may resolve to ::1 first, failing before TLS. */
+    private val ipBase get() = "https://127.0.0.1:${server.address.port}"
 
     @BeforeTest fun before() {
         server = HttpsServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
@@ -146,12 +148,73 @@ class RepositoryTransportTest {
     @Test fun `TLS certificate and hostname verification remain enabled`() = runBlocking {
         body("/tls", "ok")
         RepositoryTransport(OkHttpClient()) { it.isLoopbackAddress }.use { untrusted ->
-            assertFailsWith<IOException> { untrusted.fetch("$base/tls", 100) }
+            // The listening address, so the rejection is the certificate's and not a failed connect.
+            assertIs<SSLException>(assertFailsWith<RepositoryNetworkException> { untrusted.fetch("$ipBase/tls", 100) }.cause)
         }
         RepositoryTransport(client.newBuilder().dns { listOf(InetAddress.getLoopbackAddress()) }.build()) { it.isLoopbackAddress }.use { wrongHost ->
-            assertFailsWith<IOException> { wrongHost.fetch("https://wrong-host.invalid:${server.address.port}/tls", 100) }
+            assertIs<SSLException>(assertFailsWith<RepositoryNetworkException> { wrongHost.fetch("https://wrong-host.invalid:${server.address.port}/tls", 100) }.cause)
         }
         Unit
+    }
+
+    @Test fun `TLS failures name the host and the likely cause`() = runBlocking {
+        body("/tls-message", "ok")
+        RepositoryTransport(OkHttpClient()) { it.isLoopbackAddress }.use { untrusted ->
+            val failure = assertFailsWith<RepositoryNetworkException> { untrusted.fetch("$ipBase/tls-message", 100) }
+            assertIs<SSLException>(failure.cause)
+            val mapped = ExtensionException.from(failure)
+            assertEquals(ExtensionException.Code.DOWNLOAD_FAILED, mapped.code)
+            assertTrue(mapped.message!!.contains("“127.0.0.1”") && mapped.message!!.contains("isn't trusted"), mapped.message)
+        }
+        RepositoryTransport(client.newBuilder().dns { listOf(InetAddress.getLoopbackAddress()) }.build()) { it.isLoopbackAddress }.use { wrongHost ->
+            val failure = assertFailsWith<RepositoryNetworkException> { wrongHost.fetch("https://wrong-host.invalid:${server.address.port}/tls-message", 100) }
+            assertIs<SSLException>(failure.cause)
+            val message = ExtensionException.from(failure).message!!
+            assertTrue(message.contains("“wrong-host.invalid”") && message.contains("different site") && message.contains("DNS"), message)
+        }
+        // A plain-HTTP server on the HTTPS address: say so instead of a generic TLS failure.
+        // Like a web server without TLS on that port: it answers the ClientHello in plain HTTP.
+        val plain = java.net.ServerSocket(0, 4, InetAddress.getLoopbackAddress())
+        val answering = Thread {
+            runCatching { plain.accept().use { it.getOutputStream().write("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n".toByteArray()); it.getInputStream().read() } }
+        }.apply { isDaemon = true; start() }
+        try {
+            val failure = assertFailsWith<RepositoryNetworkException> { transport.fetch("https://127.0.0.1:${plain.localPort}/", 100) }
+            val message = ExtensionException.from(failure).message!!
+            assertTrue(message.contains("doesn't accept secure (HTTPS) connections"), message)
+        } finally { plain.close(); answering.join(2_000) }
+    }
+
+    @Test fun `a repository deadline is a download failure, not an operation conflict`() {
+        val timeout = assertFailsWith<TimeoutCancellationException> { runBlocking { withTimeout(1) { delay(1_000) } } }
+        assertEquals(ExtensionException.Code.DOWNLOAD_FAILED, ExtensionException.from(timeout).code)
+        assertEquals(ExtensionException.Code.DOWNLOAD_FAILED, ExtensionException.from(IllegalStateException("Too many repository redirects")).code)
+        assertEquals(ExtensionException.Code.CONFLICT, ExtensionException.from(IllegalStateException("Something else")).code)
+    }
+
+    @Test fun `GitHub addresses get the jsDelivr hint on TLS and reset failures`() {
+        val tls = ExtensionException.from(RepositoryNetworkException("https://raw.githubusercontent.com/a/b/main/repo.json",
+            SSLHandshakeException("Remote host terminated the handshake")))
+        assertTrue(tls.message!!.contains("jsDelivr") && tls.message!!.contains("“raw.githubusercontent.com”"), tls.message)
+        val reset = ExtensionException.from(RepositoryNetworkException("https://github.com/a/b/raw/main/x.cs3",
+            java.net.SocketException("Connection reset")))
+        assertTrue(reset.message!!.contains("cut off") && reset.message!!.contains("jsDelivr"), reset.message)
+        val other = ExtensionException.from(RepositoryNetworkException("https://example.org/repo.json", SSLHandshakeException("x")))
+        assertFalse(other.message!!.contains("jsDelivr"), other.message)
+    }
+
+    /** Android parity: `app` verifies certificates, `insecureApp` (opted into by @UnsafeSSL extensions) does not. */
+    @Test fun `only the insecure provider client accepts an untrusted certificate`() {
+        body("/insecure", "ok")
+        NetworkSetup.apply(DaemonState.NetworkSettings(httpCacheMb = 0))
+        try {
+            val request = okhttp3.Request.Builder().url("$ipBase/insecure").build()
+            @OptIn(com.lagradost.cloudstream3.UnsafeSSL::class)
+            val insecure = com.lagradost.cloudstream3.insecureApp.baseClient
+            insecure.newCall(request).execute().use { assertEquals("ok", it.body.string()) }
+            assertFailsWith<SSLException> { com.lagradost.cloudstream3.app.baseClient.newCall(request).execute().close() }
+            assertFailsWith<SSLException> { NetworkSetup.repositoryClient().newCall(request).execute().close() }
+        } finally { NetworkSetup.apply(DaemonState.NetworkSettings()) }
     }
 
     @Test fun `global provider client mutation cannot alter repository HTTP`() = runBlocking {

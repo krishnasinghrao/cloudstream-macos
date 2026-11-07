@@ -134,6 +134,20 @@ class OperationFailureTest {
         assertTrue(failure(oom).retryable)
     }
 
+    @Test fun `missing local files are a storage failure, not the network`() {
+        fun failure(error: Throwable) = OperationFailures.capture(null, "loadLinks", error).failure
+        val missing = failure(java.nio.file.NoSuchFileException("/home/workers/x/cache"))
+        assertEquals("worker_storage_error", missing.code)
+        assertTrue(missing.retryable)
+        assertEquals(503, OperationFailures.status(missing))
+        assertFalse(missing.publicMessage.contains("/home"), "local paths are never shown")
+        assertEquals("worker_storage_error", failure(java.io.FileNotFoundException("/tmp/x (No such file or directory)")).code)
+        // java.net.URL reports an HTTP 404 as FileNotFoundException with the address: still remote.
+        assertEquals("network_failure", failure(java.io.FileNotFoundException("https://site.invalid/a.json")).code)
+        val install = ExtensionException.from(java.nio.file.NoSuchFileException("/home/workers/x"))
+        assertEquals(ExtensionException.Code.LOAD_FAILED, install.code)
+    }
+
     @Test fun `cancellation is not serialized as a provider failure`() {
         assertFailsWith<CancellationException> { OperationFailures.capture(null, "search", CancellationException()) }
         assertEquals(120_000, OperationBudget.forHint(null))

@@ -274,6 +274,9 @@ internal object WorkerPool {
     }
     private val poolLock = Any()
     private val reservations = linkedMapOf<WorkerHandle, Reservation>()
+
+    /** Installations with a worker starting, running or stopping: their homes are in use. */
+    fun activeInstallationIds(): Set<String> = synchronized(poolLock) { reservations.keys.mapTo(HashSet()) { it.record.id } }
     private val crashes = ConcurrentHashMap<String, MutableList<Long>>()
     /** Set once the engine begins to exit; worker exits after it are not crashes. */
     @Volatile var shuttingDown = false

@@ -15,7 +15,7 @@ import java.util.zip.ZipInputStream
  * assessments are recognizably stale.
  */
 object RuntimeProfile {
-    const val VERSION = "cloudstream-macos-runtime-5"
+    const val VERSION = "cloudstream-macos-runtime-6"
 
     // 2: android.os Handler/Looper/Message/SystemClock/Bundle and android.text.TextUtils (RT-14).
     // 3: Android resources (RT-13), app types (Event, MainActivity, PluginManager, CommonActivity,
@@ -24,6 +24,7 @@ object RuntimeProfile {
     // 4: android.webkit types (inert WebView: configuration accepted, evaluateJavascript fails by name).
     // 5: Android's own org.json (AOSP) instead of JSON-java; Intent, Context.startActivity, Toast,
     //    android.preference and androidx.preference PreferenceManager (A1, A2).
+    // 6: android.content.DialogInterface and android.view.View with their listener interfaces (inert UI).
 
     /** The JDK: always present, never assessed. */
     internal val PLATFORM_PACKAGES = listOf("java/", "javax/", "jdk/", "sun/")

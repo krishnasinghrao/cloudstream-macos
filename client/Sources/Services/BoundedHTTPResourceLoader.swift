@@ -54,8 +54,11 @@ enum BoundedHTTPResource {
         }
     }
 
+    /// Artwork and subtitle addresses come from extensions: never this Mac
+    /// or the local network (security audit 2026-11, L2), checked again on
+    /// every redirect.
     static func isAllowed(_ url: URL) -> Bool {
-        (try? MediaResourcePolicy.remoteURL(url.absoluteString)) != nil
+        (try? MediaResourcePolicy.remoteURL(url.absoluteString)) != nil && !LocalDestination.isLocal(url)
     }
 
     private final class Receiver: NSObject, URLSessionDataDelegate, Sendable {

@@ -51,6 +51,8 @@ object SolveBridge {
 
     /** Control plane: solves a challenge on behalf of a worker. Cookies go only to the requester (not the shared cache). */
     suspend fun solveForWorker(targetUrl: String, userAgent: String? = null): String? {
+        // The app's WebKit opens the target outside the worker sandbox (H1).
+        WebDestination.requireRemote(targetUrl, "Challenge target")
         val task = newTask(targetUrl, userAgent, shared = false)
         val solution = awaitSolution(task) ?: return null
         return solution.cookies

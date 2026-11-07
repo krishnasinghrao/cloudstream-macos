@@ -159,7 +159,10 @@ internal class InstallationManager(
             if (old.enabled && old.revokedReason == null && !runtime.isCurrent(old)) restoreBlocking(id, clearQuarantine = true)
             return read().installations[id] ?: old
         }
-        val downloaded = try { RepositoryService.fetchArtifact(plugin, fetcher, mode == DaemonState.ArtifactVerification.LOCAL_OBSERVATION) } catch (failure: SecurityException) {
+        val downloaded = try {
+            // Bounded across all installs: many at once make a repository host drop or stall requests.
+            downloadPermits.withPermit { RepositoryService.fetchArtifact(plugin, fetcher, mode == DaemonState.ArtifactVerification.LOCAL_OBSERVATION) }
+        } catch (failure: SecurityException) {
             throw ExtensionException(ExtensionException.Code.UNTRUSTED, failure.message ?: "Artifact verification failed", failure)
         }
         currentCoroutineContext().ensureActive()
@@ -657,9 +660,18 @@ internal class InstallationManager(
 
     fun collectGarbage() {
         if (DaemonState.recoveryError != null) return
-        // Worker homes of extensions that are no longer installed.
+        // Worker homes of extensions that are no longer installed. Not yet
+        // installed is not the same: an install in flight (or a worker it
+        // started) already uses its home before the receipt is written, and
+        // deleting it then fails that install with a missing file.
         val installed = read().installations.keys
-        File(CloudDirs.home, "workers").listFiles()?.filter { it.isDirectory && it.name !in installed }?.forEach { it.deleteRecursively() }
+        val inFlight = locks.filterValues { it.isLocked }.keys
+        val running = com.lagradost.macos.worker.WorkerPool.activeInstallationIds()
+        val now = System.currentTimeMillis()
+        File(CloudDirs.home, "workers").listFiles()?.filter { dir ->
+            dir.isDirectory && dir.name !in installed && dir.name !in inFlight && dir.name !in running &&
+                now - dir.lastModified() > WORKER_HOME_GRACE_MS
+        }?.forEach { it.deleteRecursively() }
         try {
             val collected = ArtifactStore.collect(read(), proofs)
             if (collected != ArtifactStore.Collected(0, 0, 0)) DaemonLog.info("artifacts.collected", mapOf(
@@ -683,6 +695,11 @@ internal class InstallationManager(
         const val LEGACY_MIGRATION = "cache-to-receipts-v1"
         /** Actor of updates the engine applies on its own. */
         const val AUTO_UPDATE_ACTOR = "auto-update"
+        /** Artifact downloads running at once, across every installation manager in the process. */
+        const val MAX_CONCURRENT_DOWNLOADS = 4
+        internal val downloadPermits = Semaphore(MAX_CONCURRENT_DOWNLOADS)
+        /** An orphaned worker home younger than this is kept: it may belong to a worker still starting. */
+        const val WORKER_HOME_GRACE_MS = 5 * 60_000L
     }
 }
 

@@ -145,20 +145,8 @@ struct ProfileManagerView: View {
 
     private func row(_ profile: ViewerProfile) -> some View {
         HStack(spacing: 10) {
-            Menu {
-                ForEach(ViewerProfile.symbols, id: \.self) { symbol in
-                    Button { save(profile, symbol: symbol) } label: { Image(systemName: symbol) }
-                        .accessibilityLabel(symbol.replacing(".fill", with: "").replacing(".", with: " "))
-                }
-            } label: {
-                Image(systemName: profile.symbol)
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityLabel("Change icon for \(profile.name)")
+            ProfileSymbolPicker(selection: profile.symbol) { save(profile, symbol: $0) }
+                .accessibilityLabel("Change icon for \(profile.name)")
 
             TextField("Name", text: Binding(
                 get: { profile.name },
@@ -214,6 +202,50 @@ struct ProfileManagerView: View {
             error = nil
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Icon button that opens a grid of profile symbols. A `Menu` can't be used here:
+/// macOS menu items need a text title, so image-only items render as blank rows.
+private struct ProfileSymbolPicker: View {
+    let selection: String
+    let onPick: (String) -> Void
+    @State private var isPresented = false
+
+    var body: some View {
+        Button { isPresented.toggle() } label: {
+            Image(systemName: selection)
+                .font(.title2)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Change icon")
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(36), spacing: 6), count: 5), spacing: 6) {
+                ForEach(ViewerProfile.symbols, id: \.self) { symbol in
+                    Button {
+                        onPick(symbol)
+                        isPresented = false
+                    } label: {
+                        Image(systemName: symbol)
+                            .font(.title2)
+                            .foregroundStyle(symbol == selection ? Color.white : Color.accentColor)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(symbol == selection ? Color.accentColor : Color.clear),
+                            )
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(symbol.replacing(".fill", with: "").replacing(".", with: " "))
+                    .accessibilityAddTraits(symbol == selection ? .isSelected : [])
+                }
+            }
+            .padding(10)
         }
     }
 }

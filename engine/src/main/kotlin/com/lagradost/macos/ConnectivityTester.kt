@@ -23,11 +23,30 @@ object ConnectivityTester {
     private const val TIMEOUT_SECONDS = 8L
     private const val PARALLELISM = 6
 
-    suspend fun test(targets: List<Pair<String, String>>, client: OkHttpClient = app.baseClient): List<ConnectivityResultDto> {
+    suspend fun test(targets: List<Pair<String, String>>, client: OkHttpClient = app.baseClient,
+                     addressAllowed: (java.net.InetAddress) -> Boolean = RepositoryTransport::isPublicAddress): List<ConnectivityResultDto> {
+        val resolver = client.dns
         val probe = client.newBuilder()
             .callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
             // No cached answers: this measures the network, not the disk.
             .cache(null)
+            // A site URL is whatever an extension declares. The engine is not
+            // sandboxed, so it never follows one to this Mac or the local
+            // network (audit 2026-11, L2): not by spelling (below, and on every
+            // redirect hop) and not through DNS.
+            .dns { host ->
+                resolver.lookup(host).also { addresses ->
+                    if (addresses.any { !addressAllowed(it) }) throw java.net.UnknownHostException("$host is not a public address")
+                }
+            }
+            .addInterceptor { chain ->
+                if (WebDestination.isLocalHost(chain.request().url.host)) throw java.io.IOException("not a public address")
+                chain.proceed(chain.request())
+            }
+            .addNetworkInterceptor { chain ->
+                if (WebDestination.isLocalHost(chain.request().url.host)) throw java.io.IOException("not a public address")
+                chain.proceed(chain.request())
+            }
             .build()
         val permits = Semaphore(PARALLELISM)
         return coroutineScope {
@@ -41,6 +60,9 @@ object ConnectivityTester {
         withContext(Dispatchers.IO) {
             if (!(url.startsWith("https://", true) || url.startsWith("http://", true))) {
                 return@withContext ConnectivityResultDto(provider, url, reachable = false, error = "no site URL")
+            }
+            if (WebDestination.isLocal(url)) {
+                return@withContext ConnectivityResultDto(provider, url, reachable = false, error = "not a public address")
             }
             val start = System.nanoTime()
             try {

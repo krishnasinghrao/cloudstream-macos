@@ -244,8 +244,9 @@ class WorkerAdmissionTest {
             def wait(name):
                 while not os.path.exists(os.path.join(home, name)): time.sleep(0.01)
             while True:
+                magic = sys.stdin.buffer.read(4)
                 prefix = sys.stdin.buffer.read(4)
-                if len(prefix) != 4: break
+                if len(magic) != 4 or len(prefix) != 4: break
                 frame = json.loads(sys.stdin.buffer.read(struct.unpack('>I', prefix)[0]))
                 op = frame['type']
                 if op == 'shutdown':
@@ -260,7 +261,7 @@ class WorkerAdmissionTest {
                     wait('allow-call')
                     payload = True
                 data = json.dumps({'id': frame['id'], 'type': 'result', 'payload': payload, 'protocolVersion': 2}).encode()
-                sys.stdout.buffer.write(struct.pack('>I', len(data)) + data)
+                sys.stdout.buffer.write(b'\xfe\xc53F' + struct.pack('>I', len(data)) + data)
                 sys.stdout.buffer.flush()
         """.trimIndent()
     }

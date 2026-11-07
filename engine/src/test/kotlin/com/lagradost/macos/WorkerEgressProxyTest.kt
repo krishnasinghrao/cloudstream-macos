@@ -79,6 +79,63 @@ class WorkerEgressProxyTest {
         } finally { proxy.close() }
     }
 
+    /** Completes a CONNECT to 127.0.0.1:[port] and returns the open tunnel. */
+    private fun tunnel(settings: EgressSettings, port: Int): Socket {
+        val socket = Socket(settings.host, settings.port)
+        socket.soTimeout = 5_000
+        val output = socket.getOutputStream()
+        val input = DataInputStream(socket.getInputStream())
+        output.write(byteArrayOf(5, 1, 2))
+        output.write(byteArrayOf(1, settings.username.length.toByte()) + settings.username.toByteArray() +
+            byteArrayOf(settings.password.length.toByte()) + settings.password.toByteArray())
+        output.write(byteArrayOf(5, 1, 0, 1, 127, 0, 0, 1, (port shr 8).toByte(), port.toByte()))
+        output.flush()
+        input.readFully(ByteArray(2 + 2))
+        assertEquals(5, input.readUnsignedByte())
+        assertEquals(0, input.readUnsignedByte(), "tunnel established")
+        input.readFully(ByteArray(8))
+        return socket
+    }
+
+    /** An origin that accepts and then, per connection, runs [behaviour]. */
+    private fun origin(behaviour: (Socket) -> Unit): ServerSocket = ServerSocket(0, 16, InetAddress.getLoopbackAddress()).also { server ->
+        Thread {
+            while (!server.isClosed) {
+                val client = runCatching { server.accept() }.getOrNull() ?: break
+                Thread { runCatching { client.use(behaviour) } }.apply { isDaemon = true }.start()
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
+    @Test fun `an idle tunnel to a silent upstream is closed and frees its slot`() {
+        // Accepts, then neither sends nor closes: a peer that vanished without a FIN.
+        val silent = origin { Thread.sleep(30_000) }
+        val proxy = WorkerEgressProxy(addressAllowed = { true }, maxConnections = 1, idleTimeoutMs = 300)
+        try {
+            val first = tunnel(proxy.settings, silent.localPort)
+            first.use { assertEquals(-1, it.getInputStream().read(), "the proxy closed the idle tunnel") }
+            // The only slot is free again: a new tunnel is admitted.
+            tunnel(proxy.settings, silent.localPort).close()
+        } finally {
+            proxy.close(); silent.close()
+        }
+    }
+
+    @Test fun `a tunnel with steady traffic outlives the idle timeout`() {
+        val ticking = origin { socket ->
+            repeat(10) { socket.getOutputStream().apply { write(it); flush() }; Thread.sleep(100) }
+        }
+        val proxy = WorkerEgressProxy(addressAllowed = { true }, idleTimeoutMs = 300)
+        try {
+            tunnel(proxy.settings, ticking.localPort).use { socket ->
+                // One direction carries data for ~1 s, three times the idle timeout.
+                assertEquals((0 until 10).map { it.toByte() }, socket.getInputStream().readAllBytes().toList())
+            }
+        } finally {
+            proxy.close(); ticking.close()
+        }
+    }
+
     @Test fun `the JDK client in a worker reaches origins only through the proxy`() {
         val proxy = WorkerEgressProxy(addressAllowed = { true }, resolve = { listOf(InetAddress.getLoopbackAddress()) })
         try {

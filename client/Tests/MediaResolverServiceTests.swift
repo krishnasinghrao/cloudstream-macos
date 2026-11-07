@@ -30,6 +30,8 @@ final class MediaResolverServiceTests: XCTestCase {
         var port: UInt16 { listener.port?.rawValue ?? 0 }
 
         init(pages: [String: (String, String)]) throws {
+            // Fixtures stand in for remote hosts on loopback (LocalDestination).
+            LocalDestination.testingAllowsLoopback.store(true, ordering: .relaxed)
             self.pages = pages
             let parameters = NWParameters.tcp
             parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
@@ -59,6 +61,14 @@ final class MediaResolverServiceTests: XCTestCase {
                 connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in connection.cancel() })
             }
         }
+    }
+
+    override func setUp() async throws {
+        // No engine here: a proxy that refuses every connection. Loopback
+        // fixtures bypass it, as WebKit does for loopback.
+        WebContentNetworkPolicy.shared.egressSource = { WebContentEgressDto(host: "127.0.0.1", port: 1, username: "t", password: "t") }
+        WebContentNetworkPolicy.shared.reset()
+        LocalDestination.testingAllowsLoopback.store(true, ordering: .relaxed)
     }
 
     private func task(_ url: String, script: String? = nil, timeoutMs: Int64 = 15_000) -> MediaPendingDto {

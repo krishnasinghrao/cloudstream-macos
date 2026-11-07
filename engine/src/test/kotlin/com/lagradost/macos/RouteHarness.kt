@@ -37,6 +37,19 @@ internal class RouteHarness : AutoCloseable {
         getOutputStream().flush()
     }
 
+    /** Status line of a request sent with exactly [host] as its Host header (DNS-rebinding checks). */
+    fun statusWithHost(path: String, host: String, auth: Boolean = true): Int =
+        java.net.Socket("127.0.0.1", port).use { socket ->
+            socket.soTimeout = 5_000
+            socket.getOutputStream().write(("GET $path HTTP/1.1\r\nHost: $host\r\n" +
+                (if (auth) "Authorization: Bearer $token\r\n" else "") + "Connection: close\r\n\r\n").toByteArray())
+            socket.getOutputStream().flush()
+            socket.getInputStream().bufferedReader().readLine().split(' ')[1].toInt()
+        }
+
+    /** The listener's port, as the app would put it in a Host header. */
+    val listeningPort: Int get() = port
+
     class Raw(val status: Int, val headers: Map<String, String>, val bytes: ByteArray)
 
     /** Unauthenticated byte-level request, as the native player makes it. */
