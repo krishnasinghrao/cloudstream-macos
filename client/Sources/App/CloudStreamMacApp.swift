@@ -20,6 +20,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !AppEnvironment.isUnitTestHost else { return }
         setupSignalHandlers()
         MainActor.assumeIsolated {
+            #if DEBUG
+            // App-scoped visual tests must not change the Mac's appearance.
+            if AppEnvironment.isIsolated() {
+                switch ProcessInfo.processInfo.environment["CS_UITEST_APPEARANCE"] {
+                case "Light": NSApp.appearance = NSAppearance(named: .aqua)
+                case "Dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+                default: break
+                }
+            }
+            #endif
             // Open the active profile's library before any window reads it,
             // then arm the lock (locks immediately if enabled).
             ProfileStore.shared.activateStoredProfile()
@@ -151,6 +161,7 @@ struct CloudStreamMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState.shared
     @FocusedValue(\.windowSession) private var focusedSession
+    @FocusedValue(\.titlePage) private var titlePage
     /// Settings/player windows have no main-window scene value. Their Go
     /// commands retain the existing behavior by targeting the last main window.
     private var navigationSession: WindowSession { focusedSession ?? appState.windowSession }
@@ -189,6 +200,15 @@ struct CloudStreamMacApp: App {
                 CheckForUpdatesCommand()
             }
 
+            // App menu ▸ Lock CloudStream: the sidebar profile menu shows the
+            // same command, but a shortcut only works from the menu bar.
+            CommandGroup(after: .appSettings) {
+                Button("Lock CloudStream") { AppLock.shared.lockIfEnabled(reason: "manual") }
+                    .keyboardShortcut("l", modifiers: [.command, .control])
+                    .disabled(AppLock.shared.isLocked
+                        || !(appState.preferences.requireUnlock || ProfileStore.shared.active.requiresUnlock))
+            }
+
             CommandGroup(after: .newItem) {
                 // ⌘N is New Window and ⇧⌘N is Next Episode.
                 Button("New Library Page…") {
@@ -211,6 +231,13 @@ struct CloudStreamMacApp: App {
                 .disabled(AppLock.shared.isLocked)
             }
 
+            CommandGroup(before: .toolbar) {
+                Button("Reload Page") { titlePage?.reload?() }
+                    .keyboardShortcut("r", modifiers: .command)
+                    .disabled(titlePage?.reload == nil || AppLock.shared.isLocked)
+                Divider()
+            }
+
             CommandMenu("Go") {
                 Button("Home") {
                     navigationSession.navigateTo(.home)
@@ -219,6 +246,7 @@ struct CloudStreamMacApp: App {
 
                 Button("Search") {
                     navigationSession.navigateTo(.search)
+                    navigationSession.searchFocusRequest += 1
                 }
                 .keyboardShortcut("f", modifiers: .command)
 
@@ -268,6 +296,24 @@ struct CloudStreamMacApp: App {
                     navigationSession.navigateTo(.extensions)
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
+            }
+
+            // Title-page commands; disabled, never hidden, elsewhere.
+            CommandMenu("Title") {
+                Button("Play") { titlePage?.play() }
+                    .disabled(titlePage == nil || AppLock.shared.isLocked)
+                Button(titlePage?.isFavorite == true ? "Remove from Favorites" : "Add to Favorites") {
+                    titlePage?.toggleFavorite()
+                }
+                .keyboardShortcut("d", modifiers: .command)
+                .disabled(titlePage == nil || AppLock.shared.isLocked)
+            }
+
+            CommandMenu("Extensions") {
+                Button("Disable All Extensions") {
+                    Task { await appState.extensions.disableAll() }
+                }
+                .disabled(AppLock.shared.isLocked || !appState.isEngineReady || !appState.extensions.canDisableAll)
             }
 
             // Playback shortcuts are ⌘-modified and disabled without a

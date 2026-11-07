@@ -19,7 +19,7 @@ struct GlobalSearchModifier: ViewModifier {
 
     private var filtersLibrary: Bool { windowSession.selection.filtersLibrary }
 
-    /// "Filter Watching…", "Filter Favourite Episodes…".
+    /// "Filter Watching…", "Filter Favorite Episodes…".
     private var filterPrompt: String {
         switch windowSession.selection {
         case .page(let id):
@@ -53,6 +53,10 @@ struct GlobalSearchModifier: ViewModifier {
             )
             // Sidebar clicks are outside this hierarchy; end editing on navigation.
             .onChange(of: windowSession.selection) { isSearchFocused = false }
+            // ⌘F: focus after the navigation it accompanies has settled.
+            .onChange(of: windowSession.searchFocusRequest) {
+                Task { @MainActor in isSearchFocused = true }
+            }
             .searchSuggestions {
                 if showSuggestions {
                     ForEach(suggestions) { suggestion in

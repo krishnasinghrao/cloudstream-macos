@@ -8,6 +8,14 @@ final class ExtensionsUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    private func developerFixture() -> URL {
+        if let staged = ProcessInfo.processInfo.environment["CS_UITEST_EXTENSION_FIXTURE"] {
+            return URL(fileURLWithPath: staged)
+        }
+        return URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../engine/src/test/resources/extensions/fixture.cs3").standardized
+    }
+
     @MainActor
     private func launch(environment: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication()
@@ -99,8 +107,7 @@ final class ExtensionsUITests: XCTestCase {
     /// the d8-built fixture through developer mode (it starts disabled).
     @MainActor
     func testInstalledExtensionCanBeEnabledDisabledAndUninstalled() throws {
-        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .appendingPathComponent("../../engine/src/test/resources/extensions/fixture.cs3").standardized
+        let fixture = developerFixture()
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.path), "fixture missing at \(fixture.path)")
         let app = launch(environment: ["CS_UITEST_DEVELOPER_EXTENSION": fixture.path])
         openExtensions(app)
@@ -114,12 +121,17 @@ final class ExtensionsUITests: XCTestCase {
         let disabled = text(app, beginningWith: "Disabled")
         XCTAssertTrue(disabled.waitForExistence(timeout: 10), "a new import starts disabled")
         XCTAssertFalse(text(app, beginningWith: "Its repository was removed").exists, "developer imports never had a repository")
+        let disableAll = app.buttons["disable-all-extensions"].firstMatch
+        XCTAssertTrue(disableAll.exists)
+        XCTAssertFalse(disableAll.isEnabled, "nothing enabled yet")
 
         toggle.click()
         let running = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: disabled)
         wait(for: [running], timeout: 60) // starts a sandboxed worker for the extension
 
-        toggle.click()
+        let canDisableAll = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: disableAll)
+        wait(for: [canDisableAll], timeout: 30)
+        disableAll.click()
         XCTAssertTrue(text(app, beginningWith: "Disabled").waitForExistence(timeout: 30), "disable did not apply")
 
         app.menuButtons["More actions for fixture"].firstMatch.click()
@@ -135,8 +147,7 @@ final class ExtensionsUITests: XCTestCase {
     /// installed (complements the manual VoiceOver checklist, plan T7.8).
     @MainActor
     func testExtensionsScreenPassesTheAccessibilityAudit() throws {
-        let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .appendingPathComponent("../../engine/src/test/resources/extensions/fixture.cs3").standardized
+        let fixture = developerFixture()
         let app = launch(environment: ["CS_UITEST_DEVELOPER_EXTENSION": fixture.path])
         openExtensions(app)
         (app.radioButtons["Installed"].exists ? app.radioButtons["Installed"] : app.buttons["Installed"]).click()
@@ -149,6 +160,10 @@ final class ExtensionsUITests: XCTestCase {
             switch element.elementType {
             // SwiftUI-generated containers (not views we author) and the Touch Bar.
             case .group, .outline, .touchBar: return true
+            // NSOutlineView inserts empty 12px section spacer cells. They
+            // contain no controls or content to describe to VoiceOver.
+            case .cell where text.isEmpty && element.frame.height <= 12 && element.children(matching: .any).count == 0:
+                return true
             // Borderless SwiftUI Menu: clickable, opened by VoiceOver's show-menu command.
             case .menuButton where issue.compactDescription.contains("Action"): return true
             // App-wide sidebar styling, tracked outside the extension screens.

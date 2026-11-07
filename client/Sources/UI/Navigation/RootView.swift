@@ -11,6 +11,36 @@ struct RootView: View {
     /// Height of the title bar + toolbar, so top-trailing banners sit below
     /// the toolbar's search field instead of covering it.
     @State private var toolbarInset: CGFloat = 52
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Banners slide in from the top; under Reduce Motion they only fade.
+    private var bannerTransition: AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
+    }
+
+    @ViewBuilder
+    private var libraryFailureBanner: some View {
+        if !AppLock.shared.isLocked, let failure = LibraryStore.shared.readFailure ?? LibraryStore.shared.pendingProgressFailure ?? LibraryStore.shared.identityMigrationFailure {
+            let isIdentityUpdate = LibraryStore.shared.readFailure == nil && LibraryStore.shared.pendingProgressFailure == nil
+            ErrorBanner(message: isIdentityUpdate ? "Couldn't update the library: \(failure)" : LibraryStore.shared.readFailure == nil
+                ? "Couldn't save playback progress: \(failure)" : "Couldn't load the library: \(failure)", isTransient: false,
+                actionTitle: isIdentityUpdate ? "Retry Library Update" : LibraryStore.shared.readFailure == nil ? "Retry Saving" : "Retry Library") {
+                let profile = ProfileStore.shared.active
+                LibraryStore.shared.perform {
+                    if isIdentityUpdate {
+                        try LibraryStore.shared.migrateProviderIdentities(providers: LibraryIdentityMigration.catalog(plugins: appState.providers))
+                        return
+                    }
+                    try LibraryStore.shared.flushPendingProgress()
+                    if LibraryStore.shared.readFailure != nil {
+                        try LibraryStore.shared.retryOpeningStores(profileStoreName: profile.isDefault ? nil : profile.storeName)
+                        try DownloadService.shared.retryRestoringQueue()
+                    }
+                }
+            }
+            .transition(bannerTransition)
+        }
+    }
 
     var body: some View {
         @Bindable var windowSession = windowSession
@@ -52,57 +82,33 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            // One banner channel for engine failures and one-off action
-            // errors surfaced from screens without inline error UI.
-            if appState.player.session == nil {
-                if let transient = appState.transientError {
-                    ErrorBanner(message: transient, isTransient: true) {
-                        appState.dismissTransientError()
-                    }
-                    .padding(.trailing, 16)
-                    .padding(.top, toolbarInset + 8)
-                    .ignoresSafeArea()
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                } else if case .error(let message) = appState.daemonState {
-                    ErrorBanner(message: "Engine error — \(message)", isTransient: false,
-                                actionTitle: "Retry") { DaemonSupervisor.shared.restart() }
-                        .padding(.trailing, 16)
-                        .padding(.top, toolbarInset + 8)
-                        .ignoresSafeArea()
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-        }
-        .overlay(alignment: .topLeading) {
-            if !AppLock.shared.isLocked, let failure = LibraryStore.shared.readFailure ?? LibraryStore.shared.pendingProgressFailure ?? LibraryStore.shared.identityMigrationFailure {
-                let isIdentityUpdate = LibraryStore.shared.readFailure == nil && LibraryStore.shared.pendingProgressFailure == nil
-                VStack(alignment: .leading, spacing: 8) {
-                    ErrorBanner(message: isIdentityUpdate ? "Couldn't update the library: \(failure)" : LibraryStore.shared.readFailure == nil
-                        ? "Couldn't save playback progress: \(failure)" : "Couldn't load the library: \(failure)", isTransient: false)
-                    Button(isIdentityUpdate ? "Retry Library Update" : LibraryStore.shared.readFailure == nil ? "Retry Saving" : "Retry Library") {
-                        let profile = ProfileStore.shared.active
-                        LibraryStore.shared.perform {
-                            if isIdentityUpdate {
-                                try LibraryStore.shared.migrateProviderIdentities(providers: LibraryIdentityMigration.catalog(plugins: appState.providers))
-                                return
-                            }
-                            try LibraryStore.shared.flushPendingProgress()
-                            if LibraryStore.shared.readFailure != nil {
-                                try LibraryStore.shared.retryOpeningStores(profileStoreName: profile.isDefault ? nil : profile.storeName)
-                                try DownloadService.shared.retryRestoringQueue()
-                            }
+            // One banner channel, top trailing below the toolbar, for engine
+            // failures, one-off action errors and library store failures.
+            // (The library banner used to sit top leading, over the sidebar.)
+            VStack(alignment: .trailing, spacing: 8) {
+                if appState.player.session == nil {
+                    if let transient = appState.transientError {
+                        ErrorBanner(message: transient, isTransient: true) {
+                            appState.dismissTransientError()
                         }
+                        .transition(bannerTransition)
+                    } else if case .error(let message) = appState.daemonState {
+                        ErrorBanner(message: "Engine error — \(message)", isTransient: false,
+                                    actionTitle: "Retry") { DaemonSupervisor.shared.restart() }
+                            .transition(bannerTransition)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
-                .padding(12)
+                libraryFailureBanner
             }
+            .padding(.trailing, 16)
+            .padding(.top, toolbarInset + 8)
+            .ignoresSafeArea()
         }
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
                 if !ConnectivityMonitor.shared.isOnline {
                     OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .transition(bannerTransition)
                 }
                 if let notice = appState.transientNotice {
                     Label(notice, systemImage: "checkmark.circle.fill")
@@ -111,7 +117,7 @@ struct RootView: View {
                         .padding(.vertical, 8)
                         .background(.regularMaterial, in: Capsule())
                         .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .transition(bannerTransition)
                         .accessibilityAddTraits(.isStaticText)
                 }
             }
@@ -120,6 +126,7 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.22), value: appState.transientNotice)
         .animation(.easeInOut(duration: 0.22), value: appState.transientError)
         .animation(.easeInOut(duration: 0.22), value: ConnectivityMonitor.shared.isOnline)
+        .animation(.easeInOut(duration: 0.22), value: LibraryStore.shared.readFailure ?? LibraryStore.shared.pendingProgressFailure ?? LibraryStore.shared.identityMigrationFailure)
         .onOpenURL { url in
             guard !AppLock.shared.isLocked else { return }
             windowSession.handleDeepLink(url)
@@ -205,16 +212,41 @@ struct DetailsDestinationView: View {
         reloadToken += 1
     }
 
+    /// The title to look for elsewhere: the search result's name, or the
+    /// saved library entry's.
+    private var searchableTitle: String? {
+        let title: String? = switch coordinate {
+        case .result(let result): result.name
+        case .libraryItem(let id, _, _, _): LibraryStore.shared.readForDisplay(or: nil) { try LibraryStore.shared.item(id: id)?.title }
+        }
+        let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func searchOtherProviders(for title: String) {
+        // Search unwinds this section's pages, so the dead end is left behind.
+        windowSession.search(for: title)
+    }
+
     var body: some View {
         Group {
             if let details {
-                MediaDetailView(details: details, onRefresh: refresh)
+                MediaDetailView(details: details, onRefresh: refresh, artworkReloadToken: reloadToken)
             } else if let loadError {
-                ContentUnavailableView(
-                    "Couldn't Load Details",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(loadError),
-                )
+                ContentUnavailableView {
+                    Label("Couldn't Load Details", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(loadError)
+                } actions: {
+                    // The title is known even when its provider is gone
+                    // (uninstalled extension, renamed source): offer the
+                    // way forward instead of a dead end.
+                    if let title = searchableTitle {
+                        Button("Search Other Providers") { searchOtherProviders(for: title) }
+                            .buttonStyle(.borderedProminent)
+                            .help("Search every installed provider for “\(title)”")
+                    }
+                }
                 .toolbar {
                     Button("Retry") { reloadToken += 1 }
                 }

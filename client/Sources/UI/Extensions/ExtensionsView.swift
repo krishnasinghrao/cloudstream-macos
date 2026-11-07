@@ -128,6 +128,30 @@ struct ExtensionsView: View {
     // MARK: Header & banners
 
     private var header: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                headerFilters
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 12)
+                headerActions
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    headerFilters
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 12) {
+                    Spacer(minLength: 0)
+                    headerActions
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20).padding(.vertical, 14)
+    }
+
+    private var headerFilters: some View {
         HStack(spacing: 12) {
             Picker("Section", selection: $selectedTab) {
                 ForEach(ExtensionTab.allCases) { Text($0.rawValue).tag($0) }
@@ -136,7 +160,19 @@ struct ExtensionsView: View {
             TextField(selectedTab == .installed ? "Filter extensions" : "Filter repositories", text: $query)
                 .textFieldStyle(.roundedBorder).frame(minWidth: 160, maxWidth: 260)
                 .accessibilityLabel(selectedTab == .installed ? "Filter extensions" : "Filter repositories")
-            Spacer(minLength: 12)
+        }
+    }
+
+    private var headerActions: some View {
+        HStack(spacing: 12) {
+            if selectedTab == .installed {
+                Button(store.isBusy("disable-all") ? "Disabling…" : "Disable All", systemImage: "pause.circle") {
+                    Task { await store.disableAll() }
+                }
+                .help("Disable every installed extension, including filtered-out extensions")
+                .accessibilityIdentifier("disable-all-extensions")
+                .disabled(!appState.isEngineReady || !store.canDisableAll)
+            }
             if !store.pendingUpdates.isEmpty {
                 Button("Update All (\(store.pendingUpdates.count))", systemImage: "arrow.down.circle") {
                     Task { await store.updateAll() }
@@ -175,7 +211,7 @@ struct ExtensionsView: View {
             .help(canAddRepositories ? "Add a repository by URL or shortcode" : "Your organization manages the repository list")
             .disabled(!appState.isEngineReady || store.isAddingRepository || !canAddRepositories)
         }
-        .padding(.horizontal, 20).padding(.vertical, 14)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func installFromFile() {
@@ -442,40 +478,51 @@ private struct InstalledExtensionRow: View {
             .help(plugin.enabled ? "Disable \(plugin.name)" : "Enable \(plugin.name)")
             .disabled(!engineReady || busy || plugin.runState == "revoked")
             Menu {
-                if let previous = plugin.previousVersion {
-                    Button(ExtensionVersion.label(previous).map { "Restore Previous Version (\($0))" } ?? "Restore Previous Version") {
-                        Task { await store.rollback(plugin) }
-                    }
-                }
-                if !plugin.isExtractorOnly {
-                    Button("Provider Settings…", action: settings)
-                }
-                if plugin.isOperational {
-                    Button("Extension Settings…", action: preferences)
-                }
-                if !plugin.isExtractorOnly, plugin.isOperational {
-                    Button("Test This Extension") { Task { await store.diagnose(plugin) } }
-                        .help("Runs home page, search, details and video links for each of its providers")
-                }
-                if plugin.canRecheck {
-                    // No publisher digest: only downloading again shows whether the file changed.
-                    Button("Check for Changes") { Task { await store.recheck(plugin) } }
-                }
-                Text(plugin.verificationLabel)
-                if let hash = plugin.sha256 {
-                    Button("Copy SHA-256") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(hash, forType: .string)
-                    }
-                }
-                Divider()
-                Button("Uninstall…", role: .destructive, action: remove)
+                actionsMenu
             } label: {
                 Label("More actions for \(plugin.name)", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
             }
-            .menuStyle(.borderlessButton).fixedSize()
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("More actions")
             .disabled(!engineReady || busy)
-        }.padding(.vertical, 8)
+        }
+        .padding(.vertical, 8)
+        // Right-click offers the same actions as the row's ⋯ menu.
+        .contextMenu {
+            if engineReady, !busy { actionsMenu }
+        }
+    }
+
+    @ViewBuilder
+    private var actionsMenu: some View {
+        if let previous = plugin.previousVersion {
+            Button(ExtensionVersion.label(previous).map { "Restore Previous Version (\($0))" } ?? "Restore Previous Version") {
+                Task { await store.rollback(plugin) }
+            }
+        }
+        if !plugin.isExtractorOnly {
+            Button("Provider Settings…", action: settings)
+        }
+        if plugin.isOperational {
+            Button("Extension Settings…", action: preferences)
+        }
+        if !plugin.isExtractorOnly, plugin.isOperational {
+            Button("Test This Extension") { Task { await store.diagnose(plugin) } }
+                .help("Runs home page, search, details and video links for each of its providers")
+        }
+        if plugin.canRecheck {
+            // No publisher digest: only downloading again shows whether the file changed.
+            Button("Check for Changes") { Task { await store.recheck(plugin) } }
+        }
+        Text(plugin.verificationLabel)
+        if let hash = plugin.sha256 {
+            Button("Copy SHA-256") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(hash, forType: .string)
+            }
+        }
+        Divider()
+        Button("Uninstall…", role: .destructive, action: remove)
     }
 }
 
@@ -492,7 +539,7 @@ private struct RepositoryRow: View {
 
     private var syncSummary: String {
         if let activity = store.repositoryActivities[repo.url] { return activity }
-        var parts = ["\(repo.pluginCount) extensions"]
+        var parts = [repo.pluginCount == 1 ? "1 extension" : "\(repo.pluginCount) extensions"]
         if repo.installedCount > 0 { parts.append("\(repo.installedCount) installed") }
         if let synced = repo.lastSyncedAt {
             let date = Date(timeIntervalSince1970: TimeInterval(synced) / 1000)
@@ -536,20 +583,35 @@ private struct RepositoryRow: View {
             .help("Fetch the latest catalog for \(repo.name)")
             .disabled(!engineReady || busy)
             Menu {
-                if repo.keyFingerprint != nil {
-                    Button("Trust New Signing Key…", action: reTrust)
-                }
-                if repo.consentRequired && repo.consented {
-                    Button("Stop Allowing Installs") { Task { await store.setConsent(false, for: repo) } }
-                }
-                Divider()
-                Button("Remove Repository…", role: .destructive, action: remove)
+                actionsMenu
             } label: {
                 Label("More actions for \(repo.name)", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
             }
-            .menuStyle(.borderlessButton).fixedSize()
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("More actions")
             .disabled(!engineReady || busy || store.isAddingRepository)
-        }.padding(.vertical, 8)
+        }
+        .padding(.vertical, 8)
+        .contextMenu {
+            if engineReady, !busy, !store.isAddingRepository {
+                Button("Browse Extensions…", action: browse)
+                Button("Sync") { Task { await store.syncRepository(repo) } }
+                Divider()
+                actionsMenu
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var actionsMenu: some View {
+        if repo.keyFingerprint != nil {
+            Button("Trust New Signing Key…", action: reTrust)
+        }
+        if repo.consentRequired && repo.consented {
+            Button("Stop Allowing Installs") { Task { await store.setConsent(false, for: repo) } }
+        }
+        Divider()
+        Button("Remove Repository…", role: .destructive, action: remove)
     }
 }
 

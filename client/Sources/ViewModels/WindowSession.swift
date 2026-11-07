@@ -23,6 +23,13 @@ final class WindowSession {
         selection = destination
     }
 
+    /// Searches every installed provider for `query` from the Search screen.
+    func search(for query: String) {
+        navigateTo(.search)
+        searchQuery = query
+        commitSearch()
+    }
+
     /// Title filter for the Library collection on screen; driven by the
     /// window's global search field and cleared when leaving the collection.
     var libraryFilter = ""
@@ -35,6 +42,9 @@ final class WindowSession {
     /// Confirmed repository-add presentation remains private to its receiving window.
     var pendingRepoAdd: String?
     var showShortcuts = false
+    /// Bumped by Go ▸ Search (⌘F): the toolbar search field takes focus,
+    /// as ⌘F does in every Mac app, instead of only switching screens.
+    var searchFocusRequest = 0
     /// The New Page / Rename Page sheet over this window (ADR-0021).
     var pageEditor: PageEditorRequest?
     /// The page waiting for delete confirmation.
@@ -184,9 +194,7 @@ extension WindowSession {
             pendingRepoAdd = target
             navigateTo(.extensions)
         case .search(let query):
-            navigateTo(.search)
-            searchQuery = query
-            commitSearch()
+            search(for: query)
         case .openTitle(let provider, let providerID, let url):
             navigateTo(.home)
             openLibraryItem(id: LibraryIdentity.key(providerID: providerID, providerName: provider, url: url),

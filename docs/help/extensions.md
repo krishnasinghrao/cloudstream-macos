@@ -40,6 +40,9 @@ If a publisher withdraws an extension, CloudStream stops it and explains why.
 
 ## When an extension misbehaves
 
+- In **Extensions → Installed**, choose **Disable All** to turn off every
+  enabled extension, including extensions hidden by the filter. Extensions and
+  their settings stay installed; use their individual switches to enable them again.
 - **Retry** reloads an extension that failed to start.
 - An extension that was loading when the engine stopped is **quarantined** and
   stays off until you choose **Retry**.

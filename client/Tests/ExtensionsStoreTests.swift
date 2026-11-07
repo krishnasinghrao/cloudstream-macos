@@ -73,6 +73,7 @@ private actor ExtensionAPIFixture: ExtensionsAPI {
         throw URLError(.unsupportedURL)
     }
     var enabledCalls: [String: Bool] = [:]
+    var enableAttempts: [String] = []
     var heldToggle: CheckedContinuation<Void, Never>?
     var toggleWaiter: CheckedContinuation<Void, Never>?
     var holdToggle = false
@@ -82,13 +83,16 @@ private actor ExtensionAPIFixture: ExtensionsAPI {
         installed.removeAll { $0.id == installationId }
     }
     func setPluginEnabled(_ installationId: String, enabled: Bool) async throws -> PluginDto {
+        enableAttempts.append(installationId)
         if let error = nextError { nextError = nil; throw error }
         if holdToggle {
             holdToggle = false
             await withCheckedContinuation { heldToggle = $0; toggleWaiter?.resume(); toggleWaiter = nil }
         }
         enabledCalls[installationId] = enabled
-        return plugin(installationId, enabled: enabled)
+        let result = plugin(installationId, enabled: enabled)
+        if let index = installed.firstIndex(where: { $0.id == installationId }) { installed[index] = result }
+        return result
     }
     func waitForToggle() async {
         if heldToggle != nil { return }
@@ -279,6 +283,121 @@ final class ExtensionsStoreTests: XCTestCase {
         await store.setEnabled(true, plugin: plugin("a"))
         XCTAssertEqual(store.operationError, "Allow installs from this community repository first.")
         XCTAssertNil(store.pendingEnabled["a"])
+    }
+
+    func testDisableAllDisablesOnlyEnabledExtensionsAndRefreshesProviders() async {
+        let api = ExtensionAPIFixture()
+        await api.configureInstalled([plugin("a"), plugin("off", enabled: false), plugin("b")])
+        let store = ExtensionsStore(api: api)
+        await store.refresh()
+        let generation = store.providerGeneration
+        XCTAssertTrue(store.canDisableAll)
+
+        await store.disableAll()
+
+        let calls = await api.enabledCalls
+        XCTAssertEqual(calls, ["a": false, "b": false])
+        XCTAssertEqual(store.plugins.count, 3, "disabled extensions stay installed")
+        XCTAssertTrue(store.plugins.allSatisfy { !$0.enabled })
+        XCTAssertGreaterThan(store.providerGeneration, generation)
+        XCTAssertFalse(store.canDisableAll)
+        XCTAssertTrue(store.pendingEnabled.isEmpty)
+        XCTAssertTrue(store.pluginActivities.isEmpty)
+        XCTAssertNil(store.operationError)
+        await store.disableAll()
+        let attempts = await api.enableAttempts
+        XCTAssertEqual(attempts, ["a", "b"], "an already disabled set requires no requests")
+    }
+
+    func testDisableAllContinuesAfterFailureAndShowsSavedStates() async {
+        let api = ExtensionAPIFixture()
+        await api.configureInstalled([plugin("failed"), plugin("success")])
+        let store = ExtensionsStore(api: api)
+        await store.refresh()
+        await api.fail(with: DaemonClient.DaemonError.extensionFailure(code: "operation_conflict", message: "Still updating."))
+
+        await store.disableAll()
+
+        XCTAssertEqual(store.plugins.filter(\.enabled).map(\.id), ["failed"])
+        XCTAssertTrue(store.operationError?.contains("failed: Still updating.") == true)
+        XCTAssertTrue(store.canDisableAll, "failed extensions can be retried")
+        XCTAssertTrue(store.pendingEnabled.isEmpty)
+        XCTAssertTrue(store.pluginActivities.isEmpty)
+    }
+
+    func testDisableAllRetriesWhenTheDaemonWriteLimitIsReached() async {
+        let api = ExtensionAPIFixture()
+        await api.configureInstalled([plugin("a")])
+        let store = ExtensionsStore(api: api)
+        await store.refresh()
+        await api.fail(with: DaemonClient.DaemonError.extensionFailure(code: "rate_limited", message: "Slow down."))
+
+        await store.disableAll()
+
+        let attempts = await api.enableAttempts
+        XCTAssertEqual(attempts, ["a", "a"])
+        XCTAssertFalse(store.plugins[0].enabled)
+        XCTAssertNil(store.operationError)
+    }
+
+    func testDisableAllBlocksDuplicateBatchesAndConcurrentEnables() async {
+        let api = ExtensionAPIFixture()
+        await api.configureInstalled([plugin("a"), plugin("off", enabled: false)])
+        let store = ExtensionsStore(api: api)
+        await store.refresh()
+        await api.pauseToggle()
+        let batch = Task { await store.disableAll() }
+        await api.waitForToggle()
+
+        XCTAssertFalse(store.canDisableAll)
+        XCTAssertTrue(store.isBusy("a"))
+        XCTAssertTrue(store.isBusy("off"))
+        XCTAssertEqual(store.pendingEnabled["a"], false)
+        await store.disableAll()
+        await store.setEnabled(true, plugin: plugin("off", enabled: false))
+        await api.releaseToggle()
+        await batch.value
+
+        let attempts = await api.enableAttempts
+        XCTAssertEqual(attempts, ["a"])
+        XCTAssertTrue(store.plugins.allSatisfy { !$0.enabled })
+        XCTAssertFalse(store.isBusy("disable-all"))
+    }
+
+    func testDisableAllWaitsForExistingExtensionOperation() async {
+        let api = ExtensionAPIFixture()
+        await api.configureInstalled([plugin("a"), plugin("b")])
+        let store = ExtensionsStore(api: api)
+        await store.refresh()
+        await api.pauseToggle()
+        let toggle = Task { await store.setEnabled(false, plugin: plugin("a")) }
+        await api.waitForToggle()
+        XCTAssertFalse(store.canDisableAll)
+        await store.disableAll()
+        await api.releaseToggle()
+        await toggle.value
+        let attempts = await api.enableAttempts
+        XCTAssertEqual(attempts, ["a"])
+        XCTAssertTrue(store.canDisableAll)
+    }
+
+    func testDisableAllStopsSendingRequestsAfterEngineChanges() async {
+        let api = ExtensionAPIFixture()
+        await api.configureInstalled([plugin("a"), plugin("b")])
+        let store = ExtensionsStore(api: api)
+        await store.refresh()
+        await api.pauseToggle()
+        let batch = Task { await store.disableAll() }
+        await api.waitForToggle()
+        store.engineChanged()
+        await api.releaseToggle()
+        await batch.value
+
+        let attempts = await api.enableAttempts
+        XCTAssertEqual(attempts, ["a"], "old batches must not mutate the reconnected engine")
+        XCTAssertTrue(store.pendingEnabled.isEmpty)
+        XCTAssertTrue(store.pluginActivities.isEmpty)
+        XCTAssertFalse(store.isBusy("disable-all"))
     }
 
     func testUpdateAllReportsFailuresPerExtension() async {

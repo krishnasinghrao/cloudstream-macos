@@ -80,7 +80,11 @@ final class ExtensionsStore {
 
     var pendingUpdates: [PluginDto] { plugins.filter { $0.updateAvailable == true } }
 
-    func isBusy(_ key: String) -> Bool { inFlight.contains(key) }
+    func isBusy(_ key: String) -> Bool { inFlight.contains(key) || inFlight.contains("disable-all") }
+
+    var canDisableAll: Bool {
+        plugins.contains(where: \.enabled) && pluginActivities.isEmpty && repositoryActivities.isEmpty
+    }
 
     /// Invalidate all responses from a previous daemon, including mutation
     /// completions. Preserve the visible snapshot while the engine reconnects.
@@ -293,11 +297,68 @@ final class ExtensionsStore {
     }
 
     func setEnabled(_ enabled: Bool, plugin: PluginDto) async {
+        guard !isBusy(plugin.id) else {
+            operationError = "That item is still being updated. Try again when it finishes."
+            return
+        }
         pendingEnabled[plugin.id] = enabled
         defer { pendingEnabled[plugin.id] = nil }
         await perform(key: plugin.id, activity: enabled ? "Enabling…" : "Disabling…") {
             let result = try await self.api.setPluginEnabled(plugin.id, enabled: enabled)
             if enabled, !result.isOperational, let error = result.lastError { self.operationError = error }
+        }
+    }
+
+    /// Uses the complete installed snapshot, regardless of the view's filter.
+    /// Block other mutations until the batch has reconciled with the daemon.
+    func disableAll() async {
+        guard canDisableAll else { return }
+        let targets = plugins.filter(\.enabled)
+        let engine = epoch
+        defer {
+            if engine == epoch {
+                for plugin in targets {
+                    pendingEnabled[plugin.id] = nil
+                    pluginActivities[plugin.id] = nil
+                }
+            }
+        }
+        await perform(key: "disable-all", activity: "Disabling…") {
+            for plugin in targets {
+                self.pendingEnabled[plugin.id] = false
+                self.pluginActivities[plugin.id] = "Disabling…"
+            }
+            var failures: [String] = []
+            for plugin in targets {
+                guard self.epoch == engine, !Task.isCancelled else { return }
+                do {
+                    try await self.disablePaced(plugin.id, engine: engine)
+                } catch {
+                    failures.append("\(plugin.name): \(Self.message(for: error))")
+                }
+            }
+            if !failures.isEmpty { throw DisableAllFailure(failures: failures) }
+        }
+    }
+
+    /// Large batches can exhaust the daemon's write bucket. Wait for it to
+    /// refill instead of leaving the remaining extensions enabled.
+    private func disablePaced(_ id: String, engine: UInt64) async throws {
+        for attempt in 0..<4 {
+            guard epoch == engine, !Task.isCancelled else { throw CancellationError() }
+            do {
+                _ = try await api.setPluginEnabled(id, enabled: false)
+                return
+            } catch let error as DaemonClient.DaemonError where error.code == "rate_limited" && attempt < 3 {
+                try await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
+    private struct DisableAllFailure: LocalizedError {
+        let failures: [String]
+        var errorDescription: String? {
+            "Couldn't disable some extensions:\n" + failures.joined(separator: "\n")
         }
     }
 
@@ -333,7 +394,7 @@ final class ExtensionsStore {
     @discardableResult
     private func perform(key: String, activity: String, repository: String? = nil, activityKey: String? = nil,
                          adding: Bool = false, action: () async throws -> Void) async -> Bool {
-        guard !inFlight.contains(key) else {
+        guard !isBusy(key) else {
             operationError = "That item is still being updated. Try again when it finishes."
             return false
         }

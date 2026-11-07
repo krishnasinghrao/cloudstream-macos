@@ -1,6 +1,5 @@
 import AppIntents
 import AppKit
-import CoreSpotlight
 import SwiftUI
 
 // Offline-Features-Plan Phase 9: menu bar extra, Dock, Handoff activity
@@ -76,12 +75,16 @@ struct KeyboardShortcutsView: View {
 
     static let groups: [(String, [(String, String)])] = [
         ("Navigation", [("⌘1–⌘6", "Home, Watching, Plan to Watch, Favorites, Completed, Downloaded"),
-                        ("⌘F", "Search"), ("⌘Y", "History"), ("⇧⌘E", "Extensions"), ("⌘,", "Settings")]),
+                        ("⌘F", "Search"), ("⌘Y", "History"), ("⇧⌘E", "Extensions"), ("⌘,", "Settings"),
+                        ("⌘N", "New window"), ("⌘/", "Keyboard shortcuts")]),
         ("Title Page", [("⌘R", "Reload details"), ("⌘D", "Add to / remove from Favorites"), ("⇧⌘R", "Surprise me (Home)")]),
-        ("Player", [("Space / K", "Play / pause"), ("← → / J L", "Seek (⇧ doubles)"), ("↑ ↓", "Volume"),
+        ("Player Window", [("Space / K", "Play / pause"), ("← → / J L", "Seek (⇧ doubles)"), ("↑ ↓", "Volume"),
                     ("S", "Skip intro / credits"), ("N", "Next episode"), ("Z / X", "Subtitle earlier / later"),
                     (", / .", "Previous / next frame"), ("F", "Full screen"), ("M", "Mute"), ("Esc", "Dismiss Up Next / exit")]),
-        ("Library", [("⌥⌘E", "Export backup"), ("⌥⌘I", "Import backup"), ("⌃⌘L", "Lock now")]),
+        ("Playback Menu (any window)", [("⇧⌘→ / ⇧⌘←", "Skip forward / back 10 seconds"), ("⇧⌘↑ / ⇧⌘↓", "Volume up / down"),
+                    ("⇧⌘N", "Next episode"), ("⇧⌘M", "Mute")]),
+        ("Library", [("⌥⌘N", "New library page"), ("⌥⌘E", "Export backup"), ("⌥⌘I", "Import backup"),
+                     ("⌃⌘L", "Lock CloudStream")]),
     ]
 
     var body: some View {
