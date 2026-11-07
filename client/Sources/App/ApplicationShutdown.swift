@@ -11,6 +11,7 @@ final class ApplicationShutdown {
         DownloadService.shared.prepareForTermination()
         AppState.shared.stopApplicationTasks()
         EpisodeUpdateChecker.shared.stop()
+        LibraryMetadataHydrator.shared.stop()
         BackupService.shared.stopScheduling()
         ConnectivityMonitor.shared.stop()
     }, terminate: { completion in DaemonSupervisor.shared.stop(completion: completion) })

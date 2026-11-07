@@ -61,6 +61,7 @@ replay_pid*
 *.iml
 .vscode/
 .fleet/
+.claude/
 
 # macOS
 .DS_Store

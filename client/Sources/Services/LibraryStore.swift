@@ -2013,6 +2013,43 @@ final class LibraryStore {
         }
     }
 
+    /// Saved titles still missing the sort keys a provider can supply (the
+    /// release year), most recently used first. Titles filed before a year
+    /// was known otherwise sink to the end of a Release Year sort until the
+    /// user happens to open each one.
+    func titlesMissingReleaseYear(excluding attempted: Set<String>, limit: Int) throws -> [StoredMediaItem] {
+        guard let context else { throw ImportError.storeUnavailable }
+        try persistenceFault?(.queryRead)
+        // Bounded: titles a provider never gives a year for stay in this set
+        // for good, and this runs on the main actor. Downloads are excluded in
+        // the query, so at most `attempted` rows can precede `limit` usable ones.
+        let downloadPrefix = "local-download-v2:"
+        var descriptor = FetchDescriptor<StoredMediaItem>(
+            predicate: #Predicate {
+                $0.mergedIntoID == nil && $0.releaseYear == nil && ($0.watchTypeRaw != -1 || $0.isFavorite)
+                    && !$0.id.starts(with: downloadPrefix)
+            },
+            sortBy: [SortDescriptor(\.lastUpdated, order: .reverse)],
+        )
+        descriptor.fetchLimit = limit + attempted.count
+        let rows = try context.fetch(descriptor)
+        return Array(rows.lazy
+            .filter { !attempted.contains($0.id) && LibraryIdentity.downloadID(from: $0.id) == nil }
+            .prefix(limit))
+    }
+
+    /// Fills provider facts (the release year) into the captured row from a
+    /// background details load. Returns whether anything changed.
+    @discardableResult
+    func absorbMetadata(details: DetailsDto, itemID: String) throws -> Bool {
+        try withMutation(shared: false) { context in
+            guard let item = try mutationItem(id: itemID, in: context) else { return false }
+            let learned = absorbMetadata(item, from: details)
+            if learned { try save(context: context) }
+            return learned
+        }
+    }
+
     /// Records that an episode check was attempted for `itemID`, updating `lastEpisodeCheck`
     /// so provider failures or dead titles don't starve the background check queue.
     func recordEpisodeCheckAttempt(itemID: String) throws {

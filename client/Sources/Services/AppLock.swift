@@ -66,6 +66,7 @@ final class AppLock {
         isLocked = true
         generation &+= 1
         EpisodeUpdateChecker.shared.cancelCurrentRun()
+        LibraryMetadataHydrator.shared.cancelCurrentRun()
         LibraryStore.shared.cancelProfileOperations()
         // Nothing keeps playing (or showing) behind the lock screen.
         AppState.shared.player.close()
@@ -122,6 +123,8 @@ final class AppLock {
         }
         do {
             EpisodeUpdateChecker.shared.cancelCurrentRun()
+            LibraryMetadataHydrator.shared.cancelCurrentRun()
+            LibraryMetadataHydrator.shared.resetAttempts()
             LibraryStore.shared.cancelProfileOperations()
             AppState.shared.player.close()
             WindowSessionRegistry.shared.invalidateProfileNavigation()

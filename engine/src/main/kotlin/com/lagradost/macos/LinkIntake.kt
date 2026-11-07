@@ -1,6 +1,8 @@
 package com.lagradost.macos
 
 import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.USER_AGENT
+import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.CLEARKEY_DRM_UUID
 import com.lagradost.cloudstream3.utils.DrmExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -77,7 +79,7 @@ internal class LinkIntake {
             source = link.source,
             quality = link.quality,
             type = link.type.name,
-            headers = link.getAllHeaders(),
+            headers = withUserAgent(link.getAllHeaders()),
             extractorData = link.extractorData,
             isPlaylist = link is ExtractorLinkPlayList,
             playlist = (link as? ExtractorLinkPlayList)?.playlist?.map { it.url } ?: emptyList(),
@@ -86,11 +88,29 @@ internal class LinkIntake {
                     url = audio.url,
                     label = audio.label,
                     language = audio.language,
-                    headers = audio.headers ?: link.getAllHeaders(),
+                    headers = withUserAgent(audio.headers ?: link.getAllHeaders()),
                 )
             },
             drm = drm,
         ).let(RemoteProvider::cleanLink)
+
+        /**
+         * On Android the player fetches a stream with the extension's own
+         * User-Agent; mpv is a separate HTTP client with its own. A link whose
+         * host checks the agent (or whose clearance was issued to it) then
+         * fails with a 403 when played. Adds the provider client's
+         * User-Agent when the extension set none itself (its own always wins).
+         *
+         * Cookies are deliberately not added here: a credentialed link changes
+         * how the app plays it (through the relay), which is reviewed together
+         * with the relay and live-playback work.
+         */
+        internal fun withUserAgent(headers: Map<String, String>): Map<String, String> {
+            if (headers.keys.any { it.equals("User-Agent", ignoreCase = true) }) return headers
+            val agent = runCatching { app.defaultHeaders.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value }
+                .getOrNull()?.takeIf { it.isNotBlank() && it.none(Char::isISOControl) } ?: USER_AGENT
+            return LinkedHashMap(headers).apply { put("User-Agent", agent) }
+        }
 
         /**
          * ClearKey with the key in the link is the only DRM the player can

@@ -37,11 +37,20 @@ class LinkPipelineTest {
             callback(newExtractorLink("Later", "Second", "https://cdn.invalid/two.m3u8", ExtractorLinkType.M3U8))
         }, "fixture", emitted::add, {})
         assertEquals(listOf("https://cdn.invalid/one.mp4", "https://cdn.invalid/two.m3u8"), emitted.map { it.url })
-        assertEquals(mapOf("Referer" to "https://p.invalid/"), emitted.first().headers)
+        assertEquals(mapOf("Referer" to "https://p.invalid/", "User-Agent" to com.lagradost.cloudstream3.USER_AGENT), emitted.first().headers,
+            "connection headers are dropped; the session User-Agent is added (M1)")
         assertEquals(listOf("torrent", "invalid"), response.skipped.map { it.reason })
         assertEquals(listOf("https://subs.invalid/en.vtt"), response.subtitles.map { it.url })
         assertEquals("success", response.outcome)
         assertFalse(response.skipped.toString().contains("magnet:"), "skipped links never carry their URL")
+    }
+
+    @Test fun `an extension's own User-Agent is kept and no cookie is ever added`() {
+        val own = LinkIntake.withUserAgent(mapOf("user-agent" to "Extension/1.0", "Referer" to "https://p.invalid/"))
+        assertEquals(mapOf("user-agent" to "Extension/1.0", "Referer" to "https://p.invalid/"), own, "the extension's agent wins, in any case")
+        val added = LinkIntake.withUserAgent(mapOf("Referer" to "https://p.invalid/"))
+        assertTrue(added["User-Agent"].orEmpty().isNotBlank())
+        assertFalse(added.keys.any { it.equals("Cookie", ignoreCase = true) }, "cookies would force the relay; not added here")
     }
 
     @Test fun `a provider with only torrent sources says so instead of failing generically`() = runBlocking<Unit> {

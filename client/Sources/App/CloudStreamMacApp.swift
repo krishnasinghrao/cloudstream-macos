@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DaemonSupervisor.shared.start()
             ConnectivityMonitor.shared.start()
             EpisodeUpdateChecker.shared.start(appState: AppState.shared)
+            LibraryMetadataHydrator.shared.start(appState: AppState.shared)
             BackupService.shared.startScheduling(appState: AppState.shared)
             SpotlightIndexer.shared.scheduleReindex()
             SoftwareUpdater.shared.start()

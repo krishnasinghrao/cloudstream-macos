@@ -605,6 +605,71 @@ final class LibraryDiscoveryTests: XCTestCase {
         XCTAssertEqual(LibraryView.filterAndSort(items, query: "mystery", order: .alphabetical).map(\.providerURL), ["u/alpha"])
     }
 
+    func testHydratorFillsMissingYearsWithoutVisitsAndAsksEachTitleOnce() async throws {
+        let store = LibraryStore(inMemory: true)
+        func movie(_ url: String, year: Int?) -> DetailsDto {
+            DetailsDto(provider: "P", url: url, name: url, type: "Movie", posterUrl: nil, backgroundPosterUrl: nil, logoUrl: nil,
+                       plot: nil, year: year, durationMinutes: nil, score: nil, tags: [], actors: [], contentRating: nil,
+                       comingSoon: false, episodes: [], movieData: nil)
+        }
+        try store.upsertLibraryEntry(details: movie("u/dated", year: 2001), watchType: .watching)
+        try store.upsertLibraryEntry(details: movie("u/undated", year: nil), watchType: .watching)
+        try store.upsertLibraryEntry(details: movie("u/gone", year: nil), watchType: .completed)
+        XCTAssertEqual(Set(try store.titlesMissingReleaseYear(excluding: [], limit: 10).map(\.providerURL)), ["u/undated", "u/gone"])
+
+        var requested: [String] = []
+        let hydrator = LibraryMetadataHydrator(library: store, spacing: .zero, authorization: { 0 }, loadDetails: { _, url in
+            requested.append(url)
+            if url == "u/gone" { throw URLError(.cannotFindHost) }
+            // A payload naming another title must not redirect the write.
+            return movie("u/someone-else", year: 2019)
+        })
+        await hydrator.runOnce(canRun: { true }, engineGeneration: { 1 })
+        XCTAssertEqual(Set(requested), ["u/undated", "u/gone"], "titles that already have a year are never fetched")
+        let items = try store.items(withWatchType: .watching)
+        XCTAssertEqual(items.first { $0.providerURL == "u/undated" }?.releaseYear, 2019)
+        XCTAssertNil(try store.items(withWatchType: .watching).first { $0.providerURL == "u/someone-else" })
+        XCTAssertEqual(LibraryView.filterAndSort(items, query: "", order: .releaseYear).map(\.providerURL), ["u/undated", "u/dated"])
+
+        requested.removeAll()
+        await hydrator.runOnce(canRun: { true }, engineGeneration: { 1 })
+        XCTAssertTrue(requested.isEmpty, "a failed title is not retried in the same session")
+        XCTAssertFalse(hydrator.isRunning)
+    }
+
+    func testMissingYearQueryIsBoundedButStillReachesUnattemptedTitles() throws {
+        let store = LibraryStore(inMemory: true)
+        func movie(_ url: String) -> DetailsDto {
+            DetailsDto(provider: "P", url: url, name: url, type: "Movie", posterUrl: nil, backgroundPosterUrl: nil, logoUrl: nil,
+                       plot: nil, year: nil, durationMinutes: nil, score: nil, tags: [], actors: [], contentRating: nil,
+                       comingSoon: false, episodes: [], movieData: nil)
+        }
+        // Oldest first, so the attempted (newest) rows sort ahead of the rest.
+        for index in 0..<30 { try store.upsertLibraryEntry(details: movie("u/\(index)"), watchType: .watching) }
+        let newestFirst = try store.titlesMissingReleaseYear(excluding: [], limit: 100)
+        XCTAssertEqual(newestFirst.count, 30)
+        let attempted = Set(newestFirst.prefix(25).map(\.id))
+        let next = try store.titlesMissingReleaseYear(excluding: attempted, limit: 3)
+        XCTAssertEqual(next.count, 3, "attempted titles never crowd out the ones still to ask")
+        XCTAssertTrue(next.allSatisfy { !attempted.contains($0.id) })
+        XCTAssertEqual(try store.titlesMissingReleaseYear(excluding: attempted, limit: 20).count, 5)
+    }
+
+    func testHydratorDoesNothingWhileLockedOrUnusable() async throws {
+        let store = LibraryStore(inMemory: true)
+        try store.upsertLibraryEntry(details: series([], url: "u/x"), watchType: .watching)
+        var requests = 0
+        let locked = LibraryMetadataHydrator(library: store, spacing: .zero, authorization: { nil }, loadDetails: { _, _ in
+            requests += 1; return self.series([], url: "u/x")
+        })
+        await locked.runOnce(canRun: { true }, engineGeneration: { 1 })
+        let offline = LibraryMetadataHydrator(library: store, spacing: .zero, authorization: { 0 }, loadDetails: { _, _ in
+            requests += 1; return self.series([], url: "u/x")
+        })
+        await offline.runOnce(canRun: { false }, engineGeneration: { 1 })
+        XCTAssertEqual(requests, 0)
+    }
+
     func testLibrarySortsByReleaseYearAndDirection() throws {
         let store = LibraryStore(inMemory: true)
         func movie(_ url: String, year: Int?) -> DetailsDto {
