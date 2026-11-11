@@ -52,7 +52,7 @@ Every window, view, component, and interaction strictly adheres to Apple’s **m
 
 ## 3. The Apple TV Sidebar Specification
 
-Built using native SwiftUI `NavigationSplitView` with an `NSVisualEffectView` backing (`material: .sidebar`, `blendingMode: .behindWindow`):
+Built as a native SwiftUI `NavigationSplitView` sidebar (`List(selection:)` + `.listStyle(.sidebar)`). The system draws its glass, selection, accent-tinted icons and badges; the app does not paint any of them. It is pinned open (`SidebarPin`, 230–300 pt) with no toggle.
 
 ### 3.1 Sidebar Navigation Sections
 1. **Top Navigation Group:**
@@ -69,9 +69,8 @@ Built using native SwiftUI `NavigationSplitView` with an `NSVisualEffectView` ba
    - **`Engine Status Indicator`:** Mini glowing dot (`8pt`) `#34C759` (Connected) with label `"Daemon: Ready"`.
 
 ### 3.2 Row Selection Styling
-* **Active Row:** Solid Apple Blue pill (`#0A84FF`), cornerRadius `8pt`, white icon and semibold label.
-* **Inactive Row:** Transparent fill, `tvTextSecondary` icon and label.
-* **Hover State:** Soft translucent tint (`Color.white.opacity(0.06)`), spring transition.
+* Selection, hover and keyboard focus come from the native sidebar list: rows are `Label`s tagged with their destination, counts are `.badge(_:)`, and ↑/↓ and type-select move the selection.
+* Every selection change goes through `WindowSession.navigateTo`, as the Go menu does: pushed details unwind and the library filter clears.
 
 ---
 

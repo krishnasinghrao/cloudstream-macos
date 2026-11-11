@@ -280,7 +280,7 @@ struct CloudStreamMacApp: App {
                     navigationSession.navigateTo(.dropped)
                 }
 
-                Button("Downloaded") {
+                Button("Downloads") {
                     navigationSession.navigateTo(.downloaded)
                 }
                 .keyboardShortcut("6", modifiers: .command)

@@ -33,7 +33,7 @@ final class ExtensionsUITests: XCTestCase {
     @MainActor
     private func openExtensions(_ app: XCUIApplication) {
         app.activate()
-        let row = app.buttons.matching(NSPredicate(format: "identifier == 'SidebarRow' AND label == %@", "Extensions")).firstMatch
+        let row = app.outlines["Main Sidebar"].staticTexts["Extensions"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 15), "Extensions sidebar row not found")
         row.click()
         // "Add Repository" enables once the engine is ready.
@@ -95,7 +95,7 @@ final class ExtensionsUITests: XCTestCase {
         // the window had, pushing the header, banners and sidebar off the top.
         XCTAssertTrue(restart.isHittable, "safe-mode banner action is off-screen (frame \(restart.frame))")
         XCTAssertTrue(app.buttons["Add Repository"].firstMatch.isHittable, "Extensions header is off-screen")
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier == 'SidebarRow' AND label == %@", "Home")).firstMatch.isHittable, "sidebar is shifted off-screen")
+        XCTAssertTrue(app.outlines["Main Sidebar"].staticTexts["Home"].firstMatch.isHittable, "sidebar is shifted off-screen")
         restart.click()
         openExtensions(app)
         let banner = text(app, beginningWith: "Safe mode is on")
@@ -153,7 +153,7 @@ final class ExtensionsUITests: XCTestCase {
         (app.radioButtons["Installed"].exists ? app.radioButtons["Installed"] : app.buttons["Installed"]).click()
         XCTAssertTrue(app.checkBoxes["Enable fixture"].firstMatch.waitForExistence(timeout: 60))
         let sidebarRows: Set<String> = ["Home", "Search", "Watching", "Plan to Watch", "Favorites", "Completed",
-                                        "On Hold", "Dropped", "Downloaded", "History", "Extensions"]
+                                        "On Hold", "Dropped", "Downloads", "History", "Extensions"]
         try app.performAccessibilityAudit { issue in
             guard let element = issue.element else { return true }
             let text = (element.value as? String) ?? element.label

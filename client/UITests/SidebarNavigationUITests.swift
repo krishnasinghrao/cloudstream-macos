@@ -60,9 +60,8 @@ final class SidebarNavigationUITests: XCTestCase {
         XCTAssertTrue(window.title.contains("Home"), "app should start on Home, got “\(window.title)”")
 
         func clickRow(_ label: String) {
-            // Sidebar rows are buttons (the sidebar draws its own selection),
-            // told apart from same-named controls (the toolbar's Search) by id.
-            let row = app.buttons.matching(NSPredicate(format: "identifier == 'SidebarRow' AND label == %@", label)).firstMatch
+            // Scoped to the sidebar outline, so the toolbar's Search field never matches.
+            let row = sidebarRow(label, in: app)
             XCTAssertTrue(row.waitForExistence(timeout: 15), "sidebar row “\(label)” not found")
             if row.isHittable {
                 row.click()
@@ -84,7 +83,7 @@ final class SidebarNavigationUITests: XCTestCase {
         }
 
         // The remaining destinations.
-        clickRow("Downloaded")
+        clickRow("Downloads")
         XCTAssertTrue(expectTitle("Downloads"))
         clickRow("History")
         XCTAssertTrue(expectTitle("History"))
@@ -102,8 +101,8 @@ final class SidebarNavigationUITests: XCTestCase {
         XCTAssertTrue(expectTitle("Home"))
     }
 
-    /// The sidebar draws its own neutral selection (no system selection), so
-    /// keyboard movement and the VoiceOver selected state are proven here.
+    /// The native sidebar list moves the selection with the arrow keys and
+    /// reports the current destination's row as selected.
     func testArrowKeysMoveTheSidebarSelectionAndRowsReportSelected() throws {
         let app = launchSidebarApp()
         defer { app.terminate() }
@@ -113,13 +112,16 @@ final class SidebarNavigationUITests: XCTestCase {
             let expectation = expectation(for: NSPredicate(format: "title == %@", title), evaluatedWith: window)
             return XCTWaiter.wait(for: [expectation], timeout: 10) == .completed
         }
+        func outlineRow(_ label: String) -> XCUIElement {
+            app.outlines["Main Sidebar"].outlineRows.containing(.staticText, identifier: label).firstMatch
+        }
 
-        let watching = app.buttons.matching(NSPredicate(format: "identifier == 'SidebarRow' AND label == %@", "Watching")).firstMatch
+        let watching = sidebarRow("Watching", in: app)
         XCTAssertTrue(watching.waitForExistence(timeout: 15))
         watching.click()
         XCTAssertTrue(expectTitle("Watching"))
-        XCTAssertTrue(watching.isSelected, "the current destination reports itself selected")
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier == 'SidebarRow' AND label == %@", "Home")).firstMatch.isSelected)
+        XCTAssertTrue(outlineRow("Watching").isSelected, "the current destination reports itself selected")
+        XCTAssertFalse(outlineRow("Home").isSelected)
 
         window.typeKey(.downArrow, modifierFlags: [])
         XCTAssertTrue(expectTitle("Plan to Watch"), "↓ moves to the next destination")
@@ -132,13 +134,18 @@ final class SidebarNavigationUITests: XCTestCase {
     func testSidebarAppearanceSnapshots() throws {
         for appearance in ["Light", "Dark"] {
             let app = launchSidebarApp(appearance: appearance)
-            app.buttons.matching(NSPredicate(format: "identifier == 'SidebarRow' AND label == %@", "Watching")).firstMatch.click()
+            sidebarRow("Watching", in: app).click()
             let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
             shot.name = "Sidebar — \(appearance)"
             shot.lifetime = .keepAlways
             add(shot)
             app.terminate()
         }
+    }
+
+    /// A destination's label in the sidebar outline.
+    private func sidebarRow(_ label: String, in app: XCUIApplication) -> XCUIElement {
+        app.outlines["Main Sidebar"].staticTexts[label].firstMatch
     }
 
     private func launchSidebarApp(appearance: String? = nil) -> XCUIApplication {
