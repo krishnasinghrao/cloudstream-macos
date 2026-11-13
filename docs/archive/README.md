@@ -22,6 +22,7 @@ into a new document, not into these.
 | Verified defects | [Implementation-Plan](plans/Implementation-Plan.md) | in the plan (superseded) |
 | Hardening | [Remediation-Plan](plans/Remediation-Plan.md) | in the plan (superseded) |
 | Player | [Player-Remediation-Plan](plans/Player-Remediation-Plan.md) | in the plan |
+| November 2026 player audits and the `sprint-experimental` branch | [audit/player-2026-11](audit/player-2026-11/README.md) | [Sprint-Reconciliation-2026-11-12](plans/Sprint-Reconciliation-2026-11-12.md): what `main` took, rebuilt and left out |
 | UI and platform | [UI-Remediation-Plan](plans/UI-Remediation-Plan.md) | implemented |
 | Offline features | [Offline-Features-Plan](plans/Offline-Features-Plan.md) | implemented |
 | Siri integration | [Siri-Integration-Plan](plans/Siri-Integration-Plan.md) | draft, never built |
