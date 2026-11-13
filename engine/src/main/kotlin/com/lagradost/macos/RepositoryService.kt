@@ -259,12 +259,24 @@ object RepositoryService {
         return finalUrl.toString()
     }
 
-    fun extractRepositoriesFromHtml(html: String): List<String> {
+    /**
+     * Repository addresses linked from a web page that lists repositories.
+     * Links back to the page's own site ([pageUrl]'s host) are navigation, not
+     * repositories, and are skipped.
+     */
+    fun extractRepositoriesFromHtml(html: String, pageUrl: String? = null): List<String> {
+        val pageHost = pageUrl?.let { runCatching { java.net.URI(it).host }.getOrNull() }?.lowercase()?.removePrefix("www.")
+        fun onPageSite(address: String): Boolean {
+            if (pageHost == null) return false
+            val host = address.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#')
+                .substringAfterLast('@').substringBefore(':').lowercase().removePrefix("www.")
+            return host == pageHost || host.endsWith(".$pageHost")
+        }
         val repos = mutableSetOf<String>()
         val csRegex = Regex("""cloudstreamrepo://([^\s"'<>]+)""", RegexOption.IGNORE_CASE)
         for (m in csRegex.findAll(html)) {
             val candidate = m.groupValues[1].trim()
-            if (candidate.isNotBlank() && !candidate.contains("cloudstream-apk.com", ignoreCase = true)) {
+            if (candidate.isNotBlank() && !onPageSite("cloudstreamrepo://$candidate")) {
                 // `cloudstreamrepo://host/path` and `https://host/path` name the same repository.
                 val first = candidate.removePrefix("https://").removePrefix("http://").substringBefore('/')
                 repos.add(if ('.' in first && '/' in candidate) "https://" + candidate.removePrefix("https://").removePrefix("http://")
@@ -274,7 +286,7 @@ object RepositoryService {
         val urlRegex = Regex("""href=["'](https?://[^\s"'<>]+)["']""", RegexOption.IGNORE_CASE)
         for (m in urlRegex.findAll(html)) {
             val candidate = m.groupValues[1].trim()
-            if (candidate.contains("cloudstream-apk.com", ignoreCase = true) ||
+            if (onPageSite(candidate) ||
                 candidate.contains("wp-json", ignoreCase = true) ||
                 candidate.contains("/feed", ignoreCase = true) ||
                 candidate.endsWith(".html", ignoreCase = true) ||
@@ -366,7 +378,7 @@ object RepositoryService {
         val manifestBody = document.text()
         val manifestBase = document.effectiveUrl
 
-        // Check if fetched content is an HTML repository listing webpage (e.g. cloudstream-apk.com)
+        // Check if fetched content is an HTML web page that lists repositories
         val isHtml = manifestBody.trimStart().let {
             it.startsWith("<!DOCTYPE", ignoreCase = true) ||
             it.startsWith("<html", ignoreCase = true) ||
@@ -378,7 +390,7 @@ object RepositoryService {
             if (persisted?.pinnedPublicKey != null || anchor != null || rotateKey || policyKey != null) {
                 throw SecurityException("A trusted repository cannot downgrade to an HTML catalog")
             }
-            val linked = extractRepositoriesFromHtml(manifestBody)
+            val linked = extractRepositoriesFromHtml(manifestBody, manifestBase)
             val extractedRepos = linked.take(MAX_DISCOVERED_REPOSITORIES)
             if (linked.isEmpty()) {
                 throw IllegalArgumentException("The link points to a webpage, but no CloudStream repository links were found on it.")

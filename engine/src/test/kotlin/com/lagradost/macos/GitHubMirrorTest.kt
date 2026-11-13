@@ -12,13 +12,13 @@ class GitHubMirrorTest {
     @AfterTest fun after() { NetworkSetup.apply(DaemonState.NetworkSettings()); ExtensionTestSupport.resetHome() }
 
     @Test fun `github raw addresses map to jsDelivr and nothing else does`() {
-        assertEquals("https://cdn.jsdelivr.net/gh/recloudstream/extensions@builds/plugins.json",
-            GitHubMirror.mirrorOf("https://raw.githubusercontent.com/recloudstream/extensions/builds/plugins.json"))
-        assertEquals("https://cdn.jsdelivr.net/gh/phisher98/cloudstream-extensions-phisher@builds/CineStream.cs3",
-            GitHubMirror.mirrorOf("https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/CineStream.cs3"))
-        assertEquals("https://cdn.jsdelivr.net/gh/lawlietbr/lietrepo@main/builds/AnimeFire.cs3",
-            GitHubMirror.mirrorOf("https://github.com/lawlietbr/lietrepo/raw/refs/heads/main/builds/AnimeFire.cs3"))
-        for (other in listOf("https://gitlab.com/tearrs/vn/-/raw/main/plugins.json", "http://raw.githubusercontent.com/a/b/c/d.json",
+        assertEquals("https://cdn.jsdelivr.net/gh/example-owner/extensions@builds/plugins.json",
+            GitHubMirror.mirrorOf("https://raw.githubusercontent.com/example-owner/extensions/builds/plugins.json"))
+        assertEquals("https://cdn.jsdelivr.net/gh/example-owner/example-extensions@builds/Sample.cs3",
+            GitHubMirror.mirrorOf("https://raw.githubusercontent.com/example-owner/example-extensions/refs/heads/builds/Sample.cs3"))
+        assertEquals("https://cdn.jsdelivr.net/gh/another-owner/repo@main/builds/Sample.cs3",
+            GitHubMirror.mirrorOf("https://github.com/another-owner/repo/raw/refs/heads/main/builds/Sample.cs3"))
+        for (other in listOf("https://gitlab.com/example-owner/repo/-/raw/main/plugins.json", "http://raw.githubusercontent.com/a/b/c/d.json",
             "https://raw.githubusercontent.com/a/b/main", "https://raw.githubusercontent.com/a/b/main/../x.json",
             "https://raw.githubusercontent.com/a/b/main/x.json?token=1", "https://github.com/a/b/blob/main/x.json",
             "https://raw.githubusercontent.com/a b/c/main/x.json")) {

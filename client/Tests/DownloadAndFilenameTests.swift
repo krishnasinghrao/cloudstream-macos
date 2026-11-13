@@ -181,7 +181,7 @@ final class DownloadQueueAndCancellationTests: XCTestCase {
         let item = DownloadService.QueueItem(
             title: "Test Movie",
             episodeLabel: "Movie",
-            provider: "SuperStream",
+            provider: "SampleProvider",
             episodeData: "data_123",
             destinationURL: URL(fileURLWithPath: "/tmp/movie.mp4"),
             durationSeconds: 3600,

@@ -132,7 +132,9 @@ point a test at the production library or engine data root.
 Fixture-dependent player tests and network-dependent tests explicitly skip
 unless provisioned: `CS_MPV_ENGINE_TESTS=1` (via `make test-live-player`),
 `CS_LARGE_LIBRARY_TESTS=1`, `CS_LIVE_REPO_TESTS=1` for the engine's live
-repository syncs, the identity script below, and the player benchmarks
+repository syncs (targets from `CS_LIVE_REPO_URL`, `CS_LIVE_EXTENSION`,
+`CS_LIVE_QUERY` and `CS_LIVE_CATALOG_URL`, which CI reads from repository
+variables; the project names no third-party repository), the identity script below, and the player benchmarks
 (`CS_MPV_BENCH`, `CS_YT_DIR`; `make test-player-bench` provisions them).
 Live extension playback (`CS_LIVE_PLAYBACK_TESTS`) plays links exported to
 `/tmp/cs_live_links.json`. `make test-client-full`

@@ -68,9 +68,9 @@ final class DownloadPolicyTests: XCTestCase {
         XCTAssertEqual(DownloadService.classifyResolutionError(DaemonClient.DaemonError.http(statusCode: 503, detail: nil)), .transient("HTTP 503"))
         XCTAssertEqual(DownloadService.classifyResolutionError(DaemonClient.DaemonError.http(statusCode: 422, detail: nil)), .providerMissing(nil))
         // The engine's reason (E2) reaches the download list instead of a generic sentence.
-        let reason = "The extension “MovieBox” is turned off. Turn it on in Settings ▸ Extensions."
+        let reason = "The extension “Sample” is turned off. Turn it on in Settings ▸ Extensions."
         XCTAssertEqual(DownloadService.classifyResolutionError(DaemonClient.DaemonError.http(statusCode: 422, detail: reason)), .providerMissing(reason))
-        XCTAssertEqual(DownloadPolicy.FailureReason.providerUnavailable(provider: "MovieBox", reason: reason).label, reason)
+        XCTAssertEqual(DownloadPolicy.FailureReason.providerUnavailable(provider: "Sample", reason: reason).label, reason)
     }
 
     func testClassifierRecognizesRealHTTPErrors() {

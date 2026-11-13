@@ -396,9 +396,9 @@ object PluginBridge {
             val loader = VerifiedClassLoader(jars, PluginBridge::class.java.classLoader, "self-test")
             val type = Class.forName(requireNotNull(pluginClass), false, loader)
             require(BasePlugin::class.java.isAssignableFrom(type)) { "Self-test class is not a plugin" }
-            // Android facilities backed by optional JDK modules must be real on the shipped runtime: StreamPlay
-            // sizes its concurrency from ActivityManager, and a trimmed runtime without the management modules
-            // broke its load. The code falls back without them; the shipped runtime must not need the fallback.
+            // Android facilities backed by optional JDK modules must be real on the shipped runtime: extensions
+            // size their concurrency from ActivityManager, and a trimmed runtime without the management modules
+            // broke their load. The code falls back without them; the shipped runtime must not need the fallback.
             for (type in listOf("java.lang.management.ManagementFactory", "com.sun.management.OperatingSystemMXBean")) {
                 require(runCatching { Class.forName(type) }.isSuccess) { "This runtime lacks $type (java.management / jdk.management)" }
             }

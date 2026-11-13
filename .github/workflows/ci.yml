@@ -232,8 +232,14 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6 (pinned third-party action)
       - name: Live repository tests
+        # Targets are repository variables (Settings ▸ Variables): the project
+        # names no third-party repository. Unset variables skip their test.
         env:
           CS_LIVE_REPO_TESTS: "1"
+          CS_LIVE_REPO_URL: ${{ vars.CS_LIVE_REPO_URL }}
+          CS_LIVE_EXTENSION: ${{ vars.CS_LIVE_EXTENSION }}
+          CS_LIVE_QUERY: ${{ vars.CS_LIVE_QUERY }}
+          CS_LIVE_CATALOG_URL: ${{ vars.CS_LIVE_CATALOG_URL }}
         run: ./gradlew :engine:test --tests 'com.lagradost.macos.RepositoryServiceTest' --console=plain
       - name: Open an issue on failure
         if: failure() && github.event_name == 'schedule'

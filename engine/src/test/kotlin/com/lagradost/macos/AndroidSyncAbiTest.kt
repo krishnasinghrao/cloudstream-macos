@@ -7,7 +7,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.*
 
 /**
- * Extensions such as CineStream bundle providers that reference the Android
+ * Some extensions bundle providers that reference the Android
  * app's account-sync types and Android UI types in load(). Without these
  * types the whole extension failed to load (NoClassDefFoundError). The engine
  * provides them with Android's JVM names and "no account signed in" behavior.

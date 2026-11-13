@@ -218,7 +218,7 @@ Every later item is judged against this baseline, not against source estimates.
     and deadline, so routes cannot loop.
   - Write ADR-0020 (provider routing across workers) before implementing.
 - [x] **X2 — Duplicate provider names.** Two installed extensions both register
-  "MovieBox" on this Mac.
+  the same provider name on this Mac.
   - On install, warn when a new provider's name matches an installed one, and
     say which repository each comes from.
   - Library records that carry only a name (Android backup imports) and match
@@ -266,7 +266,7 @@ Every later item is judged against this baseline, not against source estimates.
 - [x] **W2 — More heap only where needed.** After an out-of-memory exit,
   restart that extension's worker with 512 MB (once; recorded on the receipt).
   Idle cost does not change (`-Xms16m`, heap returned when idle). Check it
-  against the CineStream/Movies4u crashes seen on 8 October.
+  against the out-of-memory crashes seen on 8 October.
 - [ ] **W3 — First-start timeouts.** From C0, list extensions whose first
   worker init exceeds the restore timeout (20 s) because of translation; if
   any do, keep translation off the timed path (translate once at install, then

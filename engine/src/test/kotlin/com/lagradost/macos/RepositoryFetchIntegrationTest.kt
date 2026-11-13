@@ -39,8 +39,8 @@ class RepositoryFetchIntegrationTest {
             RepositoryDocument(byteArrayOf(), "https://target.invalid/Case/Repo.json?Token=ABC")
         }
         assertEquals("https://target.invalid/Case/Repo.json?Token=ABC", RepositoryService.parseRepoUrl("https://bit.ly/CaseSensitive", fetcher))
-        for (url in listOf("https://localhost/", "https://safe.invalid/likdev2583/repo.json", "https://safe.invalid/?next=cs.repo&url=value",
-            "https://safe.invalid/Rowdy-Avocado/Rowdycado-Extensions/repo.json")) {
+        for (url in listOf("https://localhost/", "https://safe.invalid/example-owner/repo.json", "https://safe.invalid/?next=cs.repo&url=value",
+            "https://safe.invalid/Example-Owner/Example-Extensions/repo.json")) {
             assertEquals(url, RepositoryService.parseRepoUrl(url, fetcher))
         }
         assertEquals("https://target.invalid/Repo.json?a=b", RepositoryService.parseRepoUrl("https://cs.repo/?url=https%3A%2F%2Ftarget.invalid%2FRepo.json%3Fa%3Db", fetcher))

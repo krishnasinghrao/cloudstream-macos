@@ -23,7 +23,7 @@ the order to do them. Tick items off as they are done.
 
 Evidence from 4 October: the extension stages themselves mostly work (the
 last outcome of every stage of the 7 enabled extensions succeeded, except
-UHDmovies links, where the site returned nothing). What failed came from
+one extension's links, where the site returned nothing). What failed came from
 around them: one change killed every extension, a second copy of the app had
 no engine, and nothing told you why. The recurring Oct 2–3 crash (an extension
 killed when a link list was left mid-load) is fixed by HIGH-03.
@@ -99,7 +99,7 @@ Already in place: at 80% of an episode the engine fetches the next episode's lin
 
 ## 8. Extensions (alongside the rest)
 
-- [x] **RT-14 — JavaScript in extension-created WebViews.** Needed by StreamPlay (EnmaDecryptor). The parked branch `macos/webview-sessions-wip` does not compile; finish it (rebase it first, section 1). Largest item. Done: an extension's WebView runs in the app's WebKit (offscreen, its own data store); tested with an Android-compiled fixture through a real worker.
+- [x] **RT-14 — JavaScript in extension-created WebViews.** Needed by extensions that decrypt sources in a WebView. The parked branch `macos/webview-sessions-wip` does not compile; finish it (rebase it first, section 1). Largest item. Done: an extension's WebView runs in the app's WebKit (offscreen, its own data store); tested with an Android-compiled fixture through a real worker.
 - [ ] **RT-15 — Support missing configuration for extensions we use (only if needed).** Add a native adapter only when a specific extension needs useful configuration that the existing Extension Settings sheet cannot handle: sign-in/sign-out, custom server/account setup, source selection/order, or essential settings stored outside SharedPreferences. Working extensions whose current settings are sufficient need no further work. Keep configuration within the extension's existing settings entry; do not add a separate Advanced Settings screen or duplicate existing controls. Automatic extension-triggered browser launches and ad redirects are out of scope and must remain blocked; explicit Open in Browser, Copy Link and external-player actions belong to the app's own user-invoked controls.
 - [x] **RT-17 — play a stream from a real extension** in the built app (not just test fixtures). Done 5 October: every one of 8 providers has a stream that reaches frames through the app's player code, 4K HDR10 included ([Extensions-Live-Matrix.md](archive/plans/Extensions-Live-Matrix.md)).
 - [ ] **RT-11 — page-resolved links on real JavaScript-heavy sites.** **Partly done:** in the live app run, page resolution was refused once because all slots were busy; it now waits for a free slot, or reports `no_live_call` when nothing is waiting for it. A real site resolving through it has not been confirmed yet.

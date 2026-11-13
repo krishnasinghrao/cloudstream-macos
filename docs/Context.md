@@ -16,7 +16,7 @@ Rather than porting the entire mobile application (which includes phone-centric 
 
 ### 2.1 The Current State of CloudStream
 CloudStream (specifically CloudStream 3 / 4) is one of the most widely adopted open-source Android media streaming applications. Its strength lies entirely in its **decentralized extension ecosystem**:
-* Over 100+ community extensions (e.g., Hexated, English providers, Anime scrapers, IPTV, LibriVox) are constantly maintained by open-source contributors.
+* Over 100+ community extensions (e.g., movie and TV providers, anime scrapers, IPTV, public-domain libraries) are constantly maintained by open-source contributors.
 * When streaming websites change their DOM layouts, anti-bot scripts, or video player hosts, extension authors update their repositories within days.
 * The application itself contains **zero pirated or copyrighted media by default**; it acts strictly as an extensible indexing and playback framework.
 

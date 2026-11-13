@@ -3,8 +3,8 @@ package com.lagradost.cloudstream3.syncproviders
 import com.lagradost.cloudstream3.utils.UiText
 
 /*
- * Android app account-sync ABI (app/src/main/java/.../syncproviders). Extensions
- * such as CineStream bundle providers that read a signed-in user's sync library
+ * Android app account-sync ABI (app/src/main/java/.../syncproviders). Some
+ * extensions bundle providers that read a signed-in user's sync library
  * (Simkl, AniList, …). The macOS engine has no sync-account sign-in, so these
  * types load with the same names and members and behave as "no account signed
  * in": authUser() is null and library reads return nothing. Only the members

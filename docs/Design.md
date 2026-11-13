@@ -20,7 +20,7 @@ Every window, view, component, and interaction strictly adheres to Apple’s **m
 
 ```
 +---------------------------------------------------------------------------------------------------------+
-| [●][●][●]                                                                     [Provider: SuperStream ▾] |
+| [●][●][●]                                                                     [Provider: Sample ▾]      |
 +-------------------+-------------------------------------------------------------------------------------+
 | SIDEBAR (240pt)   | MAIN WORKSPACE CANVAS                                                               |
 |                   |                                                                                     |
@@ -31,7 +31,7 @@ Every window, view, component, and interaction strictly adheres to Apple’s **m
 | 􀐫 Recently Added  |  | ▶ ───●──── 18m left|  | ▶ ───────● 12m left|  | ▶ ──────── 1h 45m  |             |
 | 􀑈 Movies          |  +--------------------+  +--------------------+  +--------------------+             |
 | 􀌖 TV Shows        |                                                                                     |
-| 􀈂 Downloaded      |  Popular on SuperStream >                                                           |
+| 􀈂 Downloaded      |  Popular on Sample >                                                                |
 |                   |  +--------+  +--------+  +--------+  +--------+  +--------+  +--------+             |
 | ----------------- |  | [2:3]  |  | [2:3]  |  | [2:3]  |  | [2:3]  |  | [2:3]  |  | [2:3]  |             |
 | 􀣋 Settings        |  | Title  |  | Title  |  | Title  |  | Title  |  | Title  |  | Title  |             |
@@ -45,7 +45,7 @@ Every window, view, component, and interaction strictly adheres to Apple’s **m
   - Style: `.windowToolbarStyle(.unified)`
   - Titlebar Background: 100% Transparent (`.titlebarAppearsTransparent(true)`).
   - Leading Chrome: Standard macOS traffic lights (Close, Minimize, Zoom) inset `16pt` horizontally and `16pt` vertically.
-  - Trailing Toolbar Accessory: Minimalist glass Provider Switcher dropdown (`[ Provider: SuperStream ▾ ]`).
+  - Trailing Toolbar Accessory: Minimalist glass Provider Switcher dropdown (`[ Provider: Sample ▾ ]`).
 * **Window Background:** Deep obsidian neutral `#111214`.
 
 ---
@@ -86,7 +86,7 @@ Directly mirroring the Apple TV Home experience (Screenshot 2):
 * **Corner Geometry:** `12pt` continuous squircle (`.rect(cornerRadius: 12, style: .continuous)`).
 * **Visual Layers:**
   1. **High-Res Backdrop:** Scraped episode/movie backdrop artwork (`.aspectRatio(16/9, contentMode: .fill)`).
-  2. **Top-Right Provider Tag:** Translucent badge displaying source provider logo or name (e.g., `SuperStream`).
+  2. **Top-Right Provider Tag:** Translucent badge displaying source provider logo or name (e.g., `Sample`).
   3. **Bottom Shading Vignette:** Linear dark gradient (`.clear` to `Color.black.opacity(0.85)`).
   4. **Progress Bar:**
      - Capsule track height: `3pt`.
@@ -160,7 +160,7 @@ When any title is selected, it presents a cinematic full-window view (replacing 
 | [← Back]                                                            [􀈂 Share] [􀉣 Open in Browser]      |
 |                                                                                                         |
 |  Ted Lasso                                                                                              |
-|  2020 • TV-MA • 3 Seasons • 4K • HDR • 8.8/10 IMDb • Comedy, Drama • Provider: SuperStream              |
+|  2020 • TV-MA • 3 Seasons • 4K • HDR • 8.8/10 IMDb • Comedy, Drama • Provider: Sample                   |
 |                                                                                                         |
 |  [ ▶ Play S1, E1 ]   [ 􀈑 In Library ▾ ]   [ 􀈂 Download Season ]   [ 􀍠 Server: Vidplay ▾ ]              |
 |                                                                                                         |

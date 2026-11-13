@@ -30,12 +30,12 @@ class InstallClarityTest {
         fun record(id: Char, name: String, providers: List<String>, enabled: Boolean = true) = DaemonState.InstalledExtension(
             id.toString().repeat(64), "https://r$id.invalid/repo.json", name, "c".repeat(64), "g", "d".repeat(64), 0,
             RepositoryService.SitePlugin(name = name, internalName = name), providerNames = providers, enabled = enabled)
-        val a = record('a', "MovieBox A", listOf("MovieBox", "Other"))
-        val b = record('b', "MovieBox B", listOf("MovieBox"))
+        val a = record('a', "Sample A", listOf("Sample", "Other"))
+        val b = record('b', "Sample B", listOf("Sample"))
         val c = record('c', "Off", listOf("Other"), enabled = false)
         DaemonState.update { it.copy(installations = mapOf(a.id to a, b.id to b, c.id to c)) }
         val shared = RepositoryService.installedPlugin(a.id)!!.sharedProviderNames
-        assertEquals(listOf(com.lagradost.macos.models.SharedProviderNameDto("MovieBox", listOf("MovieBox B"))), shared,
+        assertEquals(listOf(com.lagradost.macos.models.SharedProviderNameDto("Sample", listOf("Sample B"))), shared,
             "disabled extensions are not counted")
     }
 }

@@ -13,7 +13,7 @@ import kotlinx.coroutines.withTimeout
 
 /**
  * RT-14: a provider that runs its own script in a hidden android.webkit.WebView,
- * as StreamPlay's EnmaDecryptor does: page-finished callback, a JavaScript
+ * as real extensions' decryptors do: page-finished callback, a JavaScript
  * interface the page calls, and evaluateJavascript.
  */
 class AndroidWebViewPlugin : Plugin() {

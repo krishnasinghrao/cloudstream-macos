@@ -14,7 +14,7 @@ final class MergedTitlesTests: XCTestCase {
 
     func testStrongMatchesMergeIntoOneTitleAndShowOnce() throws {
         let store = LibraryStore(inMemory: true)
-        let a = details(provider: "MovieBox"), b = details(provider: "CineStream", name: "community (2009)")
+        let a = details(provider: "SourceA"), b = details(provider: "SourceB", name: "community (2009)")
         try store.upsertLibraryEntry(details: a, watchType: .planToWatch)
         try store.upsertLibraryEntry(details: b, watchType: .watching)
 
