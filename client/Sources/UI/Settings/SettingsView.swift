@@ -51,6 +51,7 @@ struct SettingsView: View {
     @State private var cacheClearedAt: Date?
     @State private var cacheBytes: Int64?
     @State private var showProfileManager = false
+    @State private var showDeleteCloudStream = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -93,6 +94,9 @@ struct SettingsView: View {
         // behind the same lock as the main window (ADR-0014).
         .overlay {
             if AppLock.shared.isLocked { LockView() }
+        }
+        .sheet(isPresented: $showDeleteCloudStream) {
+            DeleteCloudStreamView()
         }
         .fileImporter(
             isPresented: $showFolderPicker,
@@ -240,6 +244,17 @@ struct SettingsView: View {
                 }
                 .help("Clears cached posters, artwork and network responses. Downloads and extensions are kept.")
                 .task { cacheBytes = await AppCaches.diskUsageBytes() }
+            }
+
+            Section {
+                LabeledContent("Delete CloudStream") {
+                    Button("Delete CloudStream…", role: .destructive) { showDeleteCloudStream = true }
+                        .disabled(AppLock.shared.isLocked)
+                        .accessibilityIdentifier("Delete CloudStream Settings Button")
+                }
+            } footer: {
+                Text("Removes your library, history, profiles, extensions, settings, caches and logs from this Mac, then moves CloudStream to the Trash. You’re asked to back up first. Downloaded videos are kept unless you choose otherwise.")
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

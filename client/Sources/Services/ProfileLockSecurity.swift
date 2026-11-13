@@ -2,7 +2,7 @@ import Foundation
 import Synchronization
 
 enum ProfileLockSecurity {
-    private static let service = "com.lagradost.cloudstream.locked-profiles"
+    static let service = "com.lagradost.cloudstream.locked-profiles"
     private static let account = "locked-ids"
     private static let isolatedLocked = Mutex<Set<String>>([])
 

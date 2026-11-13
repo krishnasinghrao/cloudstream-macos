@@ -31,7 +31,7 @@ reports are kept for history in [archive/](archive/README.md).
 ## Decisions
 
 Architecture decision records live in [adr/](adr/), numbered in the order they
-were taken (0001 mpv render backend … 0022 live playback). Add a new
+were taken (0001 mpv render backend … 0023 Delete CloudStream). Add a new
 record rather than editing an accepted one.
 
 ## Open work

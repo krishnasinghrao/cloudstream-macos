@@ -7,7 +7,7 @@ import Synchronization
 /// receives them in memory after each start and never writes them to disk.
 enum ProviderCredentialStore {
     private static let isolatedCredentials = Mutex<[String: String]>([:])
-    private static let service = "com.lagradost.cloudstream.provider-credentials"
+    static let service = "com.lagradost.cloudstream.provider-credentials"
     /// Tests only: observes each credential read (audit M8 checks the thread).
     static let readObserver = Mutex<(@Sendable () -> Void)?>(nil)
 
