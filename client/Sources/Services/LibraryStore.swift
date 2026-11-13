@@ -1001,6 +1001,7 @@ final class LibraryStore {
     }
 
     func resumeItem(for details: DetailsDto) throws -> StoredMediaItem? {
+        if PlaybackKind.catalogue(details.type) == .live { return nil }
         let context = context
         guard let context else { throw ImportError.storeUnavailable }
         try persistenceFault?(.queryRead)
@@ -1126,6 +1127,7 @@ final class LibraryStore {
             )
             let items = (try context.fetch(descriptor))
             return items.filter { item in
+                guard PlaybackKind.catalogue(item.mediaType) != .live else { return false }
                 // A merged source's title is resumed through its primary (ADR-0020).
                 guard item.mergedIntoID == nil else { return false }
                 guard item.totalDurationSeconds > 0 else { return true }
@@ -1302,6 +1304,29 @@ final class LibraryStore {
 
     // MARK: - Per-episode history (Offline-Features-Plan Phase 1)
 
+    /// A live channel has a visit, not a resumable movie position. Reuse the
+    /// existing title-backed history identity so portable backups and old
+    /// stores need no new schema or history kind.
+    func recordLiveVisit(details: DetailsDto, owner: ProfileOperationContext) throws {
+        guard owns(owner), PlaybackKind.catalogue(details.type) == .live else { return }
+        try withMutation(shared: false) { context in
+            let item = try ensureItem(for: details, in: context)
+            let now = mutationClock()
+            item.lastUpdated = now
+            item.progressSeconds = 0
+            item.totalDurationSeconds = 0
+            item.lastEpisodeData = nil
+            item.lastSeason = nil
+            item.lastEpisode = nil
+            let row = try movieRow(itemID: item.id, in: context)
+            row.positionSeconds = 0
+            row.durationSeconds = 0
+            row.watched = false
+            row.updatedAt = now
+            try save(context: context)
+        }
+    }
+
     /// Updates a history row. Returns true when its watched flag flipped (a
     /// structural change views must see).
     private func recordHistory(row: EpisodeProgress, position: Double, duration: Double, updatedAt: Date) throws -> Bool {
@@ -1472,8 +1497,11 @@ final class LibraryStore {
     func watchHistory(limit: Int = 500) throws -> [EpisodeProgress] {
         guard let context else { throw ImportError.storeUnavailable }
         try persistenceFault?(.queryRead)
+        let liveIDs = try context.fetch(FetchDescriptor<StoredMediaItem>(predicate: #Predicate {
+            $0.mediaType == "Live" || $0.mediaType == "LiveStream" || $0.mediaType == "live" || $0.mediaType == "livestream"
+        })).map(\.id)
         var descriptor = FetchDescriptor<EpisodeProgress>(
-            predicate: #Predicate { $0.positionSeconds > 0 || $0.watched },
+            predicate: #Predicate { $0.positionSeconds > 0 || $0.watched || liveIDs.contains($0.itemID) },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)],
         )
         descriptor.fetchLimit = limit

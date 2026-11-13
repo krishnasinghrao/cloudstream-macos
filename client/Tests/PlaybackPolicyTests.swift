@@ -3,6 +3,83 @@ import XCTest
 
 /// Offline-Features-Plan Phases 4–5: pure playback policies.
 final class PlaybackPolicyTests: XCTestCase {
+    @MainActor
+    func testTimelineFormattingRejectsUnsafeNativeTimestampsWithoutTruncatingHours() {
+        for value in [Double.nan, .infinity, -.infinity, .greatestFiniteMagnitude, Double(Int.max)] {
+            XCTAssertEqual(PlayerTimelineScrubber.timeString(value), "--:--")
+        }
+        XCTAssertEqual(PlayerTimelineScrubber.timeString(-5), "00:00")
+        XCTAssertEqual(PlayerTimelineScrubber.timeString(11_045), "3:04:05")
+        XCTAssertEqual(PlayerTimelineScrubber.timeString(2_147_483_652 * 3600.0), "2147483652:00:00")
+        XCTAssertNotEqual(PlayerTimelineScrubber.timeString(Double(Int.max).nextDown), "--:--")
+    }
+
+    func testOnlyTheCatalogueMakesATitleLive() {
+        XCTAssertEqual(PlaybackKind.catalogue("Live"), .live)
+        XCTAssertEqual(PlaybackKind.catalogue("LiveStream"), .live)
+        XCTAssertEqual(PlaybackKind.catalogue("live stream"), .live)
+        for type in ["Movie", "TvSeries", "Anime", "Documentary", "Others", "NSFW"] {
+            XCTAssertEqual(PlaybackKind.catalogue(type), .vod, type)
+        }
+        XCTAssertEqual(PlaybackKind.catalogue(""), .unknown)
+    }
+
+    func testLiveSeekTargetsStayInsideWhatIsCached() {
+        let ranges = [PlaybackRange(start: 100, end: 160), PlaybackRange(start: 200, end: 230)]
+        XCTAssertEqual(PlaybackRange.clamped(120, to: ranges), 120)
+        XCTAssertEqual(PlaybackRange.clamped(50, to: ranges), 100)
+        XCTAssertEqual(PlaybackRange.clamped(170, to: ranges), 160, "a gap snaps to its nearer edge")
+        XCTAssertEqual(PlaybackRange.clamped(195, to: ranges), 200)
+        XCTAssertEqual(PlaybackRange.clamped(9_999, to: ranges), 230)
+        XCTAssertNil(PlaybackRange.clamped(120, to: []))
+        XCTAssertNil(PlaybackRange.clamped(.nan, to: ranges))
+        XCTAssertNil(PlaybackRange.clamped(5, to: [PlaybackRange(start: 10, end: 10), PlaybackRange(start: .nan, end: 20)]), "empty and invalid ranges hold nothing")
+    }
+
+    func testOneInterruptionSharesADeadlineLoadsAndASingleRefresh() {
+        var budget = PlaybackRecoveryBudget(duration: .seconds(45), maximumLoads: 3)
+        let start = ContinuousClock.now
+        XCTAssertTrue(budget.takeRefresh(now: start))
+        XCTAssertFalse(budget.takeRefresh(now: start), "one fresh resolution per interruption")
+        XCTAssertTrue(budget.takeLoad(now: start))
+        XCTAssertTrue(budget.takeLoad(now: start.advanced(by: .seconds(10))))
+        XCTAssertTrue(budget.takeLoad(now: start.advanced(by: .seconds(20))))
+        XCTAssertFalse(budget.takeLoad(now: start.advanced(by: .seconds(21))), "the loads are spent")
+        budget.reset()
+        XCTAssertTrue(budget.takeLoad(now: start.advanced(by: .seconds(100))))
+        XCTAssertFalse(budget.takeLoad(now: start.advanced(by: .seconds(146))), "the deadline started with the first attempt")
+        XCTAssertFalse(budget.takeRefresh(now: start.advanced(by: .seconds(146))))
+    }
+
+    func testRecoveryNeedsThirtySecondsOfContinuousProgressAfterAnInterruption() {
+        var health = PlaybackHealthWindow()
+        let now = ContinuousClock.now
+        for second in 0..<20 {
+            XCTAssertFalse(health.recordProgress(now: now.advanced(by: .seconds(second))))
+        }
+        // Pause, buffering and seeking all interrupt this same policy window.
+        health.interrupt()
+        let resumed = now.advanced(by: .seconds(120))
+        for second in 0..<30 {
+            XCTAssertFalse(health.recordProgress(now: resumed.advanced(by: .seconds(second))))
+        }
+        XCTAssertTrue(health.recordProgress(now: resumed.advanced(by: .seconds(30))))
+    }
+
+    func testMissingClockProgressCannotCountAsHealthyPlayback() {
+        var health = PlaybackHealthWindow()
+        let now = ContinuousClock.now
+        for second in 0..<20 {
+            XCTAssertFalse(health.recordProgress(now: now.advanced(by: .seconds(second))))
+        }
+        // A gap in the samples (a frozen clock) starts the window over.
+        let resumed = now.advanced(by: .seconds(60))
+        for second in 0..<30 {
+            XCTAssertFalse(health.recordProgress(now: resumed.advanced(by: .seconds(second))))
+        }
+        XCTAssertTrue(health.recordProgress(now: resumed.advanced(by: .seconds(30))))
+    }
+
     private func link(_ source: String, _ quality: Int) -> StreamLinkDto {
         StreamLinkDto(url: "https://cdn/\(source)/\(quality)", name: source, source: source, quality: quality, type: "video")
     }

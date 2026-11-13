@@ -4,6 +4,31 @@ import XCTest
 /// Per-episode watch history (Offline-Features-Plan Phase 1).
 @MainActor
 final class WatchHistoryTests: XCTestCase {
+    func testLiveVisitKeepsHistoryWithoutResumablePositionOrCompletionAndBacksUp() throws {
+        let store = LibraryStore(inMemory: true)
+        let details = DetailsDto(provider: "live-test", url: "https://fixture/channel", name: "Channel", type: "Live",
+            posterUrl: nil, backgroundPosterUrl: nil, logoUrl: nil, plot: nil, year: nil, durationMinutes: nil,
+            score: nil, tags: [], actors: [], contentRating: nil, comingSoon: false, episodes: [], movieData: "channel")
+        let owner = try store.captureProfileOperation()
+        try store.recordLiveVisit(details: details, owner: owner)
+        let rows = try store.watchHistory()
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.positionSeconds, 0)
+        XCTAssertEqual(rows.first?.durationSeconds, 0)
+        XCTAssertFalse(try XCTUnwrap(rows.first).watched)
+        XCTAssertNil(try store.resumeItem(for: details), "a channel is never resumed at a stored position")
+        XCTAssertTrue(try store.continueWatching.isEmpty, "nor offered in Continue Watching")
+        let snapshot = try store.exportSnapshot()
+        XCTAssertEqual(snapshot.episodes.count, 1)
+        let document = BackupDocument(createdAt: Date(), appVersion: "test", items: snapshot.items,
+            episodes: snapshot.episodes, playback: snapshot.playback, preferences: [:], repositories: [], disabledProviders: [])
+        let decoded = try BackupDocument.decode(try document.encoded())
+        let restored = LibraryStore(inMemory: true)
+        try restored.importSnapshot(.init(items: decoded.items, episodes: decoded.episodes, playback: decoded.playback), mode: .replace)
+        XCTAssertEqual(try restored.watchHistory().count, 1)
+        XCTAssertNil(try restored.resumeItem(for: details))
+    }
+
     private func episode(_ number: Int, season: Int = 1, audio: String? = nil) -> EpisodeDto {
         EpisodeDto(
             data: "ep-\(season)-\(number)-\(audio ?? "x")",

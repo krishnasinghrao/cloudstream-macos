@@ -140,6 +140,7 @@ private struct PlayerStatusOverlay: View {
         switch player.phase {
         case .resolving: "Finding streams"
         case .loading: "Loading"
+        case .recovering: "Reconnecting to the live stream"
         case .ready where player.isBuffering: "Buffering"
         default: nil
         }
@@ -225,6 +226,16 @@ struct PlayerErrorCard: View {
                         player.tryNextMirror()
                     }
                     .keyboardShortcut(.defaultAction)
+                }
+                // The same source again: a dropped connection or an expired
+                // address often works the second time.
+                if player.session != nil {
+                    if player.hasNextMirror {
+                        Button("Retry") { player.retryPlayback() }
+                    } else {
+                        Button("Retry") { player.retryPlayback() }
+                            .keyboardShortcut(.defaultAction)
+                    }
                 }
                 Button(player.session == nil ? "Close" : "Dismiss") {
                     player.dismissError()

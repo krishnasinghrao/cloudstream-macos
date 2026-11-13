@@ -34,6 +34,15 @@ final class PlayerRemediationTests: XCTestCase {
         XCTAssertEqual(max(size.width, size.height), MetalVideoView.maxRenderDimension)
     }
 
+    func testGPURenderSizeReachesFourKInsteadOfTheSoftwareLimit() {
+        // The GPU path used the CPU path's 1920 limit: 2160p was drawn at 1080p and stretched.
+        XCTAssertEqual(MetalVideoView.gpuRenderSize(drawable: CGSize(width: 3840, height: 2160)), CGSize(width: 3840, height: 2160))
+        let fiveK = MetalVideoView.gpuRenderSize(drawable: CGSize(width: 5120, height: 2880))
+        XCTAssertEqual(fiveK.width, MetalVideoView.maxGPURenderDimension)
+        XCTAssertEqual(fiveK.width / fiveK.height, 5120.0 / 2880.0, accuracy: 0.01)
+        XCTAssertEqual(MetalVideoView.gpuRenderSize(drawable: CGSize(width: 1281, height: 721)), CGSize(width: 1282, height: 722), "even dimensions")
+    }
+
     func testRenderSizeWithUnknownVideoFallsBackToDrawableCap() {
         let size = MetalVideoView.renderSize(drawable: CGSize(width: 1000, height: 500), video: .zero)
         XCTAssertEqual(size, CGSize(width: 1000, height: 500))
@@ -152,7 +161,7 @@ final class PlayerRemediationTests: XCTestCase {
     }
 
     func testTimeStringHandlesNonFiniteValues() {
-        XCTAssertEqual(PlayerTimelineScrubber.timeString(.nan), "00:00")
+        XCTAssertEqual(PlayerTimelineScrubber.timeString(.nan), "--:--")
         XCTAssertEqual(PlayerTimelineScrubber.timeString(3725), "1:02:05")
     }
 }

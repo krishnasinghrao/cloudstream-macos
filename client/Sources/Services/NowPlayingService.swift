@@ -128,6 +128,8 @@ final class NowPlayingService {
         rate: Double,
         isPlaying: Bool,
         artworkURL: String?,
+        isLive: Bool = false,
+        canSeek: Bool = true,
     ) {
         // macOS routes media keys and the Now Playing widget by
         // `playbackState`; the info dictionary alone is not enough (N1).
@@ -137,7 +139,13 @@ final class NowPlayingService {
         if let subtitle {
             info[MPMediaItemPropertyArtist] = subtitle
         }
-        info[MPMediaItemPropertyPlaybackDuration] = duration
+        // A live stream has no length; Control Centre then shows "Live"
+        // instead of a scrubber running to the end of a rolling window.
+        info[MPNowPlayingInfoPropertyIsLiveStream] = isLive
+        if !isLive { info[MPMediaItemPropertyPlaybackDuration] = duration }
+        commandCenter.changePlaybackPositionCommand.isEnabled = canSeek
+        commandCenter.skipForwardCommand.isEnabled = canSeek
+        commandCenter.skipBackwardCommand.isEnabled = canSeek
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
         info[MPNowPlayingInfoPropertyPlaybackRate] = rate
         info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.video.rawValue

@@ -492,3 +492,440 @@ final class UnseekableResumeTests: XCTestCase {
         XCTAssertEqual(vm.session?.selectedLinkIndex, 1)
     }
 }
+
+/// Guards found inside the sprint's player work: each one is a way playback
+/// used to advance, switch or count down when it should not have.
+@MainActor
+final class PlayerGuardTests: XCTestCase {
+    private var savedCountdown = 10
+    private var savedContinuous = true
+
+    override func setUp() async throws {
+        savedCountdown = UserPreferences.shared.nextEpisodeCountdown
+        savedContinuous = UserPreferences.shared.continuousPlayback
+        UserPreferences.shared.nextEpisodeCountdown = 10
+        UserPreferences.shared.continuousPlayback = true
+    }
+
+    override func tearDown() async throws {
+        UserPreferences.shared.nextEpisodeCountdown = savedCountdown
+        UserPreferences.shared.continuousPlayback = savedContinuous
+    }
+
+    private func episode(_ n: Int) -> EpisodeDto {
+        EpisodeDto(data: "guard-ep-\(n)", name: "Ep \(n)", season: 1, episode: n, posterUrl: nil, description: nil, score: nil, date: nil, runTimeMinutes: 24, audio: nil)
+    }
+
+    private func series() -> DetailsDto {
+        DetailsDto(provider: "guard-test", url: "u/guard", name: "Guard", type: "TvSeries", posterUrl: nil, backgroundPosterUrl: nil,
+                   logoUrl: nil, plot: nil, year: nil, durationMinutes: nil, score: nil, tags: [], actors: [], contentRating: nil,
+                   comingSoon: false, episodes: [episode(1), episode(2), episode(3)], movieData: nil)
+    }
+
+    private func link(_ name: String, quality: Int = 1080) -> StreamLinkDto {
+        StreamLinkDto(url: "https://cdn/\(name).mp4", name: name, source: "src-\(name)", quality: quality, type: "video")
+    }
+
+    private func settle(_ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !condition(), ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertTrue(condition(), "player fixture did not reach the expected state")
+    }
+
+    func testALateErrorAfterEveryMirrorFailedChangesNothing() {
+        let vm = PlayerViewModel()
+        defer { vm.close() }
+        vm.playResolved(details: series(), episode: episode(1), links: [link("a"), link("b")], persistsProgress: false)
+        vm.handlePlaybackError()
+        XCTAssertEqual(vm.session?.selectedLinkIndex, 1)
+        vm.handlePlaybackError()
+        XCTAssertEqual(vm.phase, .failed)
+        let request = vm.loadRequest?.id
+        // The engine reports the same dead file once more.
+        vm.handlePlaybackError()
+        vm.handlePlaybackRestart()
+        XCTAssertEqual(vm.phase, .failed, "a late report must not bring a failed session back")
+        XCTAssertEqual(vm.loadRequest?.id, request)
+        XCTAssertEqual(vm.session?.selectedLinkIndex, 1)
+    }
+
+    func testRetryLoadsTheSameSourceAgain() {
+        let vm = PlayerViewModel()
+        let fake = FakeTransport()
+        defer { vm.close() }
+        vm.playResolved(details: series(), episode: episode(1), links: [link("a")], persistsProgress: false)
+        vm.videoView = fake
+        vm.handlePlaybackError()
+        XCTAssertEqual(vm.phase, .failed)
+        let failed = vm.loadRequest?.id ?? 0
+        vm.retryPlayback()
+        XCTAssertEqual(vm.phase, .loading)
+        XCTAssertNil(vm.error)
+        XCTAssertEqual(vm.session?.selectedLinkIndex, 0)
+        XCTAssertGreaterThan(vm.loadRequest?.id ?? 0, failed)
+        XCTAssertEqual(fake.playing, true)
+    }
+
+    func testUpNextCountdownDoesNotRunWhileTheVideoIsNotMoving() async throws {
+        let vm = PlayerViewModel()
+        let fake = FakeTransport()
+        defer { vm.close() }
+        vm.playResolved(details: series(), episode: episode(1), links: [link("a")])
+        vm.videoView = fake
+        vm.handlePlaybackRestart()
+        vm.handleProgress(elapsed: 1436, duration: 1440)
+        XCTAssertNotNil(vm.upNext)
+        vm.handleBuffering(true)
+        let frozen = vm.upNextRemaining
+        try await Task.sleep(for: .milliseconds(700))
+        XCTAssertEqual(vm.upNextRemaining, frozen, "a stalled stream must not cut to the next episode")
+        vm.handleBuffering(false)
+        await settle { vm.upNextRemaining < frozen }
+    }
+
+    func testOneEpisodeTransitionAtATimeAndTheLatestPickWins() async {
+        let vm = PlayerViewModel()
+        defer { vm.close() }
+        var resolved: [String] = []
+        vm.linksStream = { _, data in
+            resolved.append(data)
+            return AsyncThrowingStream { _ in } // never answers: the player stays resolving
+        }
+        vm.playResolved(details: series(), episode: episode(1), links: [link("a")], persistsProgress: false)
+        vm.handlePlaybackRestart()
+        // The end of the file, the countdown and a click, all in one moment.
+        vm.playNextEpisode()
+        XCTAssertEqual(vm.phase, .resolving, "claimed before any task ran")
+        vm.playNextEpisode()
+        vm.playEpisode(episode(2))
+        await settle { !resolved.isEmpty }
+        try? await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(resolved, [episode(2).data], "one resolution for three requests")
+        // A different episode picked while that resolves replaces it.
+        vm.playEpisode(episode(3))
+        await settle { resolved.count == 2 }
+        XCTAssertEqual(resolved.last, episode(3).data)
+        XCTAssertTrue(vm.displayTitle.contains("E3"), vm.displayTitle)
+    }
+
+    func testOutgoingFileTicksAreIgnoredWhileTheNextEpisodeResolves() {
+        let vm = PlayerViewModel()
+        defer { vm.close() }
+        vm.linksStream = { _, _ in AsyncThrowingStream { _ in } }
+        vm.playResolved(details: series(), episode: episode(1), links: [link("a")], persistsProgress: false)
+        vm.handlePlaybackRestart()
+        vm.handleProgress(elapsed: 100, duration: 1440)
+        vm.playNextEpisode()
+        vm.handleProgress(elapsed: 1439, duration: 1440)
+        XCTAssertEqual(vm.elapsed, 100, "the old file's clock no longer moves the model")
+        XCTAssertNil(vm.upNext)
+    }
+
+    func testALinkThatArrivesLateJoinsTheUntriedMirrorsInRankOrder() async {
+        let vm = PlayerViewModel()
+        defer { vm.close() }
+        var feed: AsyncThrowingStream<LinksStreamEventDto, Error>.Continuation?
+        vm.linksStream = { _, _ in AsyncThrowingStream { feed = $0 } }
+        let play = Task { await vm.play(details: self.series(), episode: self.episode(1), preferences: .shared) }
+        defer { play.cancel() }
+        await settle { feed != nil }
+        func send(_ link: StreamLinkDto) { feed?.yield(LinksStreamEventDto(type: "link", link: link, subtitle: nil, error: nil)) }
+        send(link("first", quality: 720))
+        await settle { vm.session != nil } // after the grace period
+        send(link("low", quality: 360))
+        send(link("best", quality: 1080))
+        send(link("first", quality: 720)) // the provider repeats one
+        await settle { vm.session?.links.count == 3 }
+        XCTAssertEqual(vm.session?.links.map(\.name), ["first", "best", "low"], "playing source first, then the rest as ranked")
+        XCTAssertEqual(vm.session?.selectedLinkIndex, 0)
+        // Every mirror so far fails while the provider is still answering.
+        vm.handlePlaybackError(); vm.handlePlaybackError(); vm.handlePlaybackError()
+        XCTAssertEqual(vm.phase, .failed)
+        send(link("late", quality: 480))
+        await settle { vm.phase == .loading }
+        XCTAssertEqual(vm.activeLink?.name, "late", "a source that resolves after the error card still gets its turn")
+    }
+
+    func testPreparedNextEpisodeIsUsedInsteadOfResolvingAgain() async {
+        let vm = PlayerViewModel()
+        defer { vm.close() }
+        var resolutions = 0
+        vm.linksStream = { _, _ in resolutions += 1; return AsyncThrowingStream { _ in } }
+        vm.playResolved(details: series(), episode: episode(1), links: [link("a")], persistsProgress: false)
+        vm.handlePlaybackRestart()
+        vm.prepareNextEpisode(data: episode(3).data, links: [link("wrong")])
+        vm.prepareNextEpisode(data: episode(2).data, links: [link("next")],
+                              subtitles: [SubtitleDto(url: "https://cdn/next.vtt", language: "en", label: "English", mimeType: nil)])
+        vm.playNextEpisode()
+        await settle { vm.session?.episode == self.episode(2) }
+        XCTAssertEqual(resolutions, 0, "the prefetch already resolved it")
+        XCTAssertEqual(vm.activeLink?.name, "next")
+        XCTAssertEqual(vm.session?.subtitles.count, 1, "its subtitles come along")
+    }
+
+    func testCredentialedSegmentListGoesThroughTheRelayNotThePlayer() async throws {
+        let segments = ["https://cdn.example/1.ts", "https://cdn.example/2.ts"]
+        let plain = StreamLinkDto(url: segments[0], name: "P", source: "p", quality: 720, type: "video", isPlaylist: true, playlist: segments)
+        XCTAssertNoThrow(try PlayerViewModel.loadPlan(for: plain))
+        let cookied = StreamLinkDto(url: segments[0], name: "P", source: "p", quality: 720, type: "video",
+                                    headers: ["Cookie": "session=1"], isPlaylist: true, playlist: segments)
+        XCTAssertThrowsError(try PlayerViewModel.loadPlan(for: cookied)) { error in
+            XCTAssertEqual(error as? MediaResourcePolicy.Rejection, .credentialedStream)
+        }
+        let vm = PlayerViewModel()
+        defer { vm.close() }
+        var registered: [MediaRelayResourceDto] = []
+        vm.registerRelay = { resources in
+            registered = resources
+            return DaemonClient.MediaRelaySession(sessionID: "relay-1", urls: resources.indices.map { "http://127.0.0.1:9/media/relay/r\($0)" })
+        }
+        vm.revokeRelay = { _ in }
+        vm.playResolved(details: series(), episode: episode(1), links: [cookied], persistsProgress: false)
+        await settle { vm.loadRequest != nil }
+        XCTAssertEqual(registered.map(\.url), segments)
+        XCTAssertTrue(registered.allSatisfy { $0.headers["Cookie"] == "session=1" })
+        XCTAssertEqual(vm.loadRequest?.headers, [:], "the player itself is handed no credentials")
+        XCTAssertTrue(vm.loadRequest?.url.contains("127.0.0.1") == true)
+    }
+}
+
+/// Live channels (ADR-0022): joined at the live position, never resumed,
+/// seeked only inside what is cached, and reconnected within a budget.
+@MainActor
+final class LivePlaybackTests: XCTestCase {
+    private func channel(_ name: String = "Channel") -> DetailsDto {
+        DetailsDto(provider: "live-test", url: "https://fixture/\(name)", name: name, type: "Live", posterUrl: nil,
+                   backgroundPosterUrl: nil, logoUrl: nil, plot: nil, year: nil, durationMinutes: nil, score: nil, tags: [],
+                   actors: [], contentRating: nil, comingSoon: false, episodes: [], movieData: "channel-data")
+    }
+
+    private func link(_ name: String) -> StreamLinkDto {
+        StreamLinkDto(url: "https://live.example/\(name).m3u8", name: name, source: "src-\(name)", quality: 1080, type: "M3U8")
+    }
+
+    private func settle(_ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !condition(), ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertTrue(condition(), "live fixture did not reach the expected state")
+    }
+
+    private func start(links: [StreamLinkDto], resumeAt: Double? = nil) -> (PlayerViewModel, FakeTransport) {
+        let vm = PlayerViewModel()
+        let fake = FakeTransport()
+        vm.recoveryDelay = .milliseconds(1)
+        vm.isOnline = { true }
+        vm.freshLinks = { _, _, _ in throw CancellationError() }
+        vm.inspectManifest = { _ in MediaManifestDto() }
+        vm.playResolved(details: channel(), episode: nil, links: links, resumeAt: resumeAt)
+        vm.videoView = fake
+        return (vm, fake)
+    }
+
+    func testLiveIsJoinedAtTheLivePositionAndLeavesNoResumePoint() throws {
+        let (vm, _) = start(links: [link("a")], resumeAt: 1_800)
+        defer { vm.close() }
+        XCTAssertTrue(vm.isLive)
+        XCTAssertNil(vm.loadRequest?.startAt, "a stored position means nothing on a live stream")
+        XCTAssertEqual(vm.elapsed, 0)
+        vm.handlePlaybackRestart()
+        XCTAssertTrue(vm.isFollowingLive)
+        vm.handleSeekable(false)
+        XCTAssertEqual(vm.session?.selectedLinkIndex, 0, "an unseekable live stream is normal, not a reason to switch")
+        vm.handleProgress(elapsed: 90_000, duration: 60)
+        vm.handleProgress(elapsed: 90_030, duration: 60)
+        XCTAssertNil(vm.upNext)
+        XCTAssertNil(try LibraryStore.shared.resumeItem(for: channel()))
+        let shelf = try LibraryStore.shared.continueWatching
+        XCTAssertFalse(shelf.contains(where: { $0.id == LibraryStore.itemID(for: channel()) }), "a live channel is not offered in Continue Watching")
+    }
+
+    func testATrailerOfALiveTitleIsOrdinaryVideo() {
+        let vm = PlayerViewModel()
+        defer { vm.close() }
+        vm.playResolved(details: channel(), episode: nil, links: [link("t")], resumeAt: nil, persistsProgress: false, label: "Trailer")
+        XCTAssertFalse(vm.isLive)
+    }
+
+    func testLiveSeeksStayInsideTheCachedWindow() {
+        let (vm, fake) = start(links: [link("a")])
+        defer { vm.close() }
+        vm.handlePlaybackRestart()
+        XCTAssertFalse(vm.allowsSeeking, "nothing cached yet: nothing to seek in")
+        vm.seek(to: 10)
+        XCTAssertTrue(fake.seeks.isEmpty)
+        vm.handleSeekableRanges([PlaybackRange(start: 90_000, end: 90_060), PlaybackRange(start: .nan, end: 5)])
+        XCTAssertTrue(vm.allowsSeeking)
+        XCTAssertEqual(vm.seekableRanges, [PlaybackRange(start: 90_000, end: 90_060)])
+        vm.handleProgress(elapsed: 90_050, duration: 60)
+        vm.seek(by: -20)
+        XCTAssertEqual(fake.seeks.last, 90_030, "relative to the stream's own clock, not to its 60-second window")
+        XCTAssertFalse(vm.isFollowingLive)
+        vm.seek(to: 12)
+        XCTAssertEqual(fake.seeks.last, 90_000, "clamped to the oldest cached second")
+        vm.seek(by: 100_000)
+        XCTAssertEqual(fake.seeks.last, 90_060)
+    }
+
+    func testGoLiveReopensTheStream() {
+        let (vm, fake) = start(links: [link("a")])
+        defer { vm.close() }
+        vm.handlePlaybackRestart()
+        vm.handleSeekableRanges([PlaybackRange(start: 100, end: 160)])
+        vm.seek(to: 110)
+        XCTAssertFalse(vm.isFollowingLive)
+        let before = vm.loadRequest?.id ?? 0
+        vm.goLive()
+        XCTAssertGreaterThan(vm.loadRequest?.id ?? 0, before)
+        XCTAssertNil(vm.loadRequest?.startAt)
+        XCTAssertTrue(vm.isFollowingLive)
+        XCTAssertEqual(fake.playing, true)
+    }
+
+    func testAStoppedStreamReconnectsWithFreshLinksFirst() async {
+        let (vm, _) = start(links: [link("stale"), link("mirror")])
+        defer { vm.close() }
+        var requests: [(String, String)] = []
+        vm.freshLinks = { provider, data, budget in
+            requests.append((provider, data))
+            XCTAssertGreaterThan(budget, 0)
+            return LinksResponseDto(provider: provider, links: [self.link("fresh")], subtitles: [])
+        }
+        vm.handlePlaybackRestart()
+        let playing = vm.loadRequest?.id ?? 0
+        vm.handlePlaybackError()
+        XCTAssertEqual(vm.phase, .recovering)
+        XCTAssertNil(vm.error)
+        // The same failure reported twice starts one reconnect, not two.
+        vm.handlePlaybackError()
+        await settle { vm.phase == .loading }
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.1, "channel-data")
+        XCTAssertEqual(vm.activeLink?.name, "fresh", "the usual cause is an expired address")
+        XCTAssertEqual(vm.loadRequest.map { $0.id > playing }, true)
+        XCTAssertNil(vm.loadRequest?.startAt)
+        // Not the fake: by now the window's own video view may have taken its place.
+        XCTAssertTrue(vm.isPlaying)
+    }
+
+    func testReconnectsAreBoundedAndEndInARetryableError() async {
+        let (vm, _) = start(links: [link("a"), link("b")])
+        defer { vm.close() }
+        var refreshes = 0
+        vm.freshLinks = { _, _, _ in refreshes += 1; throw URLError(.timedOut) }
+        vm.handlePlaybackRestart()
+        var tried: [String] = []
+        for _ in 0..<vm.recoveryBudget.maximumLoads {
+            vm.handlePlaybackError()
+            XCTAssertEqual(vm.phase, .recovering)
+            await settle { vm.phase == .loading }
+            tried.append(vm.activeLink?.name ?? "")
+        }
+        XCTAssertEqual(tried, ["a", "b", "b"], "the same source once more, then the other mirror")
+        XCTAssertEqual(refreshes, 1, "one fresh resolution per interruption")
+        // A first frame does not refill the budget: this stream keeps dying.
+        vm.handlePlaybackRestart()
+        vm.handlePlaybackError()
+        XCTAssertEqual(vm.phase, .failed)
+        XCTAssertEqual(vm.error?.contains("keeps stopping"), true)
+        // The user's Retry is a new interruption with a full budget.
+        vm.retryPlayback()
+        XCTAssertEqual(vm.phase, .recovering)
+        await settle { vm.phase == .loading }
+        XCTAssertEqual(refreshes, 2)
+    }
+
+    func testAStalledLiveStreamReconnectsInsteadOfWalkingTheMirrors() async {
+        let (vm, _) = start(links: [link("a"), link("b")])
+        defer { vm.close() }
+        vm.stallPolicy = .init(minimum: .zero, long: .seconds(60), count: 1, window: .seconds(60))
+        vm.handlePlaybackRestart()
+        vm.handleBuffering(true); vm.handleBuffering(false)
+        XCTAssertEqual(vm.phase, .recovering)
+        await settle { vm.phase == .loading }
+        XCTAssertEqual(vm.activeLink?.name, "a")
+    }
+
+    func testAPausedStreamIsReconnectedOnlyWhenPlayedAgain() async {
+        let (vm, _) = start(links: [link("a")])
+        defer { vm.close() }
+        vm.handlePlaybackRestart()
+        vm.setPlaying(false)
+        let paused = vm.loadRequest?.id
+        vm.handlePlaybackError()
+        try? await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(vm.loadRequest?.id, paused, "nothing reconnects behind a pause")
+        XCTAssertNotEqual(vm.phase, .recovering)
+        vm.setPlaying(true)
+        XCTAssertEqual(vm.phase, .recovering)
+        await settle { vm.phase == .loading }
+        XCTAssertNotEqual(vm.loadRequest?.id, paused)
+    }
+
+    func testPausingDuringAReconnectStopsItAndClosingCancelsIt() async {
+        let (vm, _) = start(links: [link("a")])
+        vm.recoveryDelay = .milliseconds(150)
+        vm.handlePlaybackRestart()
+        let before = vm.loadRequest?.id
+        vm.handlePlaybackError()
+        XCTAssertEqual(vm.phase, .recovering)
+        vm.setPlaying(false)
+        XCTAssertEqual(vm.phase, .ready)
+        try? await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(vm.loadRequest?.id, before)
+        vm.setPlaying(true)
+        XCTAssertEqual(vm.phase, .recovering)
+        vm.close()
+        try? await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(vm.phase, .idle)
+        XCTAssertNil(vm.loadRequest, "a reconnect never outlives its session")
+    }
+
+    func testTheEndOfABroadcastClosesAndAnythingElseReconnects() async {
+        let (ended, _) = start(links: [link("a")])
+        var asked: [MediaRelayResourceDto] = []
+        ended.inspectManifest = { resource in asked.append(resource); return MediaManifestDto(kind: "hls", ended: true) }
+        ended.handlePlaybackRestart()
+        ended.handleEndOfFile()
+        await settle { ended.session == nil }
+        XCTAssertEqual(asked.map(\.url), [link("a").url])
+
+        let (cut, _) = start(links: [link("a")])
+        defer { cut.close() }
+        cut.inspectManifest = { _ in MediaManifestDto(kind: "hls", ended: false, dynamic: true) }
+        cut.handlePlaybackRestart()
+        let before = cut.loadRequest?.id
+        cut.handleEndOfFile()
+        await settle { cut.phase == .loading && cut.loadRequest?.id != before }
+        XCTAssertNotNil(cut.session, "a live playlist that simply stopped is an interruption")
+
+        let (unknown, _) = start(links: [link("a")])
+        defer { unknown.close() }
+        unknown.inspectManifest = { _ in throw URLError(.cannotConnectToHost) }
+        unknown.handlePlaybackRestart()
+        unknown.handleEndOfFile()
+        await settle { unknown.phase == .loading }
+        XCTAssertNotNil(unknown.session, "no answer is not evidence that the broadcast ended")
+    }
+
+    func testSustainedPlaybackRefillsTheBudget() async {
+        let (vm, _) = start(links: [link("a")])
+        defer { vm.close() }
+        vm.handlePlaybackRestart()
+        vm.handlePlaybackError()
+        await settle { vm.phase == .loading }
+        XCTAssertEqual(vm.recoveryBudget.loads, 1)
+        vm.handlePlaybackRestart()
+        vm.handleProgress(elapsed: 10, duration: 0)
+        XCTAssertEqual(vm.recoveryBudget.loads, 1, "a moment of playback proves nothing")
+        vm.recoveryBudget.reset()
+        XCTAssertNil(vm.recoveryBudget.deadline)
+    }
+
+    func testAManifestSampleWithMissingFieldsStillDecodes() throws {
+        let sample = try JSONDecoder().decode(MediaManifestDto.self, from: Data(#"{"kind":"hls","ended":true}"#.utf8))
+        XCTAssertTrue(sample.ended)
+        XCTAssertFalse(sample.event)
+        XCTAssertNil(sample.sequence)
+        XCTAssertFalse(try JSONDecoder().decode(MediaManifestDto.self, from: Data("{}".utf8)).ended)
+    }
+}

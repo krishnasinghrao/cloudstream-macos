@@ -149,6 +149,11 @@ final class MetalVideoView: NSView {
     /// Upper bound for the CPU-rendered frame's longest side. The GPU scales
     /// the result to the Retina drawable.
     nonisolated static let maxRenderDimension: CGFloat = 1920
+    /// Upper bound for a GPU-rendered frame's longest side: 4K. The CPU limit
+    /// above used to apply here too, so a 2160p stream on a 4K or 5K display
+    /// was rendered at 1080p and stretched. Larger drawables are scaled from
+    /// this by Metal, which loses nothing for sources up to 4K.
+    nonisolated static let maxGPURenderDimension: CGFloat = 4096
 
     /// External subtitles attached per file (mpv handles more, but each is a
     /// network fetch at load time).
@@ -193,6 +198,12 @@ final class MetalVideoView: NSView {
 
     private func handleCommandReply(userdata: UInt64, error: String?) {
         let kind = MpvCommandReply.Kind(rawValue: userdata & 0xff) ?? .other
+        if kind == .load {
+            // mpv refused the load itself: nothing will ever start, so this
+            // is a failed mirror now rather than after the load deadline.
+            if error != nil { onPlaybackFailed?() }
+            return
+        }
         let url = kind == .screenshot ? pendingScreenshots.removeValue(forKey: userdata) : nil
         // Untagged commands only matter when they fail.
         guard kind != .other || error != nil else { return }
@@ -314,6 +325,10 @@ final class MetalVideoView: NSView {
         // `always`: never advance into a queued next episode by itself
         // (queueNext); the player decides when the next episode starts.
         setOption(mpv, "keep-open", "always")
+        // Hold the last frame without pausing. A pause mpv sets at the end of
+        // a file can land after the play command for the next episode and
+        // leave that episode paused.
+        setOption(mpv, "keep-open-pause", "no")
         // Opens a queued next entry once the current file is fully read.
         setOption(mpv, "prefetch-playlist", "yes")
         setOption(mpv, "input-cursor", "no")
@@ -353,8 +368,11 @@ final class MetalVideoView: NSView {
         // Native macOS audio output: AVFoundation (AVSampleBufferAudioRenderer) with CoreAudio fallback.
         setOption(mpv, "ao", "avfoundation,coreaudio")
         setOption(mpv, "audio-client-name", "CloudStream")
-        setOption(mpv, "volume", "100")
-        setOption(mpv, "mute", "no")
+        // The session's own volume and mute from the first sample on: a core
+        // that starts at 100, unmuted, plays at that level until the async
+        // writes that follow the load are applied.
+        setOption(mpv, "volume", String(initialVolume))
+        setOption(mpv, "mute", initialMuted ? "yes" : "no")
 
         // Benchmarks/tests only: override or add options (empty in production).
         for (name, value) in Self.optionOverridesForTesting {
@@ -463,7 +481,7 @@ final class MetalVideoView: NSView {
         if let decryption, !MediaResourcePolicy.isHexKey(decryption.key) || !(decryption.kid.map(MediaResourcePolicy.isHexKey) ?? true) {
             onPlaybackFailed?(); return
         }
-        guard let mpv = mpvHandle else { return }
+        guard mpvHandle != nil, let core else { return }
         pendingAudioTracks = audioTracks
         pendingSubtitles = subtitles
         addedSubtitleURLs = []
@@ -471,20 +489,23 @@ final class MetalVideoView: NSView {
         eofReported = false
         lastForwardedTimePos = -1
         currentElapsed = max(0, startAt ?? 0)
+        currentDuration = 0
 
         let split = Self.splitHeaders(headers)
-        // Credential headers never get here: such streams play through the
-        // engine relay (security audit M2). The rest go both to mpv's own HTTP
-        // stream and, per file below, to FFmpeg's demuxer (Remediation 3.3).
-        Self.setStringListAsync(mpv, "http-header-fields", split.fields)
-        Self.setStringAsync(mpv, "user-agent", split.userAgent ?? defaultUserAgent ?? "")
-        // A preload is capped (queueNext); the playing file gets the full buffer.
-        Self.setStringAsync(mpv, "demuxer-max-bytes", Self.playbackBufferBytes)
+        let userAgent = split.userAgent ?? defaultUserAgent ?? ""
+        // Only the entry that was actually queued, and only while it still is.
+        let switchesToQueued = usesQueuedNext && queuedNextURL == resource.url
+        queuedNextURL = nil
+        let loadTag = nextCommandTag(.load)
 
-        if usesQueuedNext {
+        if switchesToQueued {
             // The queued entry was opened (and buffered) ahead of time with
             // these same headers; switching to it keeps that work.
-            Self.commandAsync(mpv, ["playlist-next", "force"])
+            core.enqueueLoad { mpv in
+                Self.setStringListAsync(mpv, "http-header-fields", split.fields)
+                Self.setStringAsync(mpv, "user-agent", userAgent)
+                Self.commandAsync(mpv, ["playlist-next", "force"], tag: loadTag)
+            }
             requestRedraw()
             return
         }
@@ -508,8 +529,40 @@ final class MetalVideoView: NSView {
             fileOptions.append(Self.lengthPrefixed("demuxer-lavf-o", demuxer))
         }
         if !fileOptions.isEmpty { args += ["-1", fileOptions.joined(separator: ",")] }
-        Self.commandAsync(mpv, args)
+        let loadArgs = args
+        // Credential headers never get here: such streams play through the
+        // engine relay (security audit M2). The rest go both to mpv's own HTTP
+        // stream and, per file above, to FFmpeg's demuxer (Remediation 3.3).
+        // Submitted together on the event queue, behind the outgoing file's
+        // remaining events (MpvCore.enqueueLoad).
+        core.enqueueLoad { mpv in
+            Self.setStringListAsync(mpv, "http-header-fields", split.fields)
+            Self.setStringAsync(mpv, "user-agent", userAgent)
+            // A preload has its own cap (queueNext); the playing file gets the full buffer.
+            Self.setStringAsync(mpv, "demuxer-max-bytes", Self.playbackBufferBytes)
+            Self.commandAsync(mpv, loadArgs, tag: loadTag)
+        }
         requestRedraw()
+    }
+
+    /// The model has committed to another file but its load is not submitted
+    /// yet (a relay is registering, SwiftUI has not updated the view). The
+    /// outgoing file's events are dropped from here on, so its late error
+    /// cannot be taken for the new file's and skip a mirror.
+    func suspendFileEvents() {
+        core?.sink.beginLoad()
+    }
+
+    /// What `queueNext` appended, until it is used or dropped.
+    private var queuedNextURL: String?
+
+    private var initialVolume: Double = 100
+    private var initialMuted = false
+
+    /// The volume and mute a new engine starts with. Call before `setup`.
+    func configureInitialAudio(volume: Double, muted: Bool) {
+        initialVolume = volume.isFinite ? max(0, min(100, volume)) : 100
+        initialMuted = muted
     }
 
     /// The full forward buffer of the playing file, and the cap for a preload.
@@ -517,19 +570,22 @@ final class MetalVideoView: NSView {
     nonisolated static let preloadBufferBytes = "32MiB"
 
     /// Section 7 preload: appends the next episode so mpv opens it and buffers
-    /// its first seconds once the current file is fully read. The buffer cap
-    /// drops to `preloadBufferBytes` meanwhile (the current file is nearly
-    /// done); `loadStream` restores it. Headers are the current file's, so
-    /// callers queue only a link with the same headers.
+    /// its first seconds once the current file is fully read. Only the
+    /// appended entry gets `preloadBufferBytes`, as a file-local option: the
+    /// playing file keeps its full buffer for its last minute (lowering the
+    /// global value left a high-bitrate stream a few seconds of protection).
+    /// Headers are the current file's, so callers queue only a link with the
+    /// same headers.
     func queueNext(url: String) {
         guard let mpv = mpvHandle else { return }
+        queuedNextURL = url
         Self.commandAsync(mpv, ["playlist-clear"])
-        Self.setStringAsync(mpv, "demuxer-max-bytes", Self.preloadBufferBytes)
-        Self.commandAsync(mpv, ["loadfile", url, "append"])
+        Self.commandAsync(mpv, ["loadfile", url, "append", "-1", "demuxer-max-bytes=" + Self.preloadBufferBytes])
     }
 
     /// Drops a queued next episode (seek back, a different episode, close).
     func cancelQueuedNext() {
+        queuedNextURL = nil
         guard let mpv = mpvHandle else { return }
         Self.commandAsync(mpv, ["playlist-clear"])
         Self.setStringAsync(mpv, "demuxer-max-bytes", Self.playbackBufferBytes)
@@ -550,6 +606,9 @@ final class MetalVideoView: NSView {
     private func handleFileLoaded() {
         guard let mpv = mpvHandle else { return }
         fileLoaded = true
+        // A preloaded entry carried its own small cap as a file-local option;
+        // now that it is the playing file it gets the full buffer.
+        Self.setStringAsync(mpv, "demuxer-max-bytes", Self.playbackBufferBytes)
 
         // 1. External audio stream(s) (e.g. YouTube DASH / split streams).
         //    Headers are the global per-load `http-header-fields` (the daemon
@@ -777,6 +836,7 @@ final class MetalVideoView: NSView {
             ("dheight", MPV_FORMAT_INT64),
             ("eof-reached", MPV_FORMAT_FLAG),
             ("seekable", MPV_FORMAT_FLAG),
+            ("demuxer-cache-state", MPV_FORMAT_NODE),
             ("track-list", MPV_FORMAT_NODE),
             ("chapter-list", MPV_FORMAT_NODE),
         ]
@@ -998,6 +1058,8 @@ final class MetalVideoView: NSView {
         let buffers = renderBuffers
         let drawableSize = lastDrawableSize
         let video = videoSize
+        // Read with the rest of the renderer state: teardown clears it under this lock.
+        let gl = glContext
         let occluded = isOccluded
         let force = forceRedraw
         let updated = updatedFrame
@@ -1008,7 +1070,6 @@ final class MetalVideoView: NSView {
 
         guard !tornDown, let ctx, let queue, let pipeline, let layer, let buffers else { return }
         // mpv's GL renderer may touch the context even when skipping a frame.
-        let gl = glContext
         if let gl { cs_gl_make_current(gl) }
 
         // R3: only render when mpv has a new frame (or the surface changed).
@@ -1162,10 +1223,10 @@ final class MetalVideoView: NSView {
         inFlightFrames.signal()
     }
 
-    /// The GPU path's frame size: the drawable's, capped at `maxRenderDimension`.
+    /// The GPU path's frame size: the drawable's, capped at `maxGPURenderDimension`.
     nonisolated static func gpuRenderSize(drawable: CGSize) -> CGSize {
         let width = max(2, drawable.width), height = max(2, drawable.height)
-        let scale = min(1, maxRenderDimension / max(width, height))
+        let scale = min(1, maxGPURenderDimension / max(width, height))
         func even(_ value: CGFloat) -> CGFloat { max(2, (value / 2).rounded() * 2) }
         return CGSize(width: even(width * scale), height: even(height * scale))
     }
@@ -1342,7 +1403,7 @@ final class MetalVideoView: NSView {
     }
 
     func setVolume(_ volume: Double) {
-        guard let mpv = mpvHandle else { return }
+        guard volume.isFinite, let mpv = mpvHandle else { return }
         Self.setDoubleAsync(mpv, "volume", max(0, min(100, volume)))
     }
 
@@ -1420,16 +1481,24 @@ final class MetalVideoView: NSView {
         Self.setDoubleAsync(mpv, "panscan", fills ? 1 : 0)
     }
 
-    /// ffmpeg HTTP protocol options for network streams (see setup).
-    nonisolated static let httpStreamOptions = [
-        remoteProtocolOptions,
-        "request_size=4194304",
-        "multiple_requests=1",
+    /// Bounded transport retries for the stream's own connection: a dropped
+    /// connection or a transient 429/5xx is retried a few times, for a few
+    /// seconds in all, instead of ending the stream at once. The end of a
+    /// file is never retried. (Segments fetched by the HLS/DASH demuxers have
+    /// FFmpeg's own retry rules; these options do not reach them.)
+    nonisolated static let networkRetryOptions = [
         "reconnect=1",
         "reconnect_streamed=1",
         "reconnect_on_network_error=1",
+        lengthPrefixed("reconnect_on_http_error", "429,500,502,503,504"),
         "reconnect_delay_max=4",
-    ].joined(separator: ",")
+        "reconnect_max_retries=3",
+        "reconnect_delay_total_max=8",
+    ]
+
+    /// ffmpeg HTTP protocol options for network streams (see setup).
+    nonisolated static let httpStreamOptions = ([remoteProtocolOptions, "request_size=4194304", "multiple_requests=1"]
+        + networkRetryOptions).joined(separator: ",")
 
     nonisolated static let remoteProtocolOptions = "protocol_whitelist=%\(DownloadPolicy.ffmpegProtocolWhitelist.utf8.count)%\(DownloadPolicy.ffmpegProtocolWhitelist)"
 

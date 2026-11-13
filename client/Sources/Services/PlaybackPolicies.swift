@@ -1,5 +1,88 @@
 import Foundation
 
+// MARK: - Live playback (ADR-0022)
+
+/// What the catalogue says a title is. Deliberately not derived from the
+/// stream: a rolling broadcast can report a positive duration and cached
+/// seek ranges, and a finite video can be served as a growing playlist.
+enum PlaybackKind: String, Equatable, Sendable {
+    case unknown, vod, live
+
+    static func catalogue(_ type: String) -> Self {
+        let key = type.lowercased().replacingOccurrences(of: " ", with: "")
+        if key == "live" || key == "livestream" { return .live }
+        return key.isEmpty ? .unknown : .vod
+    }
+}
+
+/// A stretch of a stream that can be seeked, in the file's own time.
+struct PlaybackRange: Equatable, Sendable {
+    let start: Double
+    let end: Double
+
+    /// `target` if a range holds it, else the nearest edge of any range;
+    /// nil when there is nothing to seek in.
+    static func clamped(_ target: Double, to ranges: [Self]) -> Double? {
+        guard target.isFinite else { return nil }
+        let valid = ranges.filter { $0.start.isFinite && $0.end.isFinite && $0.end > $0.start }
+        if valid.contains(where: { $0.start...$0.end ~= target }) { return target }
+        return valid.flatMap { [$0.start, $0.end] }.min { abs($0 - target) < abs($1 - target) }
+    }
+}
+
+/// One interruption of a live stream shares a deadline, a number of loads
+/// and one fresh link resolution. A first frame does not refill it: only
+/// `PlaybackHealthWindow` reporting sustained playback does (`reset`).
+struct PlaybackRecoveryBudget {
+    var duration: Duration = .seconds(45)
+    var maximumLoads = 3
+    private(set) var deadline: ContinuousClock.Instant?
+    private(set) var loads = 0
+    private(set) var refreshed = false
+
+    mutating func begin(now: ContinuousClock.Instant = .now) {
+        if deadline == nil { deadline = now.advanced(by: duration) }
+    }
+
+    mutating func takeLoad(now: ContinuousClock.Instant = .now) -> Bool {
+        begin(now: now)
+        guard let deadline, now < deadline, loads < maximumLoads else { return false }
+        loads += 1
+        return true
+    }
+
+    mutating func takeRefresh(now: ContinuousClock.Instant = .now) -> Bool {
+        begin(now: now)
+        guard let deadline, now < deadline, !refreshed else { return false }
+        refreshed = true
+        return true
+    }
+
+    mutating func reset() { deadline = nil; loads = 0; refreshed = false }
+}
+
+/// Clock samples arrive a few times a second. Playback counts as healthy
+/// again after `required` of uninterrupted advancing samples; a pause,
+/// buffering, a seek, a backward step or a gap starts the window over.
+struct PlaybackHealthWindow {
+    var required: Duration = .seconds(30)
+    var maximumGap: Duration = .seconds(2)
+    private var startedAt: ContinuousClock.Instant?
+    private var lastProgressAt: ContinuousClock.Instant?
+
+    mutating func interrupt() { startedAt = nil; lastProgressAt = nil }
+
+    /// True once, when the window completes.
+    mutating func recordProgress(now: ContinuousClock.Instant = .now) -> Bool {
+        if let last = lastProgressAt, now < last || now - last > maximumGap { interrupt() }
+        if startedAt == nil { startedAt = now }
+        lastProgressAt = now
+        guard let startedAt, now - startedAt >= required else { return false }
+        interrupt()
+        return true
+    }
+}
+
 // Pure playback policies (Offline-Features-Plan Phase 4). No UI, no engine,
 // no persistence — everything here is deterministic and unit-tested.
 

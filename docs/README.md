@@ -25,12 +25,13 @@ reports are kept for history in [archive/](archive/README.md).
 | [repository-signing](repository-signing.md) | `cloudstream-json-v1` signing profile |
 | [repository-transport](repository-transport.md) | How repositories are fetched and ingested |
 | [help/extensions](help/extensions.md) | User-facing extension help |
+| [help/live-playback](help/live-playback.md) | User-facing help for live channels |
 | [qa-ui-checklist](qa-ui-checklist.md) | Manual regression pass before a release |
 
 ## Decisions
 
 Architecture decision records live in [adr/](adr/), numbered in the order they
-were taken (0001 mpv render backend … 0021 library pages). Add a new
+were taken (0001 mpv render backend … 0022 live playback). Add a new
 record rather than editing an accepted one.
 
 ## Open work

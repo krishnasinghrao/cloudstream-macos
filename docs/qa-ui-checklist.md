@@ -25,6 +25,13 @@ U-75). Run before each release cut and after any player/settings change.
 - [ ] Subtitle color Yellow/Cyan/Green render visibly and correctly.
 - [ ] No PiP button in the HUD.
 - [ ] Continuous Playback OFF (Settings ▸ Playback): episode end closes the player. ON: next episode auto-starts.
+- [ ] Up Next: let the stream buffer during the countdown (throttle the network): the countdown waits, and the next episode starts only after this one's video has run out.
+- [ ] 4K source on a 4K or 5K display: Show Stream Info reports the source size and fine detail and subtitle edges are sharp, not a stretched 1080p picture.
+- [ ] Live channel: opens at the live position (no resume), shows **Live**, has no remaining time; Now Playing in Control Centre shows Live.
+- [ ] Live seeking: ←/→ and the scrubber move only inside the drawn (downloaded) part; pausing or seeking shows **Replay** and **Go Live**, which returns to the broadcast.
+- [ ] Live reconnect: cut the network for a few seconds, then for a minute. The first reconnects by itself; the second ends in an error with **Retry**. Pausing during a reconnect stops it; play resumes it.
+- [ ] Live history: the channel is in History with no percentage and not in Continue Watching.
+- [ ] Error card: **Retry** loads the same source again; **Try Next Mirror** appears only when another source exists.
 
 ## Library & Home
 

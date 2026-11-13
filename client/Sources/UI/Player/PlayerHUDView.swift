@@ -143,12 +143,14 @@ struct PlayerHUDView: View {
             transportButton(Self.seekSymbol("gobackward", step), size: 18, label: "Rewind \(step) Seconds", help: "Rewind \(step) seconds (←)") {
                 player.seek(by: -player.preferences.seekStepSeconds)
             }
+            .disabled(!player.allowsSeeking)
 
             playPauseButton
 
             transportButton(Self.seekSymbol("goforward", step), size: 18, label: "Forward \(step) Seconds", help: "Forward \(step) seconds (→)") {
                 player.seek(by: player.preferences.seekStepSeconds)
             }
+            .disabled(!player.allowsSeeking)
 
             if session.details.isSeries {
                 transportButton("forward.end.fill", size: 13, label: "Next Episode", help: "Next Episode (N)") {
@@ -537,26 +539,73 @@ struct PlayerMirrorPicker: View {
 struct ClockedTimelineScrubber: View {
     let clock: PlaybackClock
     let player: PlayerViewModel
+    @State private var scrubWindow: PlaybackRange?
 
     var body: some View {
-        PlayerTimelineScrubber(
-            elapsed: clock.elapsed,
-            duration: clock.duration,
-            previews: player.preferences.showScrubPreviews ? player.scrubPreviews : nil,
-            onScrubStart: {
-                player.isInteractingWithHUD = true
-            },
-            onScrubEnd: { targetSeconds in
-                player.seek(to: targetSeconds)
+        VStack(spacing: 8) {
+            if player.isLive {
+                HStack {
+                    Label("Live", systemImage: "dot.radiowaves.left.and.right")
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                    // Only when behind: at the live position it would just
+                    // reopen the stream.
+                    if !player.isFollowingLive {
+                        Button("Go Live") { player.goLive() }
+                            .buttonStyle(.plain)
+                            .font(.caption.weight(.semibold))
+                            .help("Return to the live broadcast")
+                    }
+                }
+            }
+            if !player.isLive || !player.seekableRanges.isEmpty {
+                // Freeze the coordinate system during a drag. A playlist/cache
+                // update must not move the target beneath the user's pointer.
+                let lower = scrubWindow?.start ?? (player.isLive ? player.seekableRanges.map(\.start).min() ?? 0 : 0)
+                let upper = scrubWindow?.end ?? (player.isLive ? player.seekableRanges.map(\.end).max() ?? lower : clock.duration)
+                PlayerTimelineScrubber(
+                    elapsed: max(0, clock.elapsed - lower),
+                    duration: max(0, upper - lower),
+                    seekableRanges: player.isLive ? player.seekableRanges.map { PlaybackRange(start: $0.start - lower, end: $0.end - lower) } : nil,
+                    mode: player.isLive ? (player.isFollowingLive ? .live : .replay) : .onDemand,
+                    previews: !player.isLive && player.preferences.showScrubPreviews ? player.scrubPreviews : nil,
+                    onScrubStart: {
+                        scrubWindow = PlaybackRange(start: lower, end: upper)
+                        player.isInteractingWithHUD = true
+                    },
+                    onScrubEnd: { target in
+                        if player.isLive, upper > lower, target >= upper - lower - 1 {
+                            // The right-hand end is the live position, not
+                            // the last cached second.
+                            if !player.isFollowingLive { player.goLive() }
+                        } else {
+                            player.seek(to: target + lower)
+                        }
+                        scrubWindow = nil
+                        player.isInteractingWithHUD = false
+                    }
+                )
+                .allowsHitTesting(player.allowsSeeking)
+            }
+        }
+        .onDisappear {
+            if scrubWindow != nil { player.isInteractingWithHUD = false }
+        }
+        .onChange(of: player.allowsSeeking) { _, allowed in
+            if !allowed, scrubWindow != nil {
+                scrubWindow = nil
                 player.isInteractingWithHUD = false
-            },
-        )
+            }
+        }
     }
 }
 
 struct PlayerTimelineScrubber: View {
+    enum Mode { case onDemand, live, replay }
     let elapsed: Double
     let duration: Double
+    var seekableRanges: [PlaybackRange]? = nil
+    var mode: Mode = .onDemand
     /// Timeline thumbnails; nil shows the time alone.
     var previews: ScrubPreviewStore? = nil
     var onScrubStart: () -> Void
@@ -584,13 +633,14 @@ struct PlayerTimelineScrubber: View {
     private var isDurationKnown: Bool { duration > 0 && duration.isFinite }
 
     private var progressFraction: Double {
+        if mode == .live, !isDragging { return 1 }
         guard isDurationKnown else { return 0 }
         return max(0, min(1, currentPosition / duration))
     }
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(Self.timeString(currentPosition))
+            Text(mode == .live && !isDragging ? "" : Self.timeString(currentPosition))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(minWidth: 48, alignment: .leading)
@@ -598,15 +648,34 @@ struct PlayerTimelineScrubber: View {
             GeometryReader { geometry in
                 let width = max(1, geometry.size.width)
                 let trackHeight: CGFloat = (isHovering || isDragging) ? 5 : 3.5
+                let timelineDuration = isDurationKnown ? duration : 1
 
                 ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.2))
-                        .frame(height: trackHeight)
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.2))
+                            .frame(height: trackHeight)
 
-                    Capsule()
-                        .fill(Color.white)
-                        .frame(width: max(0, width * progressFraction), height: trackHeight)
+                        Capsule()
+                            .fill(Color.white)
+                            .frame(width: max(0, width * progressFraction), height: trackHeight)
+                    }
+                    .mask {
+                        if let seekableRanges {
+                            ZStack(alignment: .leading) {
+                                ForEach(Array(seekableRanges.enumerated()), id: \.offset) { _, range in
+                                    let start = max(0, min(1, range.start / timelineDuration))
+                                    let end = max(start, min(1, range.end / timelineDuration))
+                                    Rectangle()
+                                        .frame(width: width * (end - start), height: trackHeight)
+                                        .offset(x: width * start)
+                                }
+                            }
+                            .frame(width: width, height: trackHeight, alignment: .leading)
+                        } else {
+                            Rectangle()
+                        }
+                    }
 
                     Circle()
                         .fill(Color.white)
@@ -679,24 +748,30 @@ struct PlayerTimelineScrubber: View {
             .accessibilityElement()
             .accessibilityLabel("Playback position")
             .accessibilityValue(
-                isDurationKnown
+                mode == .live && !isDragging ? "Following live broadcast" : isDurationKnown
                     ? Self.timeString(currentPosition) + " of " + Self.timeString(duration)
                     : Self.timeString(currentPosition)
             )
             .accessibilityAdjustableAction { direction in
+                guard isDurationKnown else { return }
+                let target: Double
                 switch direction {
                 case .increment:
-                    guard isDurationKnown else { return }
-                    onScrubEnd(min(duration, currentPosition + 10))
+                    target = mode == .live ? duration : min(duration, currentPosition + 10)
                 case .decrement:
-                    guard isDurationKnown else { return }
-                    onScrubEnd(max(0, currentPosition - 10))
+                    // Match keyboard/media rewind: ten seconds of the actual
+                    // playing clock, never forward from a read-ahead boundary.
+                    target = max(0, currentPosition - 10)
                 @unknown default:
-                    break
+                    return
                 }
+                onScrubStart()
+                onScrubEnd(target)
             }
 
-            Text(isDurationKnown ? "-\(Self.timeString(max(0, duration - currentPosition)))" : "--:--")
+            Text(mode == .onDemand
+                 ? (isDurationKnown ? "-\(Self.timeString(max(0, duration - currentPosition)))" : "--:--")
+                 : (mode == .live && !isDragging ? "Live" : "Replay"))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(Color.white.opacity(0.6))
                 .frame(minWidth: 52, alignment: .trailing)
@@ -704,12 +779,15 @@ struct PlayerTimelineScrubber: View {
     }
 
     static func timeString(_ seconds: Double) -> String {
-        let total = Int(max(0, seconds.isFinite ? seconds : 0))
+        // Double(Int.max) rounds up to 2^63 on this platform and cannot be
+        // converted to Int. Native timestamps are not trusted integer inputs.
+        guard seconds.isFinite, seconds < Double(Int.max) else { return "--:--" }
+        let total = Int(max(0, seconds))
         let hours = total / 3600
         let minutes = (total % 3600) / 60
         let secs = total % 60
         if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+            return "\(hours):" + String(format: "%02d:%02d", minutes, secs)
         }
         return String(format: "%02d:%02d", minutes, secs)
     }

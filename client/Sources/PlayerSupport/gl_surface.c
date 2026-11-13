@@ -53,6 +53,7 @@ void cs_gl_make_current(cs_gl_context *context) {
 }
 
 void cs_gl_forget_framebuffers(cs_gl_context *context) {
+    if (!context) return;
     cs_gl_make_current(context);
     for (int i = 0; i < context->count; i++) {
         glDeleteFramebuffers(1, &context->targets[i].framebuffer);
@@ -77,6 +78,7 @@ void *cs_gl_get_proc_address(void *ctx, const char *name) {
 }
 
 unsigned cs_gl_framebuffer(cs_gl_context *context, IOSurfaceRef surface, bool half_float) {
+    if (!context || !surface) return 0;
     cs_gl_make_current(context);
     IOSurfaceID id = IOSurfaceGetID(surface);
     for (int i = 0; i < context->count; i++) {
@@ -118,6 +120,7 @@ unsigned cs_gl_framebuffer(cs_gl_context *context, IOSurfaceRef surface, bool ha
 }
 
 bool cs_gl_finish(cs_gl_context *context, unsigned long long timeout_ns) {
+    if (!context) return false;
     cs_gl_make_current(context);
     GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     if (!fence) return false;
@@ -127,6 +130,7 @@ bool cs_gl_finish(cs_gl_context *context, unsigned long long timeout_ns) {
 }
 
 void *cs_gl_fence(cs_gl_context *context) {
+    if (!context) return NULL;
     cs_gl_make_current(context);
     GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     // Submits the frame's commands (and the fence) without waiting for them.
@@ -135,7 +139,7 @@ void *cs_gl_fence(cs_gl_context *context) {
 }
 
 int cs_gl_fence_poll(cs_gl_context *context, void *fence) {
-    if (!fence) return -1;
+    if (!context || !fence) return -1;
     cs_gl_make_current(context);
     GLenum result = glClientWaitSync((GLsync)fence, 0, 0);
     if (result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED) return 1;
@@ -143,7 +147,7 @@ int cs_gl_fence_poll(cs_gl_context *context, void *fence) {
 }
 
 void cs_gl_fence_release(cs_gl_context *context, void *fence) {
-    if (!fence) return;
+    if (!context || !fence) return;
     cs_gl_make_current(context);
     glDeleteSync((GLsync)fence);
 }

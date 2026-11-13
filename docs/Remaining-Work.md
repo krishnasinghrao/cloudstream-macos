@@ -84,6 +84,9 @@ it is the largest item outside RT-14.
 
 ## 7. Smoother streaming
 
+- [ ] **Live channels: acceptance on real providers.** Live identity, the cached-range timeline, Go Live, bounded reconnects with fresh links, live history and the relay's lifetime rules are implemented and unit-tested ([ADR-0022](adr/0022-live-playback.md)). **Needs you:** play two or three real live channels for at least an hour each (one of them through the relay, i.e. a provider whose links carry cookies), pull the network once, and check the log for `player.live_recovery`. Not carried over from the sprint: the synthetic broadcast origin and its four-minute runs.
+- [ ] **Links that carry the provider's cookies now play through the relay.** Since 12 November a link gets the cookies the engine holds for the stream's own host (as Android's player does), and a link with a cookie is read through the engine's relay. **Needs you:** on two or three extensions you use, confirm playback and seeking are as before; `relay.manifest_refused` or `relay.upstream_failed` in `daemon-stdout.log` would point at this change.
+
 Already in place: at 80% of an episode the engine fetches the next episode's links in the background (link cache only, no video); the source, audio, subtitles and speed are remembered per title; a failing stream switches to the next mirror automatically and resumes at the same position; a new episode loads into the existing player view.
 
 - [x] **Decide the memory budget for a preloaded stream first.** Preloading runs during playback, not at idle, so it does not touch the 160 MB idle budget, but it does add a second stream's buffer on top of the current one (the player buffers up to 128 MiB ahead). Measure playback memory (section 4), then set a playback budget and cap the preload to it (for example a few seconds of video rather than a full buffer). Done: 4K playback is about 400 MB above idle; the preload is capped at 32 MiB (under 10% more).

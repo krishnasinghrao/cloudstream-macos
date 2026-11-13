@@ -6,6 +6,8 @@ import Synchronization
 // renders the frames lives in MetalVideoView.swift.
 
 enum MpvValue: Sendable {
+    /// `demuxer-cache-state`'s seekable ranges (a live stream's rewind window).
+    case ranges([PlaybackRange])
     case double(Double)
     case flag(Int32)
     case int64(Int64)
@@ -98,7 +100,12 @@ enum MpvNodeReader {
         case map([String: NodeValue])
     }
 
-    static func read(_ node: mpv_node) -> NodeValue? {
+    /// Nesting deeper than any property this app reads; a malformed or
+    /// hostile node tree cannot exhaust the stack.
+    static let maximumDepth = 16
+
+    static func read(_ node: mpv_node, depth: Int = 0) -> NodeValue? {
+        guard depth < maximumDepth else { return nil }
         switch node.format {
         case MPV_FORMAT_STRING:
             guard let raw = node.u.string else { return nil }
@@ -114,7 +121,7 @@ enum MpvNodeReader {
                   let values = list.pointee.values else { return .array([]) }
             let count = max(0, Int(list.pointee.num))
             let items = (0..<count).compactMap { index in
-                read(values[index])
+                read(values[index], depth: depth + 1)
             }
             return .array(items)
         case MPV_FORMAT_NODE_MAP:
@@ -126,7 +133,7 @@ enum MpvNodeReader {
             for index in 0..<count {
                 guard let keyPtr = keys[index] else { continue }
                 let key = String(cString: keyPtr)
-                if let value = read(values[index]) {
+                if let value = read(values[index], depth: depth + 1) {
                     map[key] = value
                 }
             }
@@ -154,6 +161,22 @@ enum MpvNodeReader {
             var title: String?
             if case .string(let value) = map["title"], !value.isEmpty { title = value }
             return MpvChapter(index: index, title: title, time: time)
+        }
+    }
+
+    /// The `seekable-ranges` of a `demuxer-cache-state` node, in file time.
+    static func seekableRanges(from node: mpv_node) -> [PlaybackRange] {
+        guard case .map(let state) = read(node), case .array(let entries) = state["seekable-ranges"] else { return [] }
+        func number(_ value: NodeValue?) -> Double? {
+            switch value {
+            case .double(let number): return number
+            case .int(let number): return Double(number)
+            default: return nil
+            }
+        }
+        return entries.compactMap { entry in
+            guard case .map(let range) = entry, let start = number(range["start"]), let end = number(range["end"]) else { return nil }
+            return PlaybackRange(start: start, end: end)
         }
     }
 
@@ -208,6 +231,13 @@ final class MpvCore: @unchecked Sendable {
     /// for any other entry (a replaced mirror) are stale and dropped (T6).
     private var currentEntryId: Int64 = 0
 
+    /// The load whose events are being drained (see `enqueueLoad`).
+    private var loadGeneration: UInt64 = 0
+    /// A load was submitted and its START_FILE has not arrived: everything
+    /// before it still describes the outgoing file.
+    private var awaitingStartFile = false
+    private var lastForwardedRangesAt: ContinuousClock.Instant?
+
     init(handle: OpaquePointer, queue: DispatchQueue, sink: MpvEventSink) {
         self.handle = handle
         self.queue = queue
@@ -224,15 +254,39 @@ final class MpvCore: @unchecked Sendable {
         }
     }
 
+    /// Submits a load so that no event of the file it replaces can reach the
+    /// model as if it were the new file's (a late error advancing a second
+    /// mirror, a late restart ending the new load's spinner).
+    ///
+    /// The fence moves on the caller's thread at once. On the drain queue the
+    /// outgoing file's queued events are flushed under its own generation
+    /// (which the main actor now drops), the load is submitted, and everything
+    /// up to its START_FILE is discarded. Never blocks the caller.
+    func enqueueLoad(_ operation: @escaping @Sendable (OpaquePointer) -> Void) {
+        let generation = sink.beginLoad()
+        queue.async { [self] in
+            guard !isStopped else { return }
+            drainEvents()
+            // A newer load (or a suspension for one) took the fence meanwhile.
+            guard !isStopped, sink.isCurrentLoad(generation) else { return }
+            loadGeneration = generation
+            awaitingStartFile = true
+            operation(handle)
+        }
+    }
+
     /// Delivers on the main queue, FIFO — unlike one `Task { @MainActor }`
     /// per event, which has no ordering guarantee (T6).
     /// Internal for deterministic lifetime tests; callers still enqueue from
     /// the core's serial drain queue, exactly like native events.
-    func deliver(_ body: @escaping @MainActor @Sendable (MpvEventSink) -> Void) {
+    /// - Parameter scopedToLoad: dropped when another load began since it was
+    ///   queued. False only for outcomes that outlive a file (a screenshot).
+    func deliver(scopedToLoad: Bool = true, _ body: @escaping @MainActor @Sendable (MpvEventSink) -> Void) {
         let sink = sink
+        let generation = loadGeneration
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
-                guard sink.acceptsEvents else { return }
+                guard sink.acceptsEvents, !scopedToLoad || sink.isCurrentLoad(generation) else { return }
                 body(sink)
             }
         }
@@ -241,6 +295,15 @@ final class MpvCore: @unchecked Sendable {
     func drainEvents() {
         while !isStopped {
             guard let event = mpv_wait_event(handle, 0) else { return }
+            if awaitingStartFile {
+                switch event.pointee.event_id {
+                case MPV_EVENT_NONE, MPV_EVENT_SHUTDOWN, MPV_EVENT_LOG_MESSAGE, MPV_EVENT_START_FILE,
+                     MPV_EVENT_COMMAND_REPLY, MPV_EVENT_SET_PROPERTY_REPLY:
+                    break
+                default:
+                    continue // the outgoing file's
+                }
+            }
             switch event.pointee.event_id {
             case MPV_EVENT_NONE:
                 return
@@ -256,6 +319,8 @@ final class MpvCore: @unchecked Sendable {
                     NSLog("%@", "[mpv:\(level)] [\(prefix)] \(text.trimmingCharacters(in: .whitespacesAndNewlines))")
                 }
             case MPV_EVENT_START_FILE:
+                awaitingStartFile = false
+                lastForwardedRangesAt = nil
                 if let data = event.pointee.data {
                     currentEntryId = data.assumingMemoryBound(to: mpv_event_start_file.self).pointee.playlist_entry_id
                 }
@@ -290,7 +355,9 @@ final class MpvCore: @unchecked Sendable {
                 // Plain values only cross to the main queue, in FIFO order.
                 let userdata = event.pointee.reply_userdata
                 if event.pointee.event_id == MPV_EVENT_COMMAND_REPLY, userdata != 0 || failure != nil {
-                    deliver { $0.onCommandReply?(userdata, failure) }
+                    // A screenshot was asked for by the user, not by a file.
+                    let outlivesLoad = userdata & 0xff == MpvCommandReply.Kind.screenshot.rawValue
+                    deliver(scopedToLoad: !outlivesLoad) { $0.onCommandReply?(userdata, failure) }
                 }
             case MPV_EVENT_PLAYBACK_RESTART:
                 deliver { $0.onPlaybackRestart?() }
@@ -298,6 +365,19 @@ final class MpvCore: @unchecked Sendable {
                 guard let data = event.pointee.data else { continue } // keep draining (P0-3b)
                 let property = data.assumingMemoryBound(to: mpv_event_property.self)
                 let name = property.pointee.name.map { String(cString: $0) } ?? ""
+
+                if name == "demuxer-cache-state" {
+                    // Changes with every packet read; the timeline needs it a few times a second.
+                    let now = ContinuousClock.now
+                    if let last = lastForwardedRangesAt, now - last < .milliseconds(500) { continue }
+                    lastForwardedRangesAt = now
+                    var ranges: [PlaybackRange] = []
+                    if property.pointee.format == MPV_FORMAT_NODE, let propData = property.pointee.data {
+                        ranges = MpvNodeReader.seekableRanges(from: propData.assumingMemoryBound(to: mpv_node.self).pointee)
+                    }
+                    deliver { $0.onProperty?(name, .ranges(ranges)) }
+                    continue
+                }
 
                 // Plain-value hops only: read C memory on this thread.
                 if name == "track-list" {
@@ -370,9 +450,15 @@ final class MpvCore: @unchecked Sendable {
 @MainActor
 final class MpvEventSink {
     nonisolated private let active = Mutex(true)
+    /// The load the model is waiting for; events queued for an earlier one are dropped.
+    nonisolated private let load = Mutex<UInt64>(0)
 
     nonisolated var acceptsEvents: Bool { active.withLock { $0 } }
     nonisolated func invalidate() { active.withLock { $0 = false } }
+    /// Moves the fence: from now on only the next load's events are delivered.
+    @discardableResult
+    nonisolated func beginLoad() -> UInt64 { load.withLock { $0 &+= 1; return $0 } }
+    nonisolated func isCurrentLoad(_ generation: UInt64) -> Bool { load.withLock { $0 == generation } }
 
     var onProperty: (@MainActor (String, MpvValue) -> Void)?
     var onEndFile: (@MainActor (MpvEndFileReason) -> Void)?
@@ -414,7 +500,7 @@ final class MpvEventSink {
 
 /// The outcome of one asynchronous player command.
 struct MpvCommandReply: Equatable, Sendable {
-    enum Kind: UInt64, Sendable { case other = 0, seek = 1, screenshot = 2 }
+    enum Kind: UInt64, Sendable { case other = 0, seek = 1, screenshot = 2, load = 3 }
     let kind: Kind
     /// nil on success.
     let error: String?

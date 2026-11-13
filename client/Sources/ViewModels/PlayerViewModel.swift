@@ -26,7 +26,14 @@ protocol PlayerTransport: AnyObject {
     func frameStep(forward: Bool)
     func queueNext(url: String)
     func cancelQueuedNext()
+    /// The model has committed to another file; the outgoing file's events
+    /// must no longer reach it.
+    func suspendFileEvents()
     func shutdown()
+}
+
+extension PlayerTransport {
+    func suspendFileEvents() {}
 }
 
 /// High-frequency playback clock, isolated from `PlayerViewModel` so only the
@@ -88,6 +95,8 @@ final class PlayerViewModel {
         /// A stream is loading in the engine (open, probe, initial buffer).
         case loading
         case ready
+        /// A live stream stopped and is being reconnected (ADR-0022).
+        case recovering
         /// Every mirror failed or resolution produced nothing.
         case failed
     }
@@ -107,6 +116,41 @@ final class PlayerViewModel {
             updateDisplaySleepAssertion()
         }
     }
+
+    // MARK: Live playback (ADR-0022)
+
+    /// What the catalogue says this title is. A live channel has no resume
+    /// point, no end to count down to and no watched percentage, whatever
+    /// duration its rolling window happens to report.
+    private(set) var playbackKind: PlaybackKind = .unknown
+    var isLive: Bool { playbackKind == .live }
+    /// The part of a live stream that can be seeked: what the player has
+    /// cached. Empty for on-demand video, which seeks anywhere.
+    private(set) var seekableRanges: [PlaybackRange] = []
+    /// Playing at the live position (as opposed to a rewound, earlier one).
+    private(set) var isFollowingLive = false
+    /// mpv `seekable` for the current file; nil until it reports.
+    private(set) var canSeek: Bool?
+    var allowsSeeking: Bool { isLive ? !seekableRanges.isEmpty : canSeek != false }
+
+    /// One interruption of a live stream: a deadline and a bounded number of
+    /// reconnects, shared by every attempt until playback has been healthy again.
+    @ObservationIgnored var recoveryBudget = PlaybackRecoveryBudget()
+    @ObservationIgnored var recoveryDelay: Duration = .seconds(1)
+    @ObservationIgnored var freshLinks: @MainActor (_ provider: String, _ data: String, _ budgetMs: Int) async throws -> LinksResponseDto = {
+        try await DaemonClient.shared.links(provider: $0, data: $1, refresh: true, budgetMs: $2)
+    }
+    @ObservationIgnored var inspectManifest: @MainActor (MediaRelayResourceDto) async throws -> MediaManifestDto = {
+        try await DaemonClient.shared.inspectManifest($0)
+    }
+    @ObservationIgnored var isOnline: @MainActor () -> Bool = { ConnectivityMonitor.shared.isOnline }
+    @ObservationIgnored private var recoveryTask: Task<Void, Never>?
+    @ObservationIgnored private var liveHealth = PlaybackHealthWindow()
+    @ObservationIgnored private var liveVisitRecorded = false
+    /// The profile that started the session: a visit is never written into another one.
+    @ObservationIgnored private var liveHistoryOwner: LibraryStore.ProfileOperationContext?
+    /// The user paused: a stopped live stream is reconnected when they play again, not behind their back.
+    @ObservationIgnored private var recoveryDeferredByPause = false
 
     let clock = PlaybackClock()
     var elapsed: Double { clock.elapsed }
@@ -192,6 +236,9 @@ final class PlayerViewModel {
     @ObservationIgnored private var seekTarget: Double?
     @ObservationIgnored private var lastPersistedAt: Double = 0
     @ObservationIgnored private var prefetchIssued = false
+    @ObservationIgnored private var prefetchTask: Task<Void, Never>?
+    /// "All mirrors failed" while links are still arriving: the next one is tried.
+    @ObservationIgnored private var awaitingLateCandidate = false
     @ObservationIgnored private var displaySleepActivity: NSObjectProtocol?
     /// Resume position of the current load until the engine confirms the
     /// source can seek there.
@@ -306,16 +353,26 @@ final class PlayerViewModel {
         preferences: UserPreferences,
         localMediaURL: URL? = nil,
     ) async {
+        // The prefetch already resolved this episode (and mpv may hold its
+        // first seconds): use that instead of resolving it again.
+        let prepared = nextEpisodeLinks.flatMap { prepared in
+            prepared.provider == details.providerKey && prepared.detailsURL == details.url
+                && prepared.data == episode?.data && ContinuousClock.now < prepared.expiresAt ? prepared : nil
+        }
         playGeneration += 1
         let generation = playGeneration
         playRequestedAt = .now
         cancelResolution()
+        cancelLiveRecovery()
         // The previous link is being replaced: its keep-alive ends now, not
         // when the new session's first load is issued.
         releaseVerifier()
         releaseRelay()
         loadDeadlineTask?.cancel()
-        upNextDismissed = false
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        cancelUpNext(dismissed: false)
+        resetStallTracking()
 
         if session != nil {
             videoView?.setPlaying(false)
@@ -361,6 +418,12 @@ final class PlayerViewModel {
             return
         }
 
+        if let prepared, localMediaURL == nil {
+            startSession(generation: generation, details: details, episode: episode, label: label,
+                         links: prepared.links, subtitles: prepared.subtitles, resumeAt: resumeAt)
+            return
+        }
+
         // Open the window immediately with a "Finding streams…" state: the
         // user sees progress and every failure (D1).
         phase = .resolving
@@ -401,6 +464,10 @@ final class PlayerViewModel {
         guard !links.isEmpty else { return }
         playGeneration += 1
         cancelResolution()
+        cancelLiveRecovery()
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        cancelUpNext(dismissed: false)
         error = nil
         if session != nil {
             videoView?.setPlaying(false)
@@ -502,7 +569,7 @@ final class PlayerViewModel {
                         continue
                     }
                     if started {
-                        session?.links.append(link)
+                        appendCandidate(link)
                     } else {
                         resolution?.links.append(link)
                         if Self.startsImmediately(link, remembered: remembered, preferred: preferred) {
@@ -616,6 +683,13 @@ final class PlayerViewModel {
                 validatedSubtitles = try subtitles.map(PlaybackSubtitle.remote)
             }
         } catch { fail(error.localizedDescription); return }
+        cancelLiveRecovery()
+        // Trailers, extras and downloaded files are finite whatever the title is.
+        playbackKind = localResource == nil && persistsProgress ? PlaybackKind.catalogue(details.type) : .vod
+        liveVisitRecorded = false
+        liveHistoryOwner = isLive ? try? LibraryStore.shared.captureProfileOperation() : nil
+        seekableRanges = []
+        awaitingLateCandidate = false
         titlePrefs = persistsProgress && preferences.rememberPlaybackPerTitle
             ? LibraryStore.shared.readForDisplay(or: nil, { try LibraryStore.shared.playbackPrefs(details: details) })
             : nil
@@ -640,7 +714,8 @@ final class PlayerViewModel {
         progressFailureShown = false
         refreshEpisodeNeighbours()
 
-        let start = max(0, resumeAt ?? 0)
+        // A live channel is joined at its live position, never at a stored one.
+        let start = isLive ? 0 : max(0, resumeAt ?? 0)
         clock.elapsed = start
         // The timeline reflects the media itself: unknown until the engine
         // reports it. Provider runtime metadata is a display label, not a
@@ -698,11 +773,22 @@ final class PlayerViewModel {
         videoView?.setSpeed(targetSpeed)
         videoView?.setSubtitleDelay(targetDelay)
         videoView?.setVolume(volume)
+        // A fresh engine starts unmuted: without this a muted session came
+        // back at full volume whenever its video view was rebuilt.
+        videoView?.setMuted(isMuted)
     }
 
     /// Hands one load to the engine through `loadRequest` (T3).
     @discardableResult
     private func issueLoad(link: StreamLinkDto, startAt: Double?) -> Bool {
+        let startAt = isLive ? nil : startAt
+        liveHealth.interrupt()
+        seekableRanges = []
+        isFollowingLive = isLive
+        canSeek = nil
+        // From here the playing file is the outgoing one, also while a relay
+        // registers or SwiftUI has yet to hand the new load to the engine.
+        videoView?.suspendFileEvents()
         loadRequestCounter += 1
         // A relay belongs to one load; this one replaces it.
         releaseRelay()
@@ -729,7 +815,9 @@ final class PlayerViewModel {
                             headers: [String: String]? = nil) {
         // The preloaded entry is used only for exactly the link it was made
         // for, from the start; any other load replaces it.
-        let usesQueued = queuedNext.map { $0.link == link && $0.url == resource.url && (startAt ?? 0) <= 1 && audioTracks.isEmpty } ?? false
+        let usesQueued = queuedNext.map {
+            $0.data == session?.episode?.data && $0.link == link && $0.url == resource.url && (startAt ?? 0) <= 1 && audioTracks.isEmpty
+        } ?? false
         queuedNext = nil
         if usesQueued { DaemonLog.client("player.preload_used") }
         chapters = []
@@ -748,8 +836,9 @@ final class PlayerViewModel {
         )
         // Exactly what the player loads: a relayed stream's resource is the
         // relay and its headers are empty, so credentials never reach the
-        // preview decoder's direct connection.
-        scrubPreviews.configure(source: ScrubPreviewSource(
+        // preview decoder's direct connection. A live stream has no fixed
+        // timeline to preview.
+        scrubPreviews.configure(source: isLive ? nil : ScrubPreviewSource(
             id: loadRequestCounter, resource: resource, headers: headers ?? link.headers, decryption: link.drm))
         pendingResumeCheck = startAt
         phase = .loading
@@ -784,12 +873,22 @@ final class PlayerViewModel {
     /// issued when the relay addresses arrive; a registration that returns
     /// after the load was replaced is revoked instead of used.
     private func beginRelayedLoad(link: StreamLinkDto, startAt: Double?) {
-        loadRequest = nil
+        // The current request stays: clearing it unmounted the video view and
+        // rebuilt the whole engine for every relayed mirror or episode.
         phase = .loading
         isBuffering = false
+        // A registration that never answers must not spin forever either.
+        armLoadDeadline(for: loadRequestCounter)
         let token = relayToken
         let ordered = Self.preferredAudioOrder(link.audioTracks)
-        let resources = MediaResourcePolicy.relayResources(video: link.url, headers: link.headers, orderedAudio: ordered)
+        let segments = link.isPlaylist ? link.playlist : []
+        // A segment list has no single video address: each segment and each
+        // audio track is its own relayed resource, with the link's headers on
+        // the link's origin only.
+        let resources = segments.isEmpty
+            ? MediaResourcePolicy.relayResources(video: link.url, headers: link.headers, orderedAudio: ordered)
+            : Array(MediaResourcePolicy.relayResources(video: link.url, headers: link.headers,
+                                                       orderedAudio: segments.map { AudioTrackDto(url: $0) } + ordered).dropFirst())
         let (register, revoke) = (registerRelay, revokeRelay)
         relayTask = Task { [weak self] in
             do {
@@ -804,8 +903,17 @@ final class PlayerViewModel {
                 }
                 self.relaySessionID = relay.sessionID
                 // The engine adds each resource's own headers; the player sends none.
-                let resource = try PlaybackResource.split(video: link.url, orderedAudio: ordered, relayed: relay.urls)
-                self.commitLoad(resource: resource, audioTracks: [], link: link, startAt: startAt, headers: [:])
+                if segments.isEmpty {
+                    let resource = try PlaybackResource.split(video: link.url, orderedAudio: ordered, relayed: relay.urls)
+                    self.commitLoad(resource: resource, audioTracks: [], link: link, startAt: startAt, headers: [:])
+                } else {
+                    guard relay.urls.count == segments.count + ordered.count else { throw MediaResourcePolicy.Rejection.invalidPlaylist }
+                    let resource = try PlaybackResource.playlist(Array(relay.urls.prefix(segments.count)))
+                    let audio = try zip(ordered, relay.urls.dropFirst(segments.count)).map { track, url in
+                        try PlaybackAudio.remote(AudioTrackDto(url: url, label: track.label, language: track.language))
+                    }
+                    self.commitLoad(resource: resource, audioTracks: audio, link: link, startAt: startAt, headers: [:])
+                }
             } catch {
                 guard let self, self.relayToken == token else { return }
                 DaemonLog.client("player.relay_unavailable")
@@ -864,7 +972,7 @@ final class PlayerViewModel {
         loadDeadlineTask = Task { [weak self] in
             for attempt in 0..<2 {
                 do { try await Task.sleep(for: deadline) } catch { return }
-                guard let self, self.phase == .loading, self.loadRequest?.id == requestID else { return }
+                guard let self, self.phase == .loading, self.loadRequestCounter == requestID else { return }
                 if attempt == 0, self.isBuffering { continue }
                 DaemonLog.client("player.load_deadline", fields: ["mirror": String((self.session?.selectedLinkIndex ?? 0) + 1)])
                 self.handlePlaybackError()
@@ -944,8 +1052,8 @@ final class PlayerViewModel {
             let saved = reply.error == nil && reply.url.map { FileManager.default.fileExists(atPath: $0.path) } == true
             showNotice(saved ? "Screenshot saved to \(reply.url?.deletingLastPathComponent().lastPathComponent ?? "folder")"
                              : "Couldn’t save the screenshot.")
-        case .other:
-            break // already logged; nothing the user asked for by name
+        case .load, .other:
+            break // a refused load arrives as a playback failure; the rest is logged
         }
     }
 
@@ -967,14 +1075,16 @@ final class PlayerViewModel {
 
     static func loadPlan(for link: StreamLinkDto) throws -> LoadPlan {
         try MediaResourcePolicy.validate(link)
+        // Credentials go only to the engine, which adds them per resource on
+        // the provider's own origin (Security M2, Audit-Fix A2 decision 2).
+        // Checked before every branch: a segment list with a cookie used to
+        // reach the player, which refuses credential headers outright.
+        if MediaResourcePolicy.carriesCredentials(link) { throw MediaResourcePolicy.Rejection.credentialedStream }
         if link.isPlaylist, !link.playlist.isEmpty {
             // EDL segment lists stay native: each segment is its own validated
             // remote URL and no manifest can name further hosts.
             return LoadPlan(resource: try .playlist(link.playlist), audioTracks: link.audioTracks)
         }
-        // Credentials go only to the engine, which adds them per resource on
-        // the provider's own origin (Security M2, Audit-Fix A2 decision 2).
-        if MediaResourcePolicy.carriesCredentials(link) { throw MediaResourcePolicy.Rejection.credentialedStream }
         if !link.audioTracks.isEmpty {
             try MediaResourcePolicy.validateSplitHeaders(video: link.url, headers: link.headers, audio: link.audioTracks)
             return LoadPlan(resource: try .split(video: link.url, orderedAudio: preferredAudioOrder(link.audioTracks)), audioTracks: [])
@@ -1074,11 +1184,18 @@ final class PlayerViewModel {
         videoView?.addSubtitles([subtitle])
     }
 
-    private func fail(_ message: String) {
+    private func fail(_ message: String, awaitingCandidate: Bool = false) {
+        awaitingLateCandidate = awaitingCandidate
         error = message
         phase = .failed
         isBuffering = false
+        seekTarget = nil
         loadDeadlineTask?.cancel()
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        // Nothing may advance or switch behind the error card.
+        cancelUpNext(dismissed: false)
+        resetStallTracking()
         releaseVerifier()
         releaseRelay()
         if session == nil {
@@ -1120,8 +1237,12 @@ final class PlayerViewModel {
     @discardableResult
     func failover(to index: Int, startAt: Double? = nil) -> Bool {
         guard let session, session.links.indices.contains(index) else { return false }
+        // A switch, manual or automatic, replaces a reconnect in progress.
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        recoveryDeferredByPause = false
         self.session?.selectedLinkIndex = index
-        let position = startAt ?? elapsed
+        let position = isLive ? 0 : (startAt ?? elapsed)
         let issued = issueLoad(link: session.links[index], startAt: position > 1 ? position : nil)
         guard issued, phase != .failed else { return false }
         error = nil
@@ -1150,13 +1271,28 @@ final class PlayerViewModel {
     /// Rules.md §4.3: automatic mirror failover without user interruption.
     /// Called when mpv reports an END_FILE with reason=error for the current file.
     func handlePlaybackError() {
-        guard let session else { return }
+        // Only a file that is loading or playing can fail: a late report for
+        // one already given up on must not advance a second mirror.
+        guard phase == .ready || phase == .loading, let session else { return }
+        if isLive { recoverLive(reason: "stream_error"); return }
         let next = session.selectedLinkIndex + 1
         if session.links.indices.contains(next) {
             showNotice("That mirror failed — trying \(Self.mirrorName(session.links[next])) (\(next + 1) of \(session.links.count)).")
             failover(to: next)
         } else {
-            fail("All \(session.links.count) mirrors failed — try another episode or provider")
+            // Links may still be arriving from the provider.
+            fail("All \(session.links.count) mirrors failed — try another episode or provider", awaitingCandidate: resolution?.started == true)
+        }
+    }
+
+    /// The error card's Retry: the same source again, from where it stopped.
+    func retryPlayback() {
+        guard let session else { return }
+        if isLive {
+            recoveryBudget.reset()
+            recoverLive(reason: "user_retry")
+        } else {
+            failover(to: session.selectedLinkIndex)
         }
     }
 
@@ -1170,6 +1306,7 @@ final class PlayerViewModel {
     /// exists; otherwise close.
     func handleEndOfFile() {
         guard let session, phase == .ready else { return }
+        if isLive { handleLiveEndOfFile(); return }
         if sleepTimer == .endOfEpisode {
             sleepTimer = nil
             close()
@@ -1187,6 +1324,7 @@ final class PlayerViewModel {
 
     /// File loaded, or playback resumed after a seek.
     func handlePlaybackRestart() {
+        guard phase == .loading || phase == .ready else { return }
         if phase == .loading {
             if let requested = playRequestedAt {
                 // Section 7 measurement: request (episode change, first play) to first frame.
@@ -1197,11 +1335,13 @@ final class PlayerViewModel {
             phase = .ready
             loadDeadlineTask?.cancel()
             applySubtitleStyle()
+            recordLiveVisitIfNeeded()
         }
         seekTarget = nil
     }
 
     func handleEnginePause(_ paused: Bool) {
+        if paused { liveHealth.interrupt() }
         let playing = !paused
         guard isPlaying != playing else { return }
         isPlaying = playing
@@ -1214,6 +1354,9 @@ final class PlayerViewModel {
     /// the "resume starts at the beginning" defect. Prefer another mirror
     /// that can resume; if none is left, keep playing and say why.
     func handleSeekable(_ seekable: Bool) {
+        canSeek = seekable
+        // A live stream has nothing to resume, and "cannot seek" is normal for one.
+        if isLive { pendingResumeCheck = nil; return }
         guard let resumeAt = pendingResumeCheck, phase == .loading || phase == .ready else { return }
         pendingResumeCheck = nil
         guard !seekable else { return }
@@ -1248,6 +1391,7 @@ final class PlayerViewModel {
     }
 
     func handleBuffering(_ buffering: Bool) {
+        if buffering { liveHealth.interrupt() }
         if isBuffering != buffering { isBuffering = buffering }
         if !buffering { bufferingPercent = nil }
         trackStall(buffering)
@@ -1299,6 +1443,9 @@ final class PlayerViewModel {
 
     private func switchMirrorForStalls(_ reason: String) {
         resetStallTracking()
+        // A live stream that stopped delivering is reconnected at its live
+        // position; another mirror is only one of the things that tries.
+        if isLive { recoverLive(reason: "stall"); return }
         guard let session, hasNextMirror else { return }
         let next = session.selectedLinkIndex + 1
         DaemonLog.client("player.stall_failover", fields: ["mirror": String(next + 1)])
@@ -1340,6 +1487,25 @@ final class PlayerViewModel {
     // MARK: - Transport
 
     func setPlaying(_ play: Bool) {
+        var resumesRecovery = false
+        if isLive {
+            if !play {
+                liveHealth.interrupt()
+                isFollowingLive = false
+                // Paused by the user: stop reconnecting; playing again resumes it.
+                if phase == .recovering {
+                    recoveryTask?.cancel()
+                    recoveryTask = nil
+                    recoveryDeferredByPause = true
+                    phase = .ready
+                }
+            } else if recoveryDeferredByPause {
+                recoveryDeferredByPause = false
+                recoveryBudget.reset()
+                resumesRecovery = true
+            }
+        }
+        defer { if resumesRecovery { recoverLive(reason: "user_resume") } }
         isPlaying = play
         videoView?.setPlaying(play)
         updateNowPlaying()
@@ -1358,13 +1524,28 @@ final class PlayerViewModel {
     /// clock, so rapid repeats accumulate exactly instead of racing mpv's
     /// not-yet-updated position.
     func seek(by delta: Double) {
-        guard session != nil else { return }
+        guard session != nil, delta.isFinite else { return }
+        if isLive {
+            // A live stream's duration is its window's length; its clock is
+            // elsewhere. The cached ranges bound the target (seek(to:)).
+            seek(to: elapsed + delta)
+            return
+        }
         let upper = duration > 0 ? duration : .greatestFiniteMagnitude
         seek(to: max(0, min(upper, elapsed + delta)))
     }
 
-    func seek(to seconds: Double) {
-        guard session != nil else { return }
+    func seek(to requested: Double) {
+        guard session != nil, requested.isFinite else { return }
+        let seconds: Double
+        if isLive {
+            guard let target = PlaybackRange.clamped(requested, to: seekableRanges) else { return }
+            seconds = target
+            isFollowingLive = false
+            liveHealth.interrupt()
+        } else {
+            seconds = max(0, requested)
+        }
         seekTarget = seconds
         clock.elapsed = seconds
         videoView?.seek(to: seconds)
@@ -1382,6 +1563,7 @@ final class PlayerViewModel {
     }
 
     func setSpeed(_ speed: Double) {
+        guard speed.isFinite, speed > 0 else { return }
         self.speed = speed
         videoView?.setSpeed(speed)
         updateNowPlaying()
@@ -1611,13 +1793,18 @@ final class PlayerViewModel {
         }
     }
 
-    /// Ticks only while playing: pausing freezes the countdown.
+    /// Ticks only while the video is actually moving: pausing freezes the
+    /// countdown, and so do buffering and a seek in progress. It used to keep
+    /// counting through a stall and cut to the next episode before this one
+    /// had finished.
     private func runUpNextCountdown() async {
         let tick = 0.25
         while !Task.isCancelled, upNext != nil {
             try? await Task.sleep(for: .milliseconds(Int(tick * 1000)))
             guard !Task.isCancelled, upNext != nil else { return }
-            if isPlaying { upNextRemaining = max(0, upNextRemaining - tick) }
+            if phase == .ready, isPlaying, !isBuffering, seekTarget == nil {
+                upNextRemaining = max(0, upNextRemaining - tick)
+            }
             if upNextRemaining <= 0 {
                 upNext = nil
                 playNextEpisode()
@@ -1758,25 +1945,40 @@ final class PlayerViewModel {
     }
 
     func playPreviousEpisode() {
-        guard let session, let prev = previousEpisode() else { return }
-        Task {
-            await play(details: session.details, episode: prev, preferences: preferences)
-        }
+        guard let prev = previousEpisode() else { return }
+        playEpisode(prev)
     }
 
     func playNextEpisode() {
-        guard let session, let next = nextEpisode() else { return }
-        Task {
-            await play(details: session.details, episode: next, preferences: preferences)
-        }
+        guard let next = nextEpisode() else { return }
+        playEpisode(next)
     }
 
     func playEpisode(_ episode: EpisodeDto) {
-        guard let session else { return }
-        Task {
-            await play(details: session.details, episode: episode, preferences: preferences)
+        // One transition at a time: the end of the file, the Up Next
+        // countdown and a click can all ask for the next episode within the
+        // same moment, before the first request's task has run. Claimed
+        // here, synchronously, the others find the player already resolving.
+        // A different episode picked meanwhile replaces the claim: the latest
+        // request is the one that plays.
+        guard let session, !(phase == .resolving && claimedEpisodeData == episode.data) else { return }
+        claimedEpisodeData = episode.data
+        episodeTransition &+= 1
+        let transition = episodeTransition
+        phase = .resolving
+        error = nil
+        pendingTitle = "\(session.details.name) — \(Self.episodeLabel(for: episode, fallbackIndex: session.details.episodes.firstIndex(of: episode)))"
+        cancelUpNext(dismissed: false)
+        resetStallTracking()
+        Task { [weak self] in
+            guard let self, self.episodeTransition == transition else { return }
+            await self.play(details: session.details, episode: episode, preferences: self.preferences)
         }
     }
+
+    @ObservationIgnored private var claimedEpisodeData: String?
+    /// Bumped by every episode request and by close: an earlier request's task finds itself replaced.
+    @ObservationIgnored private var episodeTransition: UInt64 = 0
 
     /// Warms the daemon's link cache for the next episode so auto-advance
     /// starts instantly (A3), and keeps the links for the preload. Failures
@@ -1787,16 +1989,22 @@ final class PlayerViewModel {
         prefetchIssued = true
         let provider = session.details.providerKey
         let generation = playGeneration
-        Task { [weak self] in
+        prefetchTask = Task { [weak self] in
             guard let response = try? await DaemonClient.shared.links(provider: provider, data: data),
-                  let self, self.playGeneration == generation else { return }
-            self.prepareNextEpisode(data: data, links: response.links)
+                  !Task.isCancelled, let self, self.playGeneration == generation else { return }
+            self.prepareNextEpisode(data: data, links: response.links, subtitles: response.subtitles)
         }
     }
 
     /// The next episode's resolved links (from the prefetch; tests call it directly).
-    func prepareNextEpisode(data: String, links: [StreamLinkDto]) {
-        nextEpisodeLinks = (data, links)
+    func prepareNextEpisode(data: String, links: [StreamLinkDto], subtitles: [SubtitleDto] = []) {
+        guard let session, nextEpisode()?.data == data else { return }
+        let usable = links.filter { (try? MediaResourcePolicy.validate($0)) != nil }
+        guard !usable.isEmpty else { return }
+        nextEpisodeLinks = PreparedEpisode(
+            provider: session.details.providerKey, detailsURL: session.details.url, data: data, links: usable,
+            subtitles: subtitles.filter { (try? PlaybackSubtitle.remote($0)) != nil },
+            expiresAt: ContinuousClock.now.advanced(by: Self.preparedEpisodeLifetime))
         queueNextEpisodeIfDue(elapsed: clock.elapsed)
     }
 
@@ -1804,7 +2012,18 @@ final class PlayerViewModel {
 
     /// How long before the end the next episode is queued for preloading.
     static let preloadLeadTime: Double = 60
-    @ObservationIgnored private var nextEpisodeLinks: (data: String, links: [StreamLinkDto])?
+    /// Links resolved ahead of time are tokens with a lifetime: used soon or resolved again.
+    static let preparedEpisodeLifetime: Duration = .seconds(180)
+    /// The next episode as the prefetch resolved it, for exactly the title it belongs to.
+    private struct PreparedEpisode {
+        let provider: String
+        let detailsURL: String
+        let data: String
+        let links: [StreamLinkDto]
+        let subtitles: [SubtitleDto]
+        let expiresAt: ContinuousClock.Instant
+    }
+    @ObservationIgnored private var nextEpisodeLinks: PreparedEpisode?
     /// What was queued: the link, so a load of exactly it switches instead.
     @ObservationIgnored private(set) var queuedNext: (data: String, link: StreamLinkDto, url: String)?
 
@@ -1816,6 +2035,7 @@ final class PlayerViewModel {
               session.details.isSeries, preferences.continuousPlayback, !upNextDismissed,
               sleepTimer != .endOfEpisode, clock.duration > 0, clock.duration - elapsed <= Self.preloadLeadTime,
               let next = nextEpisode(), let prepared = nextEpisodeLinks, prepared.data == next.data,
+              ContinuousClock.now < prepared.expiresAt,
               session.links.indices.contains(session.selectedLinkIndex) else { return }
         let currentHeaders = session.links[session.selectedLinkIndex].headers
         let ranked = LinkRanker.rank(prepared.links, preferences.sourcePreferences, remembered: titlePrefs?.rememberedSource)
@@ -1843,7 +2063,12 @@ final class PlayerViewModel {
     func close(fromWindow: Bool = false) {
         guard isActive || error != nil else { return }
         playGeneration += 1
+        episodeTransition &+= 1
+        claimedEpisodeData = nil
         cancelResolution()
+        cancelLiveRecovery()
+        prefetchTask?.cancel()
+        prefetchTask = nil
         loadDeadlineTask?.cancel()
         loadDeadlineTask = nil
         releaseVerifier()
@@ -1854,6 +2079,11 @@ final class PlayerViewModel {
         queuedNext = nil
         nextEpisodeLinks = nil
         session = nil
+        playbackKind = .unknown
+        isFollowingLive = false
+        seekableRanges = []
+        canSeek = nil
+        awaitingLateCandidate = false
         loadRequest = nil
         scrubPreviews.configure(source: nil)
         pendingTitle = nil
@@ -1905,7 +2135,7 @@ final class PlayerViewModel {
     /// (possibly moved) deadline — mouse-move bursts no longer allocate a Task
     /// per event (U3).
     func scheduleHUDHide() {
-        guard !isInteractingWithHUD, isPlaying, phase == .ready || phase == .loading else {
+        guard !isInteractingWithHUD, isPlaying, phase == .ready || phase == .loading || phase == .recovering else {
             hudHideDeadline = nil
             return
         }
@@ -1935,6 +2165,10 @@ final class PlayerViewModel {
     // MARK: - Progress bookkeeping
 
     func handleProgress(elapsed newElapsed: Double, duration newDuration: Double) {
+        // While the next session resolves, or after a failure, these are the
+        // outgoing file's ticks: they must not save progress under it or
+        // start its countdown again.
+        guard session != nil, phase != .resolving, phase != .failed else { return }
         if newDuration > 0, newDuration != clock.duration {
             clock.duration = newDuration
             // Chapter ends at the file end depend on the duration.
@@ -1947,8 +2181,15 @@ final class PlayerViewModel {
             seekTarget = nil
         }
         if newElapsed != clock.elapsed {
+            if isLive {
+                if newElapsed < clock.elapsed { liveHealth.interrupt() }
+                // Healthy again for long enough: the next interruption gets a full budget.
+                if phase == .ready, isPlaying, !isBuffering, liveHealth.recordProgress() { recoveryBudget.reset() }
+            }
             clock.elapsed = newElapsed
         }
+        // No position to save, no end to prepare for.
+        if isLive { return }
 
         // Time-based throttle on forward playback; a backward jump resets the
         // mark so the next tick persists promptly (P2-11).
@@ -1980,6 +2221,8 @@ final class PlayerViewModel {
             rate: isPlaying ? speed : 0.0,
             isPlaying: isPlaying,
             artworkURL: session.details.backgroundPosterUrl ?? session.details.posterUrl,
+            isLive: isLive,
+            canSeek: allowsSeeking,
         )
     }
 
@@ -1991,7 +2234,8 @@ final class PlayerViewModel {
     /// per session: the store keeps the unsaved position (journal) and later
     /// writes retry it. A session boundary (`notify`) always reports (audit Q9).
     private func persistProgress(notify: Bool) {
-        guard let session, session.persistsProgress else { return }
+        // A live channel is a visit, not a position (recordLiveVisitIfNeeded).
+        guard let session, session.persistsProgress, !isLive else { return }
         let save = {
             try LibraryStore.shared.recordProgress(
                 details: session.details,
@@ -2047,3 +2291,161 @@ final class PlayerViewModel {
 }
 
 extension MetalVideoView: PlayerTransport {}
+
+// MARK: - Late mirrors
+
+extension PlayerViewModel {
+    /// A link that arrives after playback started joins the mirrors not tried
+    /// yet, in the user's ranking: appended at the end, a better source that
+    /// resolved a moment late was the last one failover ever reached.
+    private func appendCandidate(_ link: StreamLinkDto) {
+        guard let session, !session.links.contains(link) else { return }
+        let split = min(session.selectedLinkIndex + 1, session.links.count)
+        let untried = LinkRanker.rank(Array(session.links[split...]) + [link], preferences.sourcePreferences,
+                                      remembered: titlePrefs?.rememberedSource)
+        self.session?.links = Array(session.links[..<split]) + untried
+        // Every earlier mirror failed and the card is up: this one may play.
+        if phase == .failed, awaitingLateCandidate {
+            awaitingLateCandidate = false
+            failover(to: split, startAt: elapsed)
+        }
+    }
+}
+
+// MARK: - Live playback (ADR-0022)
+
+extension PlayerViewModel {
+    /// mpv's cached seekable ranges. Only a live stream's timeline is drawn from them.
+    func handleSeekableRanges(_ ranges: [PlaybackRange]) {
+        guard isLive else { return }
+        let wasAllowed = allowsSeeking
+        let valid = ranges.filter { $0.start.isFinite && $0.end.isFinite && $0.end > $0.start }
+        if valid != seekableRanges { seekableRanges = valid }
+        if wasAllowed != allowsSeeking { updateNowPlaying() }
+    }
+
+    /// Back to the live position: the stream is opened again, which is where
+    /// a live playlist starts. Seeking to the end of the cache would only
+    /// reach the newest data already downloaded.
+    func goLive() {
+        guard isLive, let session else { return }
+        recoveryBudget.reset()
+        failover(to: session.selectedLinkIndex)
+    }
+
+    private func recordLiveVisitIfNeeded() {
+        guard isLive, !liveVisitRecorded, let session, session.persistsProgress, let owner = liveHistoryOwner else { return }
+        liveVisitRecorded = LibraryStore.shared.perform { try LibraryStore.shared.recordLiveVisit(details: session.details, owner: owner) }
+    }
+
+    private func cancelLiveRecovery() {
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        recoveryDeferredByPause = false
+        recoveryBudget.reset()
+        liveHealth.interrupt()
+    }
+
+    /// A live stream reported its end. A broadcast that really finished says
+    /// so in its playlist; anything else is an interruption. The playlist is
+    /// asked once, here, and an unanswered question counts as an interruption.
+    private func handleLiveEndOfFile() {
+        guard let link = activeLink else { return }
+        let generation = playGeneration
+        let load = loadRequestCounter
+        let inspect = inspectManifest
+        phase = .recovering
+        recoveryTask?.cancel()
+        recoveryTask = Task { [weak self] in
+            let sample = try? await inspect(MediaRelayResourceDto(url: link.url, headers: link.headers))
+            guard !Task.isCancelled, let self, self.playGeneration == generation, self.loadRequestCounter == load else { return }
+            self.recoveryTask = nil
+            if sample?.ended == true {
+                DaemonLog.client("player.live_ended")
+                self.close()
+            } else {
+                self.recoverLive(reason: "unexpected_eof")
+            }
+        }
+    }
+
+    /// Reconnects a live stream at its live position. One interruption gets
+    /// `recoveryBudget`: a deadline and a few loads, with a growing pause
+    /// between them. The first attempt asks the provider for fresh links (the
+    /// usual cause is an expired address); later ones move to the next mirror
+    /// when there is one. A first frame does not refill the budget — only
+    /// playback that stayed healthy does — so a stream that dies every few
+    /// seconds ends with an error instead of reconnecting forever.
+    private func recoverLive(reason: String) {
+        guard isLive, let session, recoveryTask == nil else { return }
+        if !isPlaying {
+            // Paused: nothing to keep alive. Reconnect when the user plays.
+            recoveryDeferredByPause = true
+            if phase == .recovering { phase = .ready }
+            return
+        }
+        recoveryBudget.begin()
+        guard let deadline = recoveryBudget.deadline, ContinuousClock.now < deadline,
+              recoveryBudget.loads < recoveryBudget.maximumLoads else {
+            fail("This live stream keeps stopping. Retry, or choose another source.")
+            return
+        }
+        let generation = playGeneration
+        let load = loadRequestCounter
+        let attempt = recoveryBudget.loads
+        phase = .recovering
+        error = nil
+        isBuffering = false
+        liveHealth.interrupt()
+        loadDeadlineTask?.cancel()
+        resetStallTracking()
+        showNotice("Reconnecting to the live stream…")
+        DaemonLog.client("player.live_recovery", fields: ["reason": reason, "attempt": String(attempt + 1)])
+        let pause = recoveryDelay * (1 << min(attempt, 2))
+        let (refresh, online) = (freshLinks, isOnline)
+        recoveryTask = Task { [weak self] in
+            @MainActor func current() -> PlayerViewModel? {
+                guard !Task.isCancelled, let self, self.playGeneration == generation, self.loadRequestCounter == load else { return nil }
+                return self
+            }
+            @MainActor func expire(_ model: PlayerViewModel) {
+                model.recoveryTask = nil
+                model.fail("The live stream didn’t come back. Retry, or choose another source.")
+            }
+            do { try await Task.sleep(for: min(pause, max(.zero, ContinuousClock.now.duration(to: deadline)))) } catch { return }
+            // Offline: wait for the network inside the same deadline rather than spend loads on it.
+            while !online() {
+                guard let model = current() else { return }
+                guard ContinuousClock.now < deadline else { expire(model); return }
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            }
+            var fresh: [StreamLinkDto] = []
+            if let model = current(), model.recoveryBudget.takeRefresh(),
+               let data = session.episode?.data ?? session.details.movieData, !data.isEmpty {
+                let remaining = max(1_000, Int(ContinuousClock.now.duration(to: deadline) / .milliseconds(1)))
+                if let response = try? await refresh(session.details.providerKey, data, remaining) {
+                    fresh = response.links.filter { (try? MediaResourcePolicy.validate($0)) != nil }
+                }
+            }
+            guard let model = current() else { return }
+            model.recoveryTask = nil
+            guard model.recoveryBudget.takeLoad() else { expire(model); return }
+            var index = model.session?.selectedLinkIndex ?? 0
+            if !fresh.isEmpty {
+                model.session?.links = LinkRanker.rank(fresh, model.preferences.sourcePreferences,
+                                                       remembered: model.titlePrefs?.rememberedSource)
+                index = 0
+            } else if attempt > 0, model.hasNextMirror {
+                index += 1
+            }
+            guard let links = model.session?.links, links.indices.contains(index) else { expire(model); return }
+            model.session?.selectedLinkIndex = index
+            // issueLoad, not failover: failover is the user's or a mirror's
+            // switch and would cancel the budget this reconnect is spending.
+            guard model.issueLoad(link: links[index], startAt: nil), model.phase != .failed else { return }
+            model.error = nil
+            model.isPlaying = true
+            model.videoView?.setPlaying(true)
+        }
+    }
+}

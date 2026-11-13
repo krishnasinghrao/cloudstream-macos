@@ -22,6 +22,8 @@ struct MpvPlayerView: NSViewRepresentable {
         view.onPropertyChange = { [weak view, weak player] name, value in
             guard let view, let player else { return }
             switch name {
+            case "demuxer-cache-state":
+                if case .ranges(let ranges) = value { player.handleSeekableRanges(ranges) }
             case "time-pos":
                 view.currentElapsed = value.doubleValue ?? 0
                 // Coarse clock updates only (4 Hz), discontinuities immediately.
@@ -83,6 +85,7 @@ struct MpvPlayerView: NSViewRepresentable {
             player.showHUD()
         }
 
+        view.configureInitialAudio(volume: player.volume, muted: player.isMuted)
         view.setup(
             resource: request.resource,
             headers: request.headers,
