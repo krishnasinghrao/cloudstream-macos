@@ -1,5 +1,5 @@
 {
-  "reviewed": "2026-10-09",
+  "reviewed": "2026-11-13",
   "inventory": "engine/build/sbom/daemon.cdx.json (locked by engine/gradle.lockfile)",
   "packages": {
     "org.jsoup:jsoup": {
@@ -66,6 +66,10 @@
       "GHSA-rmj7-2vxq-3g9f": {
         "decision": "not-applicable",
         "reason": "Concerns polymorphic type validators / default typing. Engine code enables neither (checked by search); an extension that did would affect only its own isolated worker."
+      },
+      "GHSA-5gvw-p9qm-jgwh": {
+        "decision": "not-applicable",
+        "reason": "@JsonView is not enforced on @JsonUnwrapped container properties during deserialization (a write-side authorization bypass). Neither the engine nor the shared library uses @JsonView, view-scoped readers/writers or @JsonUnwrapped (checked by search), so no view acts as an access guard. Kept on 2.13.5 for extension ABI compatibility (SEC-09); fixed upstream in 2.18.9."
       }
     }
   }
