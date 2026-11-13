@@ -111,7 +111,7 @@ class WebViewResolver(
         request: Request,
         requestCallBack: (Request) -> Boolean = { false }
     ): Pair<Request?, List<Request>> {
-        val host = WebViewHost.resolver ?: TODO("Not yet implemented")
+        val host = WebViewHost.resolver ?: return null to emptyList()
         val result = host(
             WebViewHostRequest(
                 url = request.url.toString(),

@@ -67,11 +67,11 @@ enum EngineOutputLog {
     static func rotatedURL(for url: URL) -> URL { url.appendingPathExtension("1") }
 
     static func startMarker(launchID: UUID, safeMode: Bool, now: Date = Date()) -> Data {
-        Data("=== engine launch \(launchID.uuidString) started \(ISO8601DateFormatter().string(from: now)) safeMode=\(safeMode) ===\n".utf8)
+        Data("=== engine launch \(launchID.uuidString) started \(now.formatted(.iso8601)) safeMode=\(safeMode) ===\n".utf8)
     }
 
     static func exitMarker(launchID: UUID, status: Int32?, now: Date = Date()) -> Data {
-        Data("=== engine launch \(launchID.uuidString) ended \(ISO8601DateFormatter().string(from: now)) status=\(status.map(String.init) ?? "not-started") ===\n".utf8)
+        Data("=== engine launch \(launchID.uuidString) ended \(now.formatted(.iso8601)) status=\(status.map(String.init) ?? "not-started") ===\n".utf8)
     }
 
     /// Opens both files for appending and writes the start marker. A file

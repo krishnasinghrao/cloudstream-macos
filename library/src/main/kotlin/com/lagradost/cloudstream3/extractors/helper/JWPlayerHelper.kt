@@ -149,7 +149,7 @@ object JwPlayerHelper {
 
     private fun String.addMarks(vararg strings: String): String {
         return strings.fold(this) { accumulator, str ->
-            accumulator.replace(Regex("\"?$str\"?"), "\"$str\"")
+            accumulator.replace(Regex("""\b"?$str"?\s*:"""), "\"$str\":")
         }
     }
 

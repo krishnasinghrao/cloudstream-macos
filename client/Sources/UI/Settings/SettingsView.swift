@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Settings pane for the standard `Settings` scene (⌘,) — System
 /// Settings-style grouped forms with toolbar tabs.

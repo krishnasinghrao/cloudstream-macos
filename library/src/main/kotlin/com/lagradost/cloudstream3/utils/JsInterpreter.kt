@@ -915,13 +915,23 @@ private fun looseEq(a: Any?, b: Any?): Boolean {
     return false
 }
 
+private const val MAX_JS_LIST_SIZE = 100_000
+
 private class JsList(val elements: MutableList<Any?> = mutableListOf()) {
     var length: Int
         get() = elements.size
-        set(v) { while (elements.size < v) elements.add(Unit); while (elements.size > v) elements.removeAt(elements.size - 1) }
+        set(v) {
+            val target = v.coerceIn(0, MAX_JS_LIST_SIZE)
+            while (elements.size < target) elements.add(Unit)
+            while (elements.size > target) elements.removeAt(elements.size - 1)
+        }
 
-    operator fun get(idx: Int): Any? = elements.getOrElse(idx) { Unit }
-    operator fun set(idx: Int, v: Any?) { while (elements.size <= idx) elements.add(Unit); elements[idx] = v }
+    operator fun get(idx: Int): Any? = if (idx in 0 until elements.size) elements[idx] else Unit
+    operator fun set(idx: Int, v: Any?) {
+        if (idx < 0 || idx >= MAX_JS_LIST_SIZE) return
+        while (elements.size <= idx) elements.add(Unit)
+        elements[idx] = v
+    }
 }
 
 private class JsObject(val props: MutableMap<String, Any?> = mutableMapOf(), var constructor: JsFunction? = null)
@@ -1037,8 +1047,10 @@ private class JsInterpreter(
         globalScope.define("Infinity", Double.POSITIVE_INFINITY)
 
         globalScope.define("Array", nativeFn("Array") { args ->
-            if (args.size == 1 && args[0] is Double) JsList(MutableList((args[0] as Double).toInt()) { Unit })
-            else JsList(args.toMutableList())
+            if (args.size == 1 && args[0] is Double) {
+                val size = (args[0] as Double).toInt().coerceIn(0, MAX_JS_LIST_SIZE)
+                JsList(MutableList(size) { Unit })
+            } else JsList(args.toMutableList())
         })
 
         globalScope.define("Object", NativeFn({ args ->
@@ -1362,8 +1374,24 @@ private class JsInterpreter(
                     is JsObject -> obj.props[key] = value
                     is JsList -> {
                         val idx = key.toIntOrNull()
-                        if (idx != null) obj[idx] = value
-                        else if (key == "length") obj.length = toNumber(value).toInt()
+                        if (idx != null) {
+                            if (idx in 0 until MAX_JS_LIST_SIZE) {
+                                while (obj.elements.size <= idx) {
+                                    checkBudget()
+                                    obj.elements.add(Unit)
+                                }
+                                obj.elements[idx] = value
+                            }
+                        } else if (key == "length") {
+                            val target = toNumber(value).toInt().coerceIn(0, MAX_JS_LIST_SIZE)
+                            while (obj.elements.size < target) {
+                                checkBudget()
+                                obj.elements.add(Unit)
+                            }
+                            while (obj.elements.size > target) {
+                                obj.elements.removeAt(obj.elements.size - 1)
+                            }
+                        }
                     }
                     else -> {}
                 }

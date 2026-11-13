@@ -184,6 +184,14 @@ final class MediaResourcePolicyTests: XCTestCase {
             relayed: ["file:///etc/hosts"] + relayed.dropFirst()))
     }
 
+    func testSplitPlanSanitizesPunctuationInAudioTrackMetadata() throws {
+        let audio = AudioTrackDto(url: "https://audio.example/a.m4a", label: "English, (US); 5.1", language: "en, US")
+        let plan = try PlaybackResource.split(video: "https://video.example/v.mp4", orderedAudio: [audio])
+        XCTAssertFalse(plan.url.contains("!track_meta,title=%18%English, (US); 5.1"))
+        XCTAssertTrue(plan.url.contains("title=%18%English  (US)  5.1"))
+        XCTAssertTrue(plan.url.contains("lang=%6%en  US"))
+    }
+
     @MainActor
     func testSplitStreamWithDifferentAudioHeadersLoadsThroughTheRelayAndReleasesIt() async {
         let link = splitLink

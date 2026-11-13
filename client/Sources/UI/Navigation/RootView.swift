@@ -127,10 +127,7 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.22), value: appState.transientError)
         .animation(.easeInOut(duration: 0.22), value: ConnectivityMonitor.shared.isOnline)
         .animation(.easeInOut(duration: 0.22), value: LibraryStore.shared.readFailure ?? LibraryStore.shared.pendingProgressFailure ?? LibraryStore.shared.identityMigrationFailure)
-        .onOpenURL { url in
-            guard !AppLock.shared.isLocked else { return }
-            windowSession.handleDeepLink(url)
-        }
+        .onOpenURL(perform: handleOpenURL)
         // Spotlight result → its title page.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             guard !AppLock.shared.isLocked else { return }
@@ -196,6 +193,13 @@ struct RootView: View {
         case .page(let id):
             LibraryPageView(pageID: id)
         }
+    }
+
+    private func handleOpenURL(_ url: URL) {
+        guard !AppLock.shared.isLocked else { return }
+        let activeID = WindowSessionRegistry.shared.activeID
+        guard activeID == nil || windowSession.id == activeID else { return }
+        windowSession.handleDeepLink(url)
     }
 }
 

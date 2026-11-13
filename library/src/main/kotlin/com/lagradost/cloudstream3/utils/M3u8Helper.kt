@@ -331,7 +331,15 @@ object M3u8Helper2 {
             encryptionState = true
             val encryptionUrl = resolveUrl(playlistStream.streamUrl, match[2])
 
-            encryptionIv = match[3].encodeToByteArray()
+            val rawIv = match[3].trim()
+            val cleanHex = rawIv.removePrefix("0x").removePrefix("0X")
+            encryptionIv = if (cleanHex.length == 32 && cleanHex.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }) {
+                ByteArray(16) { i -> cleanHex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+            } else if (rawIv.isNotEmpty()) {
+                rawIv.encodeToByteArray()
+            } else {
+                byteArrayOf()
+            }
             val encryptionKeyResponse =
                 app.get(encryptionUrl, headers = playlistStream.headers, verify = false)
             val body = encryptionKeyResponse.body

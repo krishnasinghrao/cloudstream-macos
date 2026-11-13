@@ -23,10 +23,20 @@ final class ProfileStore {
             loaded.insert(ViewerProfile(id: ViewerProfile.defaultID, name: "Me", symbol: ViewerProfile.symbols[0], requiresUnlock: false), at: 0)
         }
         // SEC-04: Verify requiresUnlock flags against secure Keychain record to prevent plist tampering
-        let keychainLocked = ProfileLockSecurity.readLocked()
-        for i in loaded.indices {
-            if keychainLocked.contains(loaded[i].id) {
-                loaded[i].requiresUnlock = true
+        let lockStatus = ProfileLockSecurity.readLockedStatus()
+        switch lockStatus {
+        case .unlocked(let keychainLocked):
+            for i in loaded.indices {
+                if keychainLocked.contains(loaded[i].id) {
+                    loaded[i].requiresUnlock = true
+                }
+            }
+        case .inaccessible:
+            // Fail-closed when keychain is inaccessible/locked: require unlock for all non-default profiles
+            for i in loaded.indices {
+                if !loaded[i].isDefault {
+                    loaded[i].requiresUnlock = true
+                }
             }
         }
         profiles = loaded

@@ -129,6 +129,16 @@ final class PlayerRemediationTests: XCTestCase {
         XCTAssertEqual(vm.subtitleDelay, -0.2, accuracy: 1e-9)
     }
 
+    func testSubtitleDelayRejectsNonFiniteValues() {
+        let vm = PlayerViewModel()
+        vm.setSubtitleDelay(1.5)
+        XCTAssertEqual(vm.subtitleDelay, 1.5)
+        vm.setSubtitleDelay(.nan)
+        XCTAssertEqual(vm.subtitleDelay, 1.5)
+        vm.setSubtitleDelay(.infinity)
+        XCTAssertEqual(vm.subtitleDelay, 1.5)
+    }
+
     func testEnginePauseProjectionIsIdempotent() {
         let vm = PlayerViewModel()
         vm.handleEnginePause(false)

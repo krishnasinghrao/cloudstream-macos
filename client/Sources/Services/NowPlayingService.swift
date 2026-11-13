@@ -142,12 +142,12 @@ final class NowPlayingService {
         // A live stream has no length; Control Centre then shows "Live"
         // instead of a scrubber running to the end of a rolling window.
         info[MPNowPlayingInfoPropertyIsLiveStream] = isLive
-        if !isLive { info[MPMediaItemPropertyPlaybackDuration] = duration }
+        if !isLive, duration.isFinite, duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
         commandCenter.changePlaybackPositionCommand.isEnabled = canSeek
         commandCenter.skipForwardCommand.isEnabled = canSeek
         commandCenter.skipBackwardCommand.isEnabled = canSeek
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
-        info[MPNowPlayingInfoPropertyPlaybackRate] = rate
+        if elapsed.isFinite, elapsed >= 0 { info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed }
+        if rate.isFinite, rate >= 0 { info[MPNowPlayingInfoPropertyPlaybackRate] = rate }
         info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.video.rawValue
         if let artworkURL, let currentArtwork, currentArtwork.url == artworkURL {
             info[MPMediaItemPropertyArtwork] = currentArtwork.artwork

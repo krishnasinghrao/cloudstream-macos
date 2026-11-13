@@ -188,7 +188,7 @@ final class AppState {
                 guard !Task.isCancelled else { return }
                 guard snapshot == DaemonSupervisor.shared.connectionSnapshot else { continue }
                 if case .ready = snapshot.state, let endpoint = snapshot.endpoint {
-                    guard connection.endpoint != endpoint else { continue }
+                    guard connection.endpoint != endpoint || connection.isFailed else { continue }
                     resetEngineWork()
                     connection.beginVerification(endpoint)
                     let generation = engineGeneration
@@ -498,8 +498,8 @@ final class AppState {
                 let active = MediaResolverService.shared.activeTaskIds
                 let fresh = pending.filter { !active.contains($0.taskId) }
                 for task in fresh { MediaResolverService.shared.start(task) }
-                // A provider call is waiting on these: re-check soon, without spinning.
-                if !pending.isEmpty && fresh.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
+                // Enforce an unconditional >=250ms sleep on every polling iteration to prevent busy-spinning.
+                try? await Task.sleep(for: .milliseconds(max(250, !pending.isEmpty && fresh.isEmpty ? 500 : 250)))
             }
         }
     }

@@ -76,7 +76,7 @@ object SolveBridge {
         pending[taskId] = task
         Metrics.recordSolveCreated()
         DaemonLog.info("solve.parked", mapOf("taskId" to taskId))
-        PendingSignal.parked()
+        PendingSignal.parkedSolve()
         task
     }
 

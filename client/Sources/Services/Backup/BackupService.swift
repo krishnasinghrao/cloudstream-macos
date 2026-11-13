@@ -46,6 +46,34 @@ final class BackupService {
         registerRepositories = { try await DaemonClient.shared.registerRepositories($0) }
         listProviders = { try await DaemonClient.shared.allProviders() }
         setProviderEnabled = { try await DaemonClient.shared.setProviderEnabled(providerId: $0, enabled: $1) }
+        loadPendingExternalRestore()
+    }
+
+    private var pendingExternalRestoreURL: URL {
+        backupsDirectory.appendingPathComponent("pending-external-restore.json")
+    }
+
+    private func savePendingExternalRestore(_ document: BackupDocument?) {
+        pendingExternalRestore = document
+        guard !AppEnvironment.isIsolated() else { return }
+        let file = pendingExternalRestoreURL
+        if let document {
+            try? FileManager.default.createDirectory(at: backupsDirectory, withIntermediateDirectories: true)
+            if let data = try? JSONEncoder().encode(document) {
+                try? data.write(to: file, options: .atomic)
+            }
+        } else {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    private func loadPendingExternalRestore() {
+        guard !AppEnvironment.isIsolated() else { return }
+        let file = pendingExternalRestoreURL
+        if let data = try? Data(contentsOf: file),
+           let doc = try? JSONDecoder().decode(BackupDocument.self, from: data) {
+            pendingExternalRestore = doc
+        }
     }
 
     // MARK: Extension setup (repositories, disabled providers)
@@ -264,11 +292,11 @@ final class BackupService {
         // Names are only for backups that predate stable IDs.
         let legacyNames = document.disabledProviderIDs == nil ? document.disabledProviders : []
         guard !document.repositories.isEmpty || !providerIDs.isEmpty || !legacyNames.isEmpty else {
-            pendingExternalRestore = nil
+            savePendingExternalRestore(nil)
             return
         }
         func postpone(_ reason: String) {
-            pendingExternalRestore = document
+            savePendingExternalRestore(document)
             result.externalPhasesPending = true
             result.warnings.append("Your library was restored, but the extension setup wasn’t: \(reason) Use Finish Restoring Extensions in Settings to try again.")
         }
@@ -316,7 +344,7 @@ final class BackupService {
             }
             if !failed.isEmpty { return postpone("these providers couldn’t be disabled: \(failed.joined(separator: ", ")).") }
         }
-        pendingExternalRestore = nil
+        savePendingExternalRestore(nil)
         await access.refresh()
     }
 

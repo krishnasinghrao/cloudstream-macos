@@ -301,9 +301,11 @@ internal object MediaRelay {
                 val decoded = runCatching { java.net.URLDecoder.decode(segment.replace("+", "%2B"), Charsets.UTF_8) }.getOrNull()
                 decoded == null || decoded == "." || decoded == ".." || '/' in decoded || '\\' in decoded
             }) return null
-        val target = runCatching { URI(base + rest).normalize() }.getOrNull() ?: return null
+        val encodedRest = rest.replace("[", "%5B").replace("]", "%5D")
+        val encodedBase = base.replace("[", "%5B").replace("]", "%5D")
+        val target = runCatching { URI(encodedBase + encodedRest).normalize() }.getOrNull() ?: return null
         val resolved = target.toString()
-        return resolved.takeIf { it.startsWith(base) && target.rawPath?.contains("/../") != true }
+        return resolved.takeIf { it.startsWith(encodedBase) && target.rawPath?.contains("/../") != true }
     }
 
     /** Marks a response streaming from resource [id]; while one is open its session stays alive. */
@@ -547,7 +549,9 @@ internal object MediaRelay {
         val existing = uri.rawQuery.orEmpty().split('&').map { it.substringBefore('=') }
         if (names.any { it in existing }) return null
         val prefix = url.substringBefore('#')
-        return prefix + (if (uri.rawQuery == null) "?" else "&") + query
+        val hasQuery = !uri.rawQuery.isNullOrEmpty()
+        val separator = if (hasQuery) "&" else if (prefix.endsWith('?')) "" else "?"
+        return prefix + separator + query
     }
 
     private fun manifestType(kind: ManifestRewriter.Kind): ContentType =

@@ -446,6 +446,32 @@ final class DownloadService {
             activityTrigger += 1
             return
         }
+        guard item.state == .downloading || item.state == .resolving || item.state == .queued else { return }
+
+        if item.state == .queued {
+            item.state = .paused
+            item.resumeRequested = false
+            item.statusDetail = nil
+            activityTrigger += 1
+            upsertRecord(for: item)
+            return
+        }
+
+        if item.state == .resolving {
+            item.state = .paused
+            item.resumeRequested = false
+            item.statusDetail = nil
+            if let run = runs[item.id] {
+                run.task.cancel()
+                runs[item.id] = nil
+            }
+            activityTrigger += 1
+            upsertRecord(for: item)
+            updatePowerAssertion()
+            drainQueue()
+            return
+        }
+
         guard item.state == .downloading, let run = runs[item.id], let job = run.job else { return }
         switch job {
         case .ffmpeg(let ffmpeg):
@@ -570,6 +596,7 @@ final class DownloadService {
         // download (a re-download would delete the finished part first).
         if case .finalizeFailed = item.failureReason {
             reconcileFinalizing(item)
+            drainQueue()
             return
         }
         // Its destination may have been taken while it sat failed.

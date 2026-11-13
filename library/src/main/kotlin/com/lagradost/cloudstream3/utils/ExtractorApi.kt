@@ -894,7 +894,7 @@ fun getQualityFromName(qualityName: String?): Int {
     }?.value ?: match.toIntOrNull() ?: Qualities.Unknown.value
 }
 
-private val packedRegex = Regex("""eval\(function\(p,a,c,k,e,.*\)\)""")
+private val packedRegex = Regex("""eval\(function\(p,a,c,k,e,.*?\)\)""")
 fun getPacked(string: String): String? {
     return packedRegex.find(string)?.value
 }
@@ -945,9 +945,10 @@ suspend fun loadExtractor(
     val currentUrl = unshortenLinkSafe(url)
     val compareUrl = currentUrl.lowercase().replace(schemaStripRegex, "")
 
+    val apisSnapshot = extractorApis.withLock { extractorApis.toList() }
+
     // Iterate in reverse order so the new registered ExtractorApi takes priority
-    for (index in extractorApis.lastIndex downTo 0) {
-        val extractor = extractorApis[index]
+    for (extractor in apisSnapshot.reversed()) {
         if (compareUrl.startsWith(extractor.mainUrl.replace(schemaStripRegex, ""))) {
             try {
                 extractor.getUrl(currentUrl, referer, subtitleCallback, callback)
@@ -963,8 +964,7 @@ suspend fun loadExtractor(
     }
 
     // this is to match mirror domains - like example.com, example.net
-    for (index in extractorApis.lastIndex downTo 0) {
-        val extractor = extractorApis[index]
+    for (extractor in apisSnapshot.reversed()) {
         if (Levenshtein.partialRatio(
                 extractor.mainUrl,
                 currentUrl

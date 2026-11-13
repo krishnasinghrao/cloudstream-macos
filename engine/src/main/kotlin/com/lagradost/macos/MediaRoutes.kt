@@ -410,7 +410,7 @@ internal fun Route.mediaRoutes() {
         Metrics.recordRequest("solve/pending")
         val waitMs = call.request.queryParameters["waitMs"]?.toLongOrNull() ?: 0
         call.respond(
-            PendingSignal.awaitNonEmpty(waitMs) { SolveBridge.listPending() }.map { task ->
+            PendingSignal.awaitSolve(waitMs) { SolveBridge.listPending() }.map { task ->
                 SolvePendingDto(taskId = task.taskId, targetUrl = task.targetUrl, ageMs = task.ageMs, userAgent = task.userAgent)
             },
         )
@@ -435,7 +435,7 @@ internal fun Route.mediaRoutes() {
     get("/media/pending") {
         Metrics.recordRequest("media/pending")
         val waitMs = call.request.queryParameters["waitMs"]?.toLongOrNull() ?: 0
-        call.respond(PendingSignal.awaitNonEmpty(waitMs) { MediaResolveBridge.pending() })
+        call.respond(PendingSignal.awaitMedia(waitMs) { MediaResolveBridge.pending() })
     }
 
     post("/media/observe") {
@@ -465,7 +465,7 @@ internal fun Route.mediaRoutes() {
     get("/webview/pending") {
         Metrics.recordRequest("webview/pending")
         val waitMs = call.request.queryParameters["waitMs"]?.toLongOrNull() ?: 0
-        call.respond(PendingSignal.awaitNonEmpty(waitMs) { WebViewSessionBridge.pending() })
+        call.respond(PendingSignal.awaitWebView(waitMs) { WebViewSessionBridge.pending() })
     }
 
     post("/webview/complete") {

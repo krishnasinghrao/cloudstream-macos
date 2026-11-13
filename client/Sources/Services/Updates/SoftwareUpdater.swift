@@ -187,7 +187,13 @@ final class SoftwareUpdater {
     }
 
     func cancelDownload() {
-        guard case .downloading(let release, _) = phase else { return }
+        let release: UpdateRelease
+        switch phase {
+        case .downloading(let r, _), .preparing(let r), .ready(let r):
+            release = r
+        default:
+            return
+        }
         work?.cancel()
         work = nil
         downloadGeneration += 1

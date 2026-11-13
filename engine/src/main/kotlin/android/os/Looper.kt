@@ -72,8 +72,7 @@ class MessageQueue internal constructor() {
     private var quitting = false
 
     internal fun enqueue(message: Message, at: Long): Boolean = synchronized(lock) {
-        if (quitting) return false
-        check(messages.size < MAX_PENDING) { "Too many pending Handler messages" }
+        if (quitting || messages.size >= MAX_PENDING) return false
         message.`when` = at
         message.sequence = sequence.incrementAndGet()
         messages.add(message)

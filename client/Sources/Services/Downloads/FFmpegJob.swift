@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// One ffmpeg remux run (HLS/DASH → MP4/MKV), wrapped as a single awaitable
@@ -27,6 +28,7 @@ final class FFmpegJob: @unchecked Sendable {
     private var launched = false
     private var terminated = false
     private var suspended = false
+    private var escalationTask: Task<Void, Never>?
 
     private let stdoutSplitter = LineSplitter()
     private let stderrSplitter = LineSplitter()
@@ -82,6 +84,7 @@ final class FFmpegJob: @unchecked Sendable {
                 }
 
                 process.terminationHandler = { [weak self] process in
+                    self?.cancelEscalation()
                     // Drain whatever the pipes still hold *before* reading the
                     // tail: the final error lines usually arrive last.
                     stdoutPipe.fileHandleForReading.readabilityHandler = nil
@@ -144,9 +147,28 @@ final class FFmpegJob: @unchecked Sendable {
         return !suspended
     }
 
+    private func cancelEscalation() {
+        lock.withLock {
+            escalationTask?.cancel()
+            escalationTask = nil
+        }
+    }
+
+    /// Verifies that the process is still running, has a valid PID, is a direct child of this process,
+    /// and has not transitioned to a zombie state awaiting reap.
+    private static func isOurRunningChild(_ process: Process) -> Bool {
+        guard process.isRunning else { return false }
+        let pid = process.processIdentifier
+        guard pid > 1 else { return false }
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return false }
+        return info.pbi_ppid == UInt32(getpid()) && info.pbi_status != UInt32(SZOMB)
+    }
+
     /// Graceful stop: SIGCONT (a stopped process can't act on SIGTERM),
     /// SIGTERM, then SIGKILL after a grace period. The escalation checks the
-    /// `Process` object — never a bare PID that the kernel may have reused.
+    /// `Process` object and its parentage — never a bare PID that the kernel may have reused.
     func terminate() {
         lock.lock()
         let alreadyTerminated = terminated
@@ -161,11 +183,20 @@ final class FFmpegJob: @unchecked Sendable {
         guard shouldSignal, !alreadyTerminated else { return }
         process.terminate()
         let process = self.process
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 3) {
-            if process.isRunning {
-                kill(process.processIdentifier, SIGKILL)
+        lock.lock()
+        escalationTask?.cancel()
+        escalationTask = Task.detached(priority: .utility) { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(3))
+            } catch {
+                return
             }
+            guard !Task.isCancelled else { return }
+            let stillTerminating = self?.lock.withLock { self?.terminated ?? false } ?? false
+            guard stillTerminating, Self.isOurRunningChild(process) else { return }
+            kill(process.processIdentifier, SIGKILL)
         }
+        lock.unlock()
     }
 
     // MARK: - Stream parsing

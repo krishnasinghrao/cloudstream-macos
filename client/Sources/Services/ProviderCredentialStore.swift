@@ -53,14 +53,28 @@ enum ProviderCredentialStore {
         for providerId in stored {
             guard !Task.isCancelled else { break }
             guard availableProviderIds.map({ $0.contains(providerId) }) ?? true else { continue }
-            guard let credential = await Task.detached(priority: .utility, operation: { credential(for: providerId) }).value else { continue }
-            do {
-                let result = try await DaemonClient.shared.configureProvider(
-                    PluginConfigRequestDto(providerId: providerId, credentials: .set(credential)))
-                if !result.accepted { failures[providerId] = result.detail ?? "The provider did not accept its credentials." }
-            } catch {
-                guard !Task.isCancelled else { break }
-                failures[providerId] = error.localizedDescription
+            let credResult = await Task.detached(priority: .utility) { () -> GenericPasswordKeychain.ReadResult in
+                readObserver.withLock { $0 }?()
+                if AppEnvironment.isIsolated() {
+                    return isolatedCredentials.withLock { $0[providerId] }.map { .found(Data($0.utf8)) } ?? .missing
+                }
+                return GenericPasswordKeychain.readResult(service: service, account: providerId)
+            }.value
+            switch credResult {
+            case .found(let data):
+                guard let credential = String(data: data, encoding: .utf8) else { continue }
+                do {
+                    let result = try await DaemonClient.shared.configureProvider(
+                        PluginConfigRequestDto(providerId: providerId, credentials: .set(credential)))
+                    if !result.accepted { failures[providerId] = result.detail ?? "The provider did not accept its credentials." }
+                } catch {
+                    guard !Task.isCancelled else { break }
+                    failures[providerId] = error.localizedDescription
+                }
+            case .locked:
+                failures[providerId] = "Keychain is locked or inaccessible."
+            case .missing, .unavailable:
+                continue
             }
         }
         return failures

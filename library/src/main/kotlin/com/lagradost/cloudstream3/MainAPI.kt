@@ -29,6 +29,8 @@ import io.ktor.http.takeFrom
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -113,14 +115,16 @@ object APIHolder {
         get() = unixTimeMS / 1000L
 
     val allProviders = atomicListOf<MainAPI>()
+    private val apisLock = SynchronizedObject()
 
     fun initAll() {
-        allProviders.withLock {
-            for (api in allProviders) {
-                api.init()
-            }
+        val providers = allProviders.withLock { allProviders.toList() }
+        for (api in providers) {
+            api.init()
         }
-        apiMap = null
+        synchronized(apisLock) {
+            apiMap = null
+        }
     }
 
     /** String extension function to Capitalize first char of string.*/
@@ -132,21 +136,21 @@ object APIHolder {
     var apiMap: Map<String, Int>? = null
 
     fun addPluginMapping(plugin: MainAPI) {
-        apis.withLock {
+        synchronized(apisLock) {
             apis = apis + plugin
+            initMap(true)
         }
-        initMap(true)
     }
 
     fun removePluginMapping(plugin: MainAPI) {
-        apis.withLock {
+        synchronized(apisLock) {
             apis = apis.filter { it != plugin }
+            initMap(true)
         }
-        initMap(true)
     }
 
     private fun initMap(forcedUpdate: Boolean = false) {
-        apis.withLock {
+        synchronized(apisLock) {
             if (apiMap == null || forcedUpdate)
                 apiMap = apis.mapIndexed { index, api -> api.name to index }.toMap()
         }
@@ -154,13 +158,10 @@ object APIHolder {
 
     fun getApiFromNameNull(apiName: String?): MainAPI? {
         if (apiName == null) return null
-        return allProviders.withLock {
+        return synchronized(apisLock) {
             initMap()
-            apis.withLock {
-                apiMap?.get(apiName)?.let { apis.getOrNull(it) }
-                // Leave the ?. null check, it can crash regardless
-                ?: allProviders.firstOrNull { it.name == apiName }
-            }
+            apiMap?.get(apiName)?.let { apis.getOrNull(it) }
+                ?: allProviders.withLock { allProviders.firstOrNull { it.name == apiName } }
         }
     }
 
@@ -809,7 +810,17 @@ fun splitUrlParameters(url: Url): Map<String, String> {
  */
 @Prerelease
 fun splitUrlParameters(url: String): Map<String, String> {
-    return splitUrlParameters(Url(url))
+    val normalized = when {
+        url.startsWith("http://") || url.startsWith("https://") -> url
+        url.startsWith("/") -> "https://dummy.internal$url"
+        url.startsWith("?") -> "https://dummy.internal/$url"
+        else -> "https://dummy.internal/$url"
+    }
+    return try {
+        splitUrlParameters(Url(normalized))
+    } catch (_: Exception) {
+        emptyMap()
+    }
 }
 
 /**
@@ -2369,7 +2380,7 @@ constructor(
     override fun getTotalEpisodeIndex(episode: Int, season: Int): Int {
         val displayMap = this.seasonNames?.associate { it.season to it.displaySeason } ?: emptyMap()
 
-        return this.episodes.maxOf { (_, episodes) ->
+        return (this.episodes.maxOfOrNull { (_, episodes) ->
             episodes.count { episodeData ->
                 // Prioritize display season as actual season may be something random to fit multiple seasons into one.
                 val episodeSeason =
@@ -2377,7 +2388,7 @@ constructor(
                 // Count all episodes from season 1 to below the current season.
                 episodeSeason in 1..<season
             }
-        } + episode
+        } ?: 0) + episode
     }
 }
 

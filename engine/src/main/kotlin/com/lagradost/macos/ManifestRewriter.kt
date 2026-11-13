@@ -50,8 +50,12 @@ internal object ManifestRewriter {
 
     private val uriAttribute = Regex("""URI="([^"]*)"""")
 
+    private fun sanitizeReference(reference: String): String =
+        reference.trim().replace("[", "%5B").replace("]", "%5D")
+
     private fun absolute(base: URI, reference: String): String {
-        val resolved = runCatching { base.resolve(reference.trim()) }.getOrNull() ?: throw Unsupported("reference")
+        val clean = sanitizeReference(reference)
+        val resolved = runCatching { base.resolve(clean) }.getOrNull() ?: throw Unsupported("reference")
         if (resolved.scheme?.lowercase(Locale.ROOT) !in setOf("http", "https") || resolved.host == null) throw Unsupported("scheme")
         return resolved.toString()
     }

@@ -179,11 +179,13 @@ object HlsPlaylistParser {
 
     @Throws(ParserException::class)
     private fun parseIntAttr(line: String, pattern: Regex): Int {
-        return parseStringAttr(line, pattern, emptyMap()).toInt()
+        val str = parseStringAttr(line, pattern, emptyMap())
+        return str.toLongOrNull()?.coerceIn(0L, Int.MAX_VALUE.toLong())?.toInt()
+            ?: throw ParserException.createForMalformedManifest("Invalid integer attribute value: $str", null)
     }
 
     private fun parseOptionalIntAttr(line: String, pattern: Regex, defaultValue: Int): Int =
-        pattern.find(line)?.groupValues?.get(1)?.toInt() ?: defaultValue
+        pattern.find(line)?.groupValues?.get(1)?.toLongOrNull()?.coerceIn(0L, Int.MAX_VALUE.toLong())?.toInt() ?: defaultValue
 
     data class SchemeData(
         /**

@@ -149,6 +149,8 @@ final class PlayerViewModel {
     @ObservationIgnored private var liveVisitRecorded = false
     /// The profile that started the session: a visit is never written into another one.
     @ObservationIgnored private var liveHistoryOwner: LibraryStore.ProfileOperationContext?
+    /// The profile active when playback started; aborts progress persistence if active profile changed.
+    @ObservationIgnored private var sessionProfileID: UUID?
     /// The user paused: a stopped live stream is reconnected when they play again, not behind their back.
     @ObservationIgnored private var recoveryDeferredByPause = false
 
@@ -239,7 +241,7 @@ final class PlayerViewModel {
     @ObservationIgnored private var prefetchTask: Task<Void, Never>?
     /// "All mirrors failed" while links are still arriving: the next one is tried.
     @ObservationIgnored private var awaitingLateCandidate = false
-    @ObservationIgnored private var displaySleepActivity: NSObjectProtocol?
+    @ObservationIgnored nonisolated(unsafe) private var displaySleepActivity: (any NSObjectProtocol)?
     /// Resume position of the current load until the engine confirms the
     /// source can seek there.
     @ObservationIgnored private var pendingResumeCheck: Double?
@@ -342,6 +344,12 @@ final class PlayerViewModel {
     func endPending(_ token: Int) {
         guard playGeneration == token else { return }
         close()
+    }
+
+    deinit {
+        if let activity = displaySleepActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+        }
     }
 
     // MARK: - Play
@@ -688,6 +696,7 @@ final class PlayerViewModel {
         playbackKind = localResource == nil && persistsProgress ? PlaybackKind.catalogue(details.type) : .vod
         liveVisitRecorded = false
         liveHistoryOwner = isLive ? try? LibraryStore.shared.captureProfileOperation() : nil
+        sessionProfileID = ProfileStore.shared.activeID
         seekableRanges = []
         awaitingLateCandidate = false
         titlePrefs = persistsProgress && preferences.rememberPlaybackPerTitle
@@ -710,6 +719,8 @@ final class PlayerViewModel {
             localResource: localResource,
         )
         pendingTitle = nil
+        transitionTargetEpisode = nil
+        claimedEpisodeData = nil
         error = nil
         progressFailureShown = false
         refreshEpisodeNeighbours()
@@ -1287,6 +1298,10 @@ final class PlayerViewModel {
 
     /// The error card's Retry: the same source again, from where it stopped.
     func retryPlayback() {
+        if let target = transitionTargetEpisode {
+            playEpisode(target)
+            return
+        }
         guard let session else { return }
         if isLive {
             recoveryBudget.reset()
@@ -1553,6 +1568,7 @@ final class PlayerViewModel {
     }
 
     func setSubtitleDelay(_ seconds: Double) {
+        guard seconds.isFinite else { return }
         subtitleDelay = seconds
         videoView?.setSubtitleDelay(seconds)
         rememberForTitle { $0.subtitleDelay = seconds }
@@ -1596,6 +1612,9 @@ final class PlayerViewModel {
 
     func dismissError() {
         error = nil
+        transitionTargetEpisode = nil
+        claimedEpisodeData = nil
+        pendingTitle = nil
         if session == nil {
             close()
         } else if phase == .failed {
@@ -1737,6 +1756,7 @@ final class PlayerViewModel {
     /// carry no chapters.
     func markIntro(start: Bool) {
         let position = elapsed
+        guard position.isFinite, position >= 0 else { return }
         rememberForTitle { prefs in
             if start {
                 prefs.introStart = position
@@ -1963,6 +1983,7 @@ final class PlayerViewModel {
         // request is the one that plays.
         guard let session, !(phase == .resolving && claimedEpisodeData == episode.data) else { return }
         claimedEpisodeData = episode.data
+        transitionTargetEpisode = episode
         episodeTransition &+= 1
         let transition = episodeTransition
         phase = .resolving
@@ -1976,6 +1997,7 @@ final class PlayerViewModel {
         }
     }
 
+    @ObservationIgnored private var transitionTargetEpisode: EpisodeDto?
     @ObservationIgnored private var claimedEpisodeData: String?
     /// Bumped by every episode request and by close: an earlier request's task finds itself replaced.
     @ObservationIgnored private var episodeTransition: UInt64 = 0
@@ -2065,6 +2087,7 @@ final class PlayerViewModel {
         playGeneration += 1
         episodeTransition &+= 1
         claimedEpisodeData = nil
+        transitionTargetEpisode = nil
         cancelResolution()
         cancelLiveRecovery()
         prefetchTask?.cancel()
@@ -2074,6 +2097,7 @@ final class PlayerViewModel {
         releaseVerifier()
         releaseRelay(cancelPending: true)
         persistProgress(notify: true)
+        sessionProfileID = nil
         progressFailureShown = false
         NowPlayingService.shared.clearNowPlaying()
         queuedNext = nil
@@ -2236,6 +2260,9 @@ final class PlayerViewModel {
     private func persistProgress(notify: Bool) {
         // A live channel is a visit, not a position (recordLiveVisitIfNeeded).
         guard let session, session.persistsProgress, !isLive else { return }
+        if let sessionProfileID, sessionProfileID != ProfileStore.shared.activeID {
+            return
+        }
         let save = {
             try LibraryStore.shared.recordProgress(
                 details: session.details,

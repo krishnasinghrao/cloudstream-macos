@@ -6,6 +6,11 @@ enum ProfileLockSecurity {
     private static let account = "locked-ids"
     private static let isolatedLocked = Mutex<Set<String>>([])
 
+    enum LockStatus {
+        case unlocked(Set<UUID>)
+        case inaccessible
+    }
+
     static func recordLocked(profileIDs: Set<UUID>) {
         if AppEnvironment.isIsolated() {
             isolatedLocked.withLock { $0 = Set(profileIDs.map(\.uuidString)) }
@@ -16,12 +21,25 @@ enum ProfileLockSecurity {
         GenericPasswordKeychain.save(data, service: service, account: account)
     }
 
-    static func readLocked() -> Set<UUID> {
+    static func readLockedStatus() -> LockStatus {
         if AppEnvironment.isIsolated() {
-            return Set(isolatedLocked.withLock { $0 }.compactMap(UUID.init(uuidString:)))
+            return .unlocked(Set(isolatedLocked.withLock { $0 }.compactMap(UUID.init(uuidString:))))
         }
-        guard let data = GenericPasswordKeychain.read(service: service, account: account),
-              let list = try? JSONDecoder().decode([String].self, from: data) else { return [] }
-        return Set(list.compactMap(UUID.init(uuidString:)))
+        switch GenericPasswordKeychain.readResult(service: service, account: account) {
+        case .found(let data):
+            guard let list = try? JSONDecoder().decode([String].self, from: data) else { return .unlocked([]) }
+            return .unlocked(Set(list.compactMap(UUID.init(uuidString:))))
+        case .locked:
+            return .inaccessible
+        case .missing, .unavailable:
+            return .unlocked([])
+        }
+    }
+
+    static func readLocked() -> Set<UUID> {
+        if case .unlocked(let set) = readLockedStatus() {
+            return set
+        }
+        return []
     }
 }

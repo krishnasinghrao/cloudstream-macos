@@ -14,6 +14,7 @@ struct LibraryPageView: View {
     @MainActor
     final class Cache {
         struct Key: Equatable {
+            var profileID: UUID
             var version: UInt64
             var pageID: String
             var options: LibraryViewOptions
@@ -52,7 +53,7 @@ struct LibraryPageView: View {
 
     var body: some View {
         let query = windowSession.libraryFilter
-        let _ = cache.update(.init(version: LibraryStore.shared.version, pageID: pageID, options: options.orderingAndFilters, query: query)) {
+        let _ = cache.update(.init(profileID: ProfileStore.shared.activeID, version: LibraryStore.shared.version, pageID: pageID, options: options.orderingAndFilters, query: query)) {
             let store = LibraryStore.shared
             let page = store.readForDisplay(or: nil, { try store.page(id: pageID) })
             let entries = store.readForDisplay(or: [], { try store.pageEntries(pageID: pageID) })

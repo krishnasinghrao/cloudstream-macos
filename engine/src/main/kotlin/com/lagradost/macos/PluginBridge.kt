@@ -143,7 +143,8 @@ object PluginBridge {
         compatibility?.let(CompatibilityAssessment::impossibleReason)?.let { throw UnsupportedExtensionException(it) }
         val loader = VerifiedClassLoader(jars, PluginBridge::class.java.classLoader, record.id)
 
-        val context = android.content.Context(ExtensionStorage.directory(record.id))
+        val context = resources?.let { android.content.Context(ExtensionStorage.directory(record.id), it) }
+            ?: android.content.Context(ExtensionStorage.directory(record.id))
         ProviderRuntimeBootstrap.initialize(context)
 
         val instance = loader.loadClass(pluginClassName).getDeclaredConstructor().newInstance()

@@ -211,13 +211,27 @@ struct PlaybackResource: Equatable, Sendable {
             parts += ["!new_stream", "!no_clip", "!no_chapters"]
             if index > 0 { parts.append("!delay_open,media_type=audio,codec=" + audioCodecGuess(track)) }
             var metadata: [String] = []
-            if let language = track.language, !language.isEmpty { metadata.append("lang=" + edlQuoted(language)) }
-            if let label = track.label, !label.isEmpty { metadata.append("title=" + edlQuoted(label)) }
+            if let language = track.language {
+                let clean = edlSanitizeMeta(language)
+                if !clean.isEmpty { metadata.append("lang=" + edlQuoted(clean)) }
+            }
+            if let label = track.label {
+                let clean = edlSanitizeMeta(label)
+                if !clean.isEmpty { metadata.append("title=" + edlQuoted(clean)) }
+            }
             if !metadata.isEmpty { parts.append((["!track_meta"] + metadata).joined(separator: ",")) }
             parts.append(edlQuoted(relayed?[index + 1] ?? track.url))
         }
         guard !parts.contains(where: { $0.contains("\0") }) else { throw MediaResourcePolicy.Rejection.invalidPlaylist }
         return Self(url: "edl://" + parts.joined(separator: ";"), origin: .generatedRemote)
+    }
+
+    /// mpv's EDL header tokenizer splits directive tokens on `,` and `;` before evaluating
+    /// `%len%` escapes. Strip `,` and `;` from metadata attributes to prevent demuxer syntax errors.
+    private static func edlSanitizeMeta(_ value: String) -> String {
+        value.replacingOccurrences(of: ";", with: " ")
+            .replacingOccurrences(of: ",", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func edlQuoted(_ value: String) -> String { "%\(value.utf8.count)%\(value)" }

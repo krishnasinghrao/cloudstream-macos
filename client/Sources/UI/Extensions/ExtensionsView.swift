@@ -117,9 +117,6 @@ struct ExtensionsView: View {
         .sheet(item: $pluginForSettings) { plugin in
             ProviderSettingsSheet(plugin: plugin)
         }
-        .task(id: appState.isEngineReady) {
-            if appState.isEngineReady { await appState.bootstrap() }
-        }
         .onAppear(perform: consumePendingRepository)
         .onChange(of: windowSession.pendingRepoAdd) { _, _ in consumePendingRepository() }
         .onChange(of: selectedTab) { _, _ in query = "" }

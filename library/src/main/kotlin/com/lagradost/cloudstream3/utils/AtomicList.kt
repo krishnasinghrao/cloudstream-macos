@@ -12,19 +12,24 @@ import kotlinx.atomicfu.locks.synchronized
 open class AtomicList<T>(
     private val delegate: List<T> = emptyList(),
 ) : List<T>, SynchronizedObject() {
+    internal var lock: SynchronizedObject = SynchronizedObject()
 
-    fun <R> withLock(block: () -> R): R = synchronized(this) { block() }
+    internal constructor(delegate: List<T>, lock: SynchronizedObject) : this(delegate) {
+        this.lock = lock
+    }
 
-    fun filter(predicate: (T) -> Boolean): AtomicList<T> = synchronized(this) { AtomicList(delegate.filter(predicate)) }
-    fun distinctBy(selector: (T) -> Any?): AtomicList<T> = synchronized(this) { AtomicList(delegate.distinctBy(selector)) }
+    fun <R> withLock(block: () -> R): R = synchronized(lock) { block() }
 
-    override val size: Int get() = synchronized(this) { delegate.size }
-    override fun isEmpty(): Boolean = synchronized(this) { delegate.isEmpty() }
-    override fun contains(element: T): Boolean = synchronized(this) { delegate.contains(element) }
-    override fun containsAll(elements: Collection<T>): Boolean = synchronized(this) { delegate.containsAll(elements) }
-    override fun get(index: Int): T = synchronized(this) { delegate[index] }
-    override fun indexOf(element: T): Int = synchronized(this) { delegate.indexOf(element) }
-    override fun lastIndexOf(element: T): Int = synchronized(this) { delegate.lastIndexOf(element) }
+    fun filter(predicate: (T) -> Boolean): AtomicList<T> = synchronized(lock) { AtomicList(delegate.filter(predicate), lock) }
+    fun distinctBy(selector: (T) -> Any?): AtomicList<T> = synchronized(lock) { AtomicList(delegate.distinctBy(selector), lock) }
+
+    override val size: Int get() = synchronized(lock) { delegate.size }
+    override fun isEmpty(): Boolean = synchronized(lock) { delegate.isEmpty() }
+    override fun contains(element: T): Boolean = synchronized(lock) { delegate.contains(element) }
+    override fun containsAll(elements: Collection<T>): Boolean = synchronized(lock) { delegate.containsAll(elements) }
+    override fun get(index: Int): T = synchronized(lock) { delegate[index] }
+    override fun indexOf(element: T): Int = synchronized(lock) { delegate.indexOf(element) }
+    override fun lastIndexOf(element: T): Int = synchronized(lock) { delegate.lastIndexOf(element) }
 
     // Iterators intentionally NOT synchronized, callers must use withLock { } for safe iteration.
     override fun iterator(): Iterator<T> = delegate.iterator()
@@ -32,24 +37,27 @@ open class AtomicList<T>(
     override fun listIterator(index: Int): ListIterator<T> = delegate.listIterator(index)
     override fun subList(fromIndex: Int, toIndex: Int): List<T> = delegate.subList(fromIndex, toIndex)
 
-    operator fun plus(element: T): AtomicList<T> = synchronized(this) { AtomicList(delegate + element) }
-    operator fun plus(elements: Collection<T>): AtomicList<T> = synchronized(this) { AtomicList(delegate + elements) }
+    operator fun plus(element: T): AtomicList<T> = synchronized(lock) { AtomicList(delegate + element, lock) }
+    operator fun plus(elements: Collection<T>): AtomicList<T> = synchronized(lock) { AtomicList(delegate + elements, lock) }
 }
 
 class AtomicMutableList<T>(
     private val mutableDelegate: MutableList<T> = mutableListOf(),
 ) : AtomicList<T>(mutableDelegate), MutableList<T> {
+    internal constructor(mutableDelegate: MutableList<T>, lock: SynchronizedObject) : this(mutableDelegate) {
+        this.lock = lock
+    }
 
-    override fun add(element: T): Boolean = synchronized(this) { mutableDelegate.add(element) }
-    override fun add(index: Int, element: T) = synchronized(this) { mutableDelegate.add(index, element) }
-    override fun addAll(elements: Collection<T>): Boolean = synchronized(this) { mutableDelegate.addAll(elements) }
-    override fun addAll(index: Int, elements: Collection<T>): Boolean = synchronized(this) { mutableDelegate.addAll(index, elements) }
-    override fun remove(element: T): Boolean = synchronized(this) { mutableDelegate.remove(element) }
-    override fun removeAt(index: Int): T = synchronized(this) { mutableDelegate.removeAt(index) }
-    override fun removeAll(elements: Collection<T>): Boolean = synchronized(this) { mutableDelegate.removeAll(elements) }
-    override fun retainAll(elements: Collection<T>): Boolean = synchronized(this) { mutableDelegate.retainAll(elements) }
-    override fun set(index: Int, element: T): T = synchronized(this) { mutableDelegate.set(index, element) }
-    override fun clear() = synchronized(this) { mutableDelegate.clear() }
+    override fun add(element: T): Boolean = synchronized(lock) { mutableDelegate.add(element) }
+    override fun add(index: Int, element: T) = synchronized(lock) { mutableDelegate.add(index, element) }
+    override fun addAll(elements: Collection<T>): Boolean = synchronized(lock) { mutableDelegate.addAll(elements) }
+    override fun addAll(index: Int, elements: Collection<T>): Boolean = synchronized(lock) { mutableDelegate.addAll(index, elements) }
+    override fun remove(element: T): Boolean = synchronized(lock) { mutableDelegate.remove(element) }
+    override fun removeAt(index: Int): T = synchronized(lock) { mutableDelegate.removeAt(index) }
+    override fun removeAll(elements: Collection<T>): Boolean = synchronized(lock) { mutableDelegate.removeAll(elements) }
+    override fun retainAll(elements: Collection<T>): Boolean = synchronized(lock) { mutableDelegate.retainAll(elements) }
+    override fun set(index: Int, element: T): T = synchronized(lock) { mutableDelegate.set(index, element) }
+    override fun clear() = synchronized(lock) { mutableDelegate.clear() }
 
     // Iterators intentionally NOT synchronized, callers must use withLock { } for safe iteration.
     override fun iterator(): MutableIterator<T> = mutableDelegate.iterator()

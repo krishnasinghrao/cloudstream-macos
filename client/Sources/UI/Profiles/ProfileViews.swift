@@ -99,7 +99,6 @@ struct ProfileSwitcher: View {
 /// Add, rename, restyle, lock and delete profiles.
 struct ProfileManagerView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var editing: ViewerProfile?
     @State private var newName = ""
     @State private var error: String?
     @State private var pendingDelete: ViewerProfile?

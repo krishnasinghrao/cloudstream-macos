@@ -104,8 +104,14 @@ internal class WorkerEgressProxy(
                 runCatching { remote.keepAlive = true }
                 val activity = AtomicLong(System.currentTimeMillis())
                 val back = pool.submit { pipe(remote.getInputStream(), output, socket, activity) }
-                pipe(input, remote.getOutputStream(), remote, activity)
-                runCatching { back.get() }
+                try {
+                    pipe(input, remote.getOutputStream(), remote, activity)
+                } finally {
+                    runCatching { socket.close() }
+                    runCatching { remote.close() }
+                    back.cancel(true)
+                    runCatching { back.get() }
+                }
             }
         }
     }

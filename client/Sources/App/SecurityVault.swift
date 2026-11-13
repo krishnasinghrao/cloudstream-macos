@@ -13,6 +13,6 @@ enum SecurityVault {
         var bytes = [UInt8](repeating: 0, count: 32)
         let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
         precondition(status == errSecSuccess, "SecRandomCopyBytes failed: \(status)")
-        return bytes.map { String(format: "%02hhx", $0) }.joined()
+        return bytes.hexString
     }
 }

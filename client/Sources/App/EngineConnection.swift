@@ -29,6 +29,7 @@ struct EngineConnection: Sendable {
 
     var isReady: Bool { phase == .restoring || phase == .usable }
     var isUsable: Bool { phase == .usable }
+    var isFailed: Bool { if case .failed = phase { return true }; return false }
     var providersRestored: Bool { ["ready", "safe_mode"].contains(health?.extensions?.phase ?? "") }
     var daemonState: DaemonState {
         switch phase {
@@ -81,5 +82,6 @@ struct EngineConnection: Sendable {
     mutating func fail(_ message: String, generation: UInt64) {
         guard generation == self.generation else { return }
         phase = .failed(message)
+        endpoint = nil
     }
 }

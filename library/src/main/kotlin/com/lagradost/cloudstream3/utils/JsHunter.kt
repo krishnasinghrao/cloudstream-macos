@@ -59,17 +59,20 @@ class JsHunter(private val hunterJS: String) {
     }
 
     private fun hunter(h: String, n: String, t: Int, e: Int): String {
+        if (e < 0 || e >= n.length) return ""
+        val delimiter = n[e]
         var result = ""
         var i = 0
         while (i < h.length) {
             var j = 0
             var s = ""
-            while (h[i] != n[e]) {
+            while (i < h.length && h[i] != delimiter) {
                 s += h[i]
                 i++
             }
             while (j < n.length) {
-                s = s.replace(n[j], j.digitToChar())
+                val replacement = if (j < 36) j.digitToChar(36) else '?'
+                s = s.replace(n[j], replacement)
                 j++
             }
             result += (duf(s, e) - t).toChar()

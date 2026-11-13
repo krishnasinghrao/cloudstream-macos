@@ -13,7 +13,11 @@ import java.io.File
  * files and preferences are namespaced per installation and follow the
  * configured data root (`cs.cloudstream.home`), never `user.home` directly.
  */
-open class Context(private val root: File) {
+open class Context(
+    private val root: File,
+    private val resources: Resources = Resources(null, AssetManager(emptyMap())),
+    private val assets: AssetManager = resources.getAssets(),
+) {
     /** Host-level context (no extension); used for engine-internal callers. */
     constructor() : this(File(CloudDirs.extensionDataDir, "_host"))
 
@@ -39,6 +43,7 @@ open class Context(private val root: File) {
     private fun dir(vararg parts: String): File = parts.fold(root) { acc, part -> File(acc, part) }.apply { mkdirs() }
 
     open fun getPackageName(): String = "com.lagradost.cloudstream3"
+    open fun getDataDir(): File = root.apply { mkdirs() }
     open fun getFilesDir(): File = dir("files")
     open fun getCacheDir(): File = dir("cache")
     open fun getExternalFilesDir(type: String?): File = dir("external", type ?: "files")
@@ -66,8 +71,8 @@ open class Context(private val root: File) {
         CONNECTIVITY_SERVICE -> connectivityManager
         else -> null.also { unavailableService(name) }
     }
-    open fun getResources(): Resources? = null
-    open fun getAssets(): AssetManager? = null
+    open fun getResources(): Resources = resources
+    open fun getAssets(): AssetManager = assets
     open fun getClassLoader(): ClassLoader = Context::class.java.classLoader
 
     /**

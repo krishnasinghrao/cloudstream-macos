@@ -974,9 +974,10 @@ final class MetalVideoView: NSView {
             self.renderLock.lock()
             self.isUpdatePending = false
             let ctx = self.isTornDownState ? nil : self.renderContext
+            let gl = self.isTornDownState ? nil : self.glContext
             self.renderLock.unlock()
             guard let ctx else { return }
-            if let gl = self.glContext { cs_gl_make_current(gl) }
+            if let gl { cs_gl_make_current(gl) }
             let flags = mpv_render_context_update(ctx)
             guard flags & UInt64(MPV_RENDER_UPDATE_FRAME.rawValue) != 0 else { return }
             self.renderLock.lock()
@@ -1079,11 +1080,13 @@ final class MetalVideoView: NSView {
 
         // Remediation 2.2: a GPU frame whose GL work may still be running is
         // presented only once its fence has passed; the queue never waits.
+        var presentedThisTick = false
         if let gl, let pending = pendingGPU.frame {
             switch cs_gl_fence_poll(gl, pending.fence) {
             case 1:
                 takePendingGPUFrame(gl: gl)
                 present(pending.buffer, width: pending.width, height: pending.height, to: target)
+                presentedThisTick = true
             case 0 where pending.issued.duration(to: .now) < Self.maxFencePending:
                 // Still on the GPU: try again next tick, and keep any new frame
                 // for then rather than queueing it behind this one.
@@ -1128,7 +1131,7 @@ final class MetalVideoView: NSView {
                 inFlightFrames.signal()
                 return
             }
-            if cs_gl_fence_poll(gl, fence) == 1 {
+            if !presentedThisTick && cs_gl_fence_poll(gl, fence) == 1 {
                 cs_gl_fence_release(gl, fence)
                 present(buffer, width: width, height: height, to: target)
             } else {
@@ -1618,6 +1621,8 @@ final class MetalVideoView: NSView {
 
         // 1. No new events or render requests from mpv's threads.
         if let mpv {
+            _ = mpv_set_property_string(mpv, "pause", "yes")
+            _ = mpv_set_property_string(mpv, "mute", "yes")
             mpv_set_wakeup_callback(mpv, nil, nil)
         }
         if let ctx {

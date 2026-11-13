@@ -154,6 +154,8 @@ fun CoroutineScope.launchSafe(
     val obj: suspend CoroutineScope.() -> Unit = {
         try {
             block()
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (throwable: Throwable) {
             logError(throwable)
         }
@@ -192,9 +194,7 @@ fun <T> throwAbleToResource(
         }
 
         is CancellationException -> {
-            throwable.cause?.let {
-                throwAbleToResource(it)
-            } ?: safeFail(throwable)
+            throw throwable
         }
 
         else -> platformThrowAbleToResource(throwable)
@@ -208,6 +208,8 @@ suspend fun <T> safeApiCall(
     return apiCall.ioWork { work ->
         try {
             Resource.Success(work.invoke())
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (throwable: Throwable) {
             logError(throwable)
             throwAbleToResource(throwable)

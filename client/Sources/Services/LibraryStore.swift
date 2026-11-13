@@ -13,6 +13,7 @@ import SwiftData
 @Observable
 final class LibraryStore {
     static let shared = LibraryStore(storeDirectory: AppEnvironment.crashFixtureStoreDirectory)
+    nonisolated(unsafe) static var defaultStoreDirectory: URL?
 
     /// The app-wide store: download records plus the default profile's
     /// library (the original single-user database, unchanged on disk).
@@ -139,6 +140,7 @@ final class LibraryStore {
          }) {
         self.inMemory = inMemory || (AppEnvironment.isIsolated() && storeDirectory == nil)
         self.storeDirectory = storeDirectory
+        Self.defaultStoreDirectory = storeDirectory
         self.containerFactory = containerFactory
         if let progressJournalURL {
             self.progressJournalURL = progressJournalURL
@@ -342,11 +344,17 @@ final class LibraryStore {
     }
 
     /// Deletes a (non-active, non-default) profile's store files.
-    nonisolated static func deleteProfileStore(named storeName: String) {
+    nonisolated static func deleteProfileStore(named storeName: String, in directory: URL? = nil) {
         guard storeName != defaultStoreName, !AppEnvironment.isIsolated() else { return }
-        let url = ModelConfiguration(storeName).url
+        let targetDirectory = directory ?? defaultStoreDirectory
+        let baseURL: URL
+        if let targetDirectory {
+            baseURL = targetDirectory.appendingPathComponent(storeName + ".store")
+        } else {
+            baseURL = ModelConfiguration(storeName).url
+        }
         for suffix in ["", "-wal", "-shm"] {
-            try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + suffix))
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: baseURL.path + suffix))
         }
     }
 
@@ -1773,6 +1781,9 @@ final class LibraryStore {
         let changes = Dictionary(uniqueKeysWithValues: report.changes.map { ($0.oldID, $0) })
         let localChanges = Dictionary(uniqueKeysWithValues: report.localChanges.map { ($0.oldID, $0) })
         for row in rows {
+            if let merge = row.mergedIntoID, let remapped = mapping[merge] {
+                row.mergedIntoID = remapped
+            }
             if let change = localChanges[row.id] {
                 row.legacyItemID = row.legacyItemID ?? row.id
                 row.id = change.newID
@@ -1798,11 +1809,19 @@ final class LibraryStore {
             if let itemID = mapping[row.itemID] { row.itemID = itemID }
         }
         let renamed = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        var seenPageEntryKeys = Set<String>()
         for entry in try transaction.fetch(FetchDescriptor<LibraryPageEntry>()) {
-            guard let itemID = mapping[entry.itemID] else { continue }
-            entry.itemID = itemID
-            entry.id = LibraryPageEntry.key(pageID: entry.pageID, itemID: itemID, episodeData: entry.episodeData)
-            if let row = renamed[itemID] { entry.providerID = row.providerID; entry.providerName = row.providerName }
+            let targetItemID = mapping[entry.itemID] ?? entry.itemID
+            let targetKey = LibraryPageEntry.key(pageID: entry.pageID, itemID: targetItemID, episodeData: entry.episodeData)
+            if !seenPageEntryKeys.insert(targetKey).inserted {
+                transaction.delete(entry)
+                continue
+            }
+            if let itemID = mapping[entry.itemID] {
+                entry.itemID = itemID
+                entry.id = targetKey
+                if let row = renamed[itemID] { entry.providerID = row.providerID; entry.providerName = row.providerName }
+            }
         }
         let migrationName = "provider-identity-v2"
         let marker = try transaction.fetch(FetchDescriptor<LibraryMigrationRecord>(predicate: #Predicate { $0.name == migrationName })).first
@@ -2313,6 +2332,7 @@ final class LibraryStore {
     func importSnapshotInBackground(_ snapshot: LibrarySnapshot, mode: ImportMode) async throws -> ImportReport {
         let container = try prepareImport(snapshot)
         isImporting = true
+        defer { isImporting = false }
         // The fault seam is nil outside tests, which set it before an import
         // starts and never change it while one runs.
         struct FaultSeam: @unchecked Sendable {
@@ -2387,9 +2407,13 @@ final class LibraryStore {
 
         var existingItems: [String: StoredMediaItem] = [:]
         var existingStableItems: [String: StoredMediaItem] = [:]
+        var existingByProviderAndURL: [String: StoredMediaItem] = [:]
         if mode == .merge {
             for item in try context.fetch(FetchDescriptor<StoredMediaItem>()) {
                 existingItems[item.id] = item
+                if item.id.hasPrefix("remote-v2:") {
+                    existingByProviderAndURL["\(item.providerName)|\(item.providerURL)"] = item
+                }
                 if let providerID = item.providerID, !providerID.isEmpty, item.mediaType != "Download" {
                     let stable = LibraryIdentity.remote(providerID: providerID, url: item.providerURL)
                     guard existingStableItems[stable] == nil else {
@@ -2404,7 +2428,7 @@ final class LibraryStore {
         for entry in snapshot.items where !entry.id.isEmpty {
             let stableMatch = entry.providerID.flatMap {
                 existingStableItems[LibraryIdentity.remote(providerID: $0, url: entry.providerURL)]
-            }
+            } ?? (entry.providerID == nil ? existingByProviderAndURL["\(entry.providerName)|\(entry.providerURL)"] : nil)
             // A backup's known installation cannot claim an unknown legacy
             // owner merely because their old display-name key is the same.
             var targetID = stableMatch?.id ?? entry.id
@@ -2414,7 +2438,7 @@ final class LibraryStore {
             }
             importedItemIDs[entry.id] = targetID
             if let item = existingItems[targetID] {
-                guard entry.providerID != nil || item.providerID == nil else {
+                guard entry.providerID != nil || item.providerID == nil || item.id.hasPrefix("remote-v2:") else {
                     throw ImportError.identityConflict("This legacy backup does not identify the provider owning an existing title. Its data cannot be merged into that identified title.")
                 }
                 guard item.providerURL == entry.providerURL,

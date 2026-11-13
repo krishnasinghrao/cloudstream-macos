@@ -224,6 +224,8 @@ internal class WorkerClient(
             }
         } catch (failure: Exception) {
             if (!stopping.get()) kill("Protocol error: ${failure.javaClass.simpleName}")
+        } finally {
+            runCatching { input.close() }
         }
     }
 
@@ -371,7 +373,9 @@ internal class WorkerClient(
         }
         scope.cancel()
         deadlines.cancel()
-        output.close()
+        runCatching { output.close() }
+        runCatching { process.inputStream.close() }
+        runCatching { process.errorStream.close() }
         onExit(this, expected, reason)
     }
 

@@ -9,9 +9,9 @@ object TextUtils {
     @JvmStatic fun join(delimiter: CharSequence, tokens: Iterable<*>): String = tokens.joinToString(delimiter)
     /** Android splits on a regular expression and, unlike String.split, keeps trailing empty strings. */
     @JvmStatic fun split(text: String, expression: String): Array<String> =
-        if (text.isEmpty()) emptyArray() else text.split(Regex(expression)).toTypedArray()
+        if (text.isEmpty()) emptyArray() else java.util.regex.Pattern.compile(expression).split(text, -1)
     @JvmStatic fun split(text: String, pattern: java.util.regex.Pattern): Array<String> =
-        if (text.isEmpty()) emptyArray() else text.split(pattern.toRegex()).toTypedArray()
+        if (text.isEmpty()) emptyArray() else pattern.split(text, -1)
     @JvmStatic fun htmlEncode(s: String): String = buildString(s.length) {
         for (c in s) append(when (c) { '<' -> "&lt;"; '>' -> "&gt;"; '&' -> "&amp;"; '\'' -> "&#39;"; '"' -> "&quot;"; else -> c })
     }

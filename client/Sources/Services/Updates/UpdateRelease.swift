@@ -174,7 +174,7 @@ enum UpdateFeed {
         guard let dmg = try asset(named: dmgName), dmg.size > 0, dmg.size <= maximumDMGBytes else {
             throw FeedError.noDiskImage(wire.tag_name)
         }
-        let published = wire.published_at.flatMap { ISO8601DateFormatter().date(from: $0) }
+        let published = wire.published_at.flatMap { try? Date($0, strategy: .iso8601) }
         return UpdateRelease(version: version, tag: wire.tag_name, pageURL: page, publishedAt: published,
                              dmg: dmg, checksumAsset: try asset(named: checksumName))
     }

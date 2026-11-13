@@ -129,7 +129,7 @@ internal object MediaResolveBridge {
             if (tasks.size >= MAX_PENDING) throw WorkerCapacityException()
             tasks[task.id] = task
         }
-        PendingSignal.parked()
+        PendingSignal.parkedMedia()
         try {
             val completion = withTimeoutOrNull(task.spec.timeoutMs) { task.done.await() }
             return outcome(task, completion)

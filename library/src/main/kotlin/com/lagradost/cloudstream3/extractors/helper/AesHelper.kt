@@ -5,10 +5,12 @@ import com.lagradost.cloudstream3.Prerelease
 import com.lagradost.cloudstream3.base64DecodeArray
 import com.lagradost.cloudstream3.base64Encode
 import com.lagradost.cloudstream3.utils.AppUtils
+import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import dev.whyoleg.cryptography.CryptographyProvider
 import dev.whyoleg.cryptography.DelicateCryptographyApi
 import dev.whyoleg.cryptography.algorithms.AES
 import dev.whyoleg.cryptography.algorithms.MD5
+import dev.whyoleg.cryptography.random.CryptographyRandom
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -27,23 +29,74 @@ object AesHelper {
         encrypt: Boolean = true,
         padding: Boolean = true,
     ): String? {
-        val parse = AppUtils.tryParseJson<AesData>(data) ?: return null
-        val (key, iv) = generateKeyAndIv(
-            password = pass,
-            salt = parse.s.hexToByteArray(),
-            ivLength = parse.iv.length / 2,
-            saltLength = parse.s.length / 2,
-        ) ?: return null
+        if (encrypt) {
+            val salt = CryptographyRandom.nextBytes(8)
+            val (key, iv) = generateKeyAndIv(
+                password = pass,
+                salt = salt,
+                keyLength = 32,
+                ivLength = 16,
+                saltLength = salt.size,
+            ) ?: return null
 
-        val aesKey = aesCbc.keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, key)
-        val cipher = aesKey.cipher(padding = padding)
-
-        return if (!encrypt) {
-            val plainBytes = cipher.decryptWithIv(iv, base64DecodeArray(parse.ct))
-            plainBytes.decodeToString()
-        } else {
-            base64Encode(cipher.encryptWithIv(iv, parse.ct.encodeToByteArray()))
+            val aesKey = aesCbc.keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, key)
+            val cipher = aesKey.cipher(padding = padding)
+            val cipherBytes = cipher.encryptWithIv(iv, data.encodeToByteArray())
+            val aesData = AesData(
+                ct = base64Encode(cipherBytes),
+                iv = iv.joinToString("") { "%02x".format(it) },
+                s = salt.joinToString("") { "%02x".format(it) },
+            )
+            return aesData.toJson()
         }
+
+        // Decryption: check for AesData JSON payload first
+        val parse = AppUtils.tryParseJson<AesData>(data)
+        if (parse != null) {
+            val salt = if (parse.s.isNotEmpty()) parse.s.hexToByteArray() else byteArrayOf()
+            val (key, derivedIv) = generateKeyAndIv(
+                password = pass,
+                salt = salt,
+                keyLength = 32,
+                ivLength = 16,
+                saltLength = salt.size,
+            ) ?: return null
+
+            val iv = if (parse.iv.isNotEmpty()) {
+                parse.iv.hexToByteArray()
+            } else {
+                derivedIv
+            }
+
+            val aesKey = aesCbc.keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, key)
+            val cipher = aesKey.cipher(padding = padding)
+            val plainBytes = cipher.decryptWithIv(iv, base64DecodeArray(parse.ct))
+            return plainBytes.decodeToString()
+        }
+
+        // Decryption fallback: check for OpenSSL "Salted__" raw base64 payload
+        val rawBytes = runCatching { base64DecodeArray(data) }.getOrNull()
+        if (rawBytes != null && rawBytes.size >= 16) {
+            val prefix = rawBytes.copyOfRange(0, 8).decodeToString()
+            if (prefix == "Salted__") {
+                val salt = rawBytes.copyOfRange(8, 16)
+                val cipherBytes = rawBytes.copyOfRange(16, rawBytes.size)
+                val (key, iv) = generateKeyAndIv(
+                    password = pass,
+                    salt = salt,
+                    keyLength = 32,
+                    ivLength = 16,
+                    saltLength = salt.size,
+                ) ?: return null
+
+                val aesKey = aesCbc.keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, key)
+                val cipher = aesKey.cipher(padding = padding)
+                val plainBytes = cipher.decryptWithIv(iv, cipherBytes)
+                return plainBytes.decodeToString()
+            }
+        }
+
+        return null
     }
 
     @Deprecated(

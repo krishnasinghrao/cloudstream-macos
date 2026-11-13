@@ -223,6 +223,7 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
         player?.close(fromWindow: true)
         window = nil
         fittedAspect = nil
+        windowedFrame = nil
     }
 
     func setControlsVisible(_ visible: Bool) {
@@ -285,6 +286,7 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
 
     func windowDidExitFullScreen(_ notification: Notification) {
         player?.isFullScreen = false
+        windowedFrame = nil
         setControlsVisible(player?.hudVisible ?? true)
     }
 

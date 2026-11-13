@@ -60,7 +60,8 @@ object CryptoJS {
      */
     @OptIn(DelicateCryptographyApi::class)
     fun decrypt(password: String, cipherText: String): String {
-        val ctBytes = base64DecodeArray(cipherText)
+        val ctBytes = runCatching { base64DecodeArray(cipherText) }.getOrNull() ?: return ""
+        if (ctBytes.size < 16) return ""
         val saltBytes = ctBytes.copyOfRange(8, 16)
         val cipherTextBytes = ctBytes.copyOfRange(16, ctBytes.size)
 

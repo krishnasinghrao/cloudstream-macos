@@ -43,9 +43,9 @@ object SyncRedirector {
         // This goes through all sync ids and finds supported id by said provider
         return syncIds.firstNotNullOfOrNull { (syncName, syncRegex) ->
             if (providerApi.supportedSyncNames.contains(syncName)) {
-                syncRegex.find(url)?.value?.let {
+                syncRegex.find(url)?.groupValues?.getOrNull(1)?.let { id ->
                     safeAsync {
-                        providerApi.getLoadUrl(syncName, it)
+                        providerApi.getLoadUrl(syncName, id)
                     }
                 }
             } else null

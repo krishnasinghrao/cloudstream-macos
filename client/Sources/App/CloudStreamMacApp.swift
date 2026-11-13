@@ -53,7 +53,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
         termSource.setEventHandler {
             MainActor.assumeIsolated {
-                ApplicationShutdown.shared.begin { exit(0) }
+                ApplicationShutdown.shared.begin {
+                    SoftwareUpdater.shared.installAtTermination()
+                    exit(0)
+                }
             }
         }
         termSource.resume()
@@ -63,7 +66,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let intSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
         intSource.setEventHandler {
             MainActor.assumeIsolated {
-                ApplicationShutdown.shared.begin { exit(0) }
+                ApplicationShutdown.shared.begin {
+                    SoftwareUpdater.shared.installAtTermination()
+                    exit(0)
+                }
             }
         }
         intSource.resume()
@@ -145,6 +151,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LibraryStore.shared.startResume(item: item, appState: AppState.shared)
     }
 
+    @MainActor
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            for window in sender.windows where window.canBecomeMain {
+                window.makeKeyAndOrderFront(self)
+                return true
+            }
+        }
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
             guard !AppEnvironment.isUnitTestHost else { return }
@@ -184,7 +201,6 @@ struct CloudStreamMacApp: App {
                 .onChange(of: DownloadService.shared.totalActiveOrQueuedCount) { _, _ in
                     DockBadge.update()
                 }
-
         }
         .windowResizability(.contentMinSize)
         .windowToolbarStyle(.unified(showsTitle: true))
@@ -332,7 +348,7 @@ struct CloudStreamMacApp: App {
 
         MenuBarExtra("CloudStream", systemImage: "play.tv", isInserted: Binding(
             get: { appState.preferences.showMenuBarExtra },
-            set: { appState.preferences.showMenuBarExtra = $0 },
+            set: { appState.preferences.showMenuBarExtra = $0 }
         )) {
             CloudStreamMenuBarContent(appState: appState)
         }
@@ -431,7 +447,7 @@ private struct PlaybackCommands: View {
 
         Toggle("Float on Top", isOn: Binding(
             get: { player.isFloatingOnTop },
-            set: { _ in player.toggleFloatOnTop() },
+            set: { _ in player.toggleFloatOnTop() }
         ))
         .disabled(!hasSession)
 
@@ -441,7 +457,6 @@ private struct PlaybackCommands: View {
         .disabled(!hasSession)
     }
 }
-
 
 #if DEBUG
 /// A separate debug app process exercises production ModelContainer/SQLite

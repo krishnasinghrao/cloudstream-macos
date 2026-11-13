@@ -13,7 +13,8 @@ open class Maxstream : ExtractorApi() {
         val response = app.get(url).text
         val jstounpack = Regex("cript\">eval((.|\\n)*?)</script>").find(response)?.groups?.get(1)?.value
         val unpacjed = JsUnpacker(jstounpack).unpack()
-        val extractedUrl = unpacjed?.let { Regex("""src:"((.|\n)*?)",type""").find(it) }?.groups?.get(1)?.value.toString()
+        val extractedUrl = unpacjed?.let { Regex("""src:"([^"]+)",type""").find(it) }?.groups?.get(1)?.value
+            ?: return null
 
         M3u8Helper.generateM3u8(
             name,

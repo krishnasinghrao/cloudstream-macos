@@ -29,10 +29,18 @@ final class MediaResolverService {
     var activeTaskIds: Set<String> { Set(sessions.keys) }
 
     func start(_ task: MediaPendingDto, client: MediaResolveClient = DaemonClient.shared) {
-        guard sessions[task.taskId] == nil, sessions.count < Self.maxConcurrent, task.timeoutMs > 0,
+        guard sessions[task.taskId] == nil else { return }
+        guard task.timeoutMs > 0,
               let url = URL(string: task.url), ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
               url.host != nil, url.user == nil, url.password == nil,
-              WebContentNetworkPolicy.shared.allowsNavigation(to: url) else { return }
+              WebContentNetworkPolicy.shared.allowsNavigation(to: url) else {
+            Task {
+                try? await client.completeMedia(MediaCompleteRequestDto(
+                    taskId: task.taskId, scriptResult: nil, cookies: [:], userAgent: nil, pageUrl: nil))
+            }
+            return
+        }
+        guard sessions.count < Self.maxConcurrent else { return }
         let session = Session(task: task, url: url, client: client) { [weak self] id in self?.sessions[id] = nil }
         sessions[task.taskId] = session
         session.begin()

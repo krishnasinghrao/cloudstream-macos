@@ -239,11 +239,12 @@ final class DaemonSupervisor {
                 await transportReset?.value
                 if revision != requestedRevision { continue }
                 completedRevision = revision
-                if stopped {
-                    let completions = stopCompletions
-                    stopCompletions.removeAll()
-                    completions.forEach { $0() }
-                } else { state = .error("An owned child process could not be stopped.") }
+                let completions = stopCompletions
+                stopCompletions.removeAll()
+                if !stopped {
+                    state = .error("An owned child process could not be stopped.")
+                }
+                completions.forEach { $0() }
                 continue
             }
             if pendingDelay > 0 {

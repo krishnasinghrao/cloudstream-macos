@@ -60,24 +60,56 @@ enum GenericPasswordKeychain {
         return SecItemAdd(addition(file, data: data) as CFDictionary, nil)
     }
 
-    static func read(service: String, account: String) -> Data? {
+    enum ReadResult: Equatable {
+        case found(Data)
+        case missing
+        case locked
+        case unavailable
+    }
+
+    static func readResult(service: String, account: String) -> ReadResult {
         switch copyData(.dataProtection, service: service, account: account) {
         case .found(let data):
-            return data
+            return .found(data)
+        case .locked:
+            return .locked
         case .unavailable:
-            if case .found(let data) = copyData(.file, service: service, account: account) { return data }
-            return nil
+            switch copyData(.file, service: service, account: account) {
+            case .found(let data):
+                return .found(data)
+            case .locked:
+                return .locked
+            case .missing:
+                return .missing
+            case .unavailable:
+                return .unavailable
+            }
         case .missing:
             // An item an older build saved in the file keychain moves to the
             // data protection keychain the first time it is read.
             // Best effort: if the move fails the value is still returned and the move retried next time.
-            guard case .found(let data) = copyData(.file, service: service, account: account) else { return nil }
-            _ = save(data, service: service, account: account)
-            return data
+            switch copyData(.file, service: service, account: account) {
+            case .found(let data):
+                _ = save(data, service: service, account: account)
+                return .found(data)
+            case .locked:
+                return .locked
+            case .missing:
+                return .missing
+            case .unavailable:
+                return .missing
+            }
         }
     }
 
-    private enum Lookup { case found(Data), missing, unavailable }
+    static func read(service: String, account: String) -> Data? {
+        if case .found(let data) = readResult(service: service, account: account) {
+            return data
+        }
+        return nil
+    }
+
+    private enum Lookup { case found(Data), missing, locked, unavailable }
 
     private static func copyData(_ store: Store, service: String, account: String) -> Lookup {
         var query = query(store, service: service, account: account)
@@ -86,6 +118,7 @@ enum GenericPasswordKeychain {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecMissingEntitlement { return .unavailable }
+        if status == errSecInteractionNotAllowed || status == errSecAuthFailed { return .locked }
         guard status == errSecSuccess, let data = result as? Data else { return .missing }
         return .found(data)
     }
@@ -94,9 +127,14 @@ enum GenericPasswordKeychain {
         SecItemDelete(query(.file, service: service, account: account) as CFDictionary)
     }
 
-    static func delete(service: String, account: String) {
-        SecItemDelete(query(.dataProtection, service: service, account: account) as CFDictionary)
-        removeFileItem(service: service, account: account)
+    @discardableResult
+    static func delete(service: String, account: String) -> OSStatus {
+        let status = SecItemDelete(query(.dataProtection, service: service, account: account) as CFDictionary)
+        let fileStatus = SecItemDelete(query(.file, service: service, account: account) as CFDictionary)
+        if status == errSecSuccess || status == errSecItemNotFound {
+            return (fileStatus == errSecSuccess || fileStatus == errSecItemNotFound) ? status : fileStatus
+        }
+        return status
     }
 
     static func accounts(service: String) -> [String] {

@@ -172,7 +172,7 @@ internal object WebViewSessionBridge {
         if (commands.size >= MAX_COMMANDS) throw WorkerCapacityException()
         val command = Command(dto)
         commands[dto.commandId] = command
-        PendingSignal.parked()
+        PendingSignal.parkedWebView()
         try {
             val result = withTimeoutOrNull(COMMAND_TIMEOUT_MS) { command.done.await() }
                 ?: throw IllegalStateException("The app did not run the WebView command in time")
@@ -187,7 +187,7 @@ internal object WebViewSessionBridge {
         // Tell the app to drop the view; nobody waits for the answer.
         val dto = WebViewCommandDto(newId(), session.id, "destroy")
         if (commands.size < MAX_COMMANDS * 2) commands[dto.commandId] = Command(dto)
-        PendingSignal.parked()
+        PendingSignal.parkedWebView()
     }
 
     private fun expire() {

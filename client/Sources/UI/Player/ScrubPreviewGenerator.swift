@@ -170,6 +170,7 @@ final class ScrubPreviewDecoder: @unchecked Sendable {
             }
             loadedSourceID = job.source.id
         }
+        drainEvents(mpv)
         let seek = Self.command(mpv, ["seek", String(format: "%.3f", job.seconds), "absolute+keyframes"])
         guard seek >= 0, wait(for: MPV_EVENT_PLAYBACK_RESTART, on: mpv, sourceID: job.source.id,
                                timeout: Self.seekTimeout) else { return nil }

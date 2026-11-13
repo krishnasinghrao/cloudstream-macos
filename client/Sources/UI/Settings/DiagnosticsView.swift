@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Removes secrets from log text before it is shown or exported.
 enum LogRedactor {

@@ -168,10 +168,20 @@ enum SQLiteRecoverySnapshot {
               sqlite3_open_v2(destination.path, &output, SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
             throw Failure(detail: "The database or recovery destination cannot be opened.")
         }
+        sqlite3_busy_timeout(input, 1000)
+        sqlite3_busy_timeout(output, 1000)
         guard let backup = sqlite3_backup_init(output, "main", input, "main") else {
             throw Failure(detail: "SQLite could not initialize a consistent snapshot.")
         }
-        let result = sqlite3_backup_step(backup, -1)
+        var result: Int32 = SQLITE_ERROR
+        for _ in 0..<20 {
+            result = sqlite3_backup_step(backup, -1)
+            if result == SQLITE_BUSY || result == SQLITE_LOCKED {
+                sqlite3_sleep(50)
+                continue
+            }
+            break
+        }
         let finished = sqlite3_backup_finish(backup)
         guard result == SQLITE_DONE, finished == SQLITE_OK else {
             throw Failure(detail: "The database is busy or its snapshot could not be written. Retry when current work finishes.")

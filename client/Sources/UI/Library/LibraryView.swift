@@ -29,6 +29,11 @@ struct LibraryView: View {
     /// titles each time froze the window.
     @MainActor
     final class Arrangement {
+        private struct StoreKey: Equatable {
+            var version: UInt64
+            var collection: LibraryCollection
+        }
+
         struct Key: Equatable {
             var version: UInt64
             var collection: LibraryCollection
@@ -36,6 +41,8 @@ struct LibraryView: View {
             var query: String
         }
 
+        private var storeKey: StoreKey?
+        private var cachedAll: [StoredMediaItem] = []
         private var key: Key?
         private(set) var all: [StoredMediaItem] = []
         private(set) var arranged: [StoredMediaItem] = []
@@ -43,12 +50,18 @@ struct LibraryView: View {
         private(set) var artworkByID: [String: LibraryArtworkItem] = [:]
         private(set) var itemsByID: [String: StoredMediaItem] = [:]
 
-        func update(_ key: Key, _ make: () -> (all: [StoredMediaItem], arranged: [StoredMediaItem])) {
+        func update(_ key: Key, unfiltered: () -> [StoredMediaItem], arranged: ([StoredMediaItem]) -> [StoredMediaItem]) {
             guard key != self.key else { return }
-            (all, arranged) = make()
-            artwork = arranged.map { LibraryArtworkItem(id: $0.id, url: $0.posterURL ?? $0.bannerURL) }
+            let currentStoreKey = StoreKey(version: key.version, collection: key.collection)
+            if currentStoreKey != self.storeKey {
+                cachedAll = unfiltered()
+                self.storeKey = currentStoreKey
+            }
+            all = cachedAll
+            self.arranged = arranged(all)
+            artwork = self.arranged.map { LibraryArtworkItem(id: $0.id, url: $0.posterURL ?? $0.bannerURL) }
             artworkByID = Dictionary(artwork.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            itemsByID = Dictionary(arranged.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            itemsByID = Dictionary(self.arranged.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             self.key = key
         }
     }
@@ -86,11 +99,11 @@ struct LibraryView: View {
     var body: some View {
         // At most one store read per library change: the menu, the filters
         // and every card's context menu share it.
-        let _ = arrangement.update(.init(version: storeVersion, collection: collection, options: options.orderingAndFilters,
-                                         query: windowSession.libraryFilter)) {
-            let all = unfilteredItems()
-            return (all, filteredAndSortedItems(all))
-        }
+        let _ = arrangement.update(
+            .init(version: storeVersion, collection: collection, options: options.orderingAndFilters, query: windowSession.libraryFilter),
+            unfiltered: { unfilteredItems() },
+            arranged: { filteredAndSortedItems($0) }
+        )
         let all = arrangement.all
         let rearrangeable = canRearrange(in: all)
         let items = Self.applying(dragOrder, to: arrangement.arranged)

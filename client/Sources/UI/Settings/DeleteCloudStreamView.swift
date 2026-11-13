@@ -242,8 +242,11 @@ struct DeleteCloudStreamView: View {
         let scanned = Uninstaller.shared.footprint(options: options)
         footprint = scanned
         // Isolated (test) launches never read the real Keychain.
+        let services = Uninstaller.keychainServices
         keychainItems = AppEnvironment.isIsolated() ? 0
-            : Uninstaller.keychainServices.reduce(0) { $0 + GenericPasswordKeychain.accounts(service: $1).count }
+            : await Task.detached(priority: .userInitiated) {
+                services.reduce(0) { $0 + GenericPasswordKeychain.accounts(service: $1).count }
+            }.value
         sizes = await Task.detached(priority: .userInitiated) { scanned.measuredSizes() }.value
     }
 

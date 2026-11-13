@@ -24,8 +24,13 @@ abstract class Uri : Comparable<Uri> {
         companion object {
             fun from(raw: String): Impl {
                 var rest = raw
-                val scheme = if (rest.contains("://")) rest.substringBefore("://") else null
-                if (scheme != null) rest = rest.substringAfter("://")
+                val schemeMatch = Regex("^([a-zA-Z][a-zA-Z0-9+.-]*):(.*)$").matchEntire(rest)
+                val scheme = schemeMatch?.groupValues?.get(1)
+                val isHierarchical = schemeMatch != null && schemeMatch.groupValues[2].startsWith("//")
+                if (scheme != null) {
+                    val afterScheme = schemeMatch.groupValues[2]
+                    rest = if (afterScheme.startsWith("//")) afterScheme.substring(2) else afterScheme
+                }
 
                 val fragment = rest.substringAfter('#', "").ifBlank { null }
                 rest = rest.substringBefore('#')
@@ -33,11 +38,18 @@ abstract class Uri : Comparable<Uri> {
                 val query = rest.substringAfter('?', "").ifBlank { null }
                 rest = rest.substringBefore('?')
 
-                val authority = rest.substringBefore('/').ifBlank { null }
-                val path = when {
-                    rest.contains('/') -> "/" + rest.substringAfter('/')
-                    authority != null -> ""
-                    else -> rest
+                val authority: String?
+                val path: String?
+                if (scheme != null && !isHierarchical) {
+                    authority = null
+                    path = rest
+                } else {
+                    authority = rest.substringBefore('/').ifBlank { null }
+                    path = when {
+                        rest.contains('/') -> "/" + rest.substringAfter('/')
+                        authority != null -> ""
+                        else -> rest
+                    }
                 }
 
                 val host = authority?.substringBefore(':')
@@ -145,7 +157,18 @@ abstract class Uri : Comparable<Uri> {
                     value[i + 1].digitToIntOrNull(16) != null && value[i + 2].digitToIntOrNull(16) != null) {
                     out.write(value.substring(i + 1, i + 3).toInt(16)); i += 3; continue
                 }
-                if (c == '+' && plusAsSpace) out.write(' '.code) else out.write(c.toString().toByteArray(Charsets.UTF_8))
+                if (c == '+' && plusAsSpace) {
+                    out.write(' '.code)
+                    i++
+                    continue
+                }
+                if (Character.isHighSurrogate(c) && i + 1 < value.length && Character.isLowSurrogate(value[i + 1])) {
+                    val codePoint = Character.toCodePoint(c, value[i + 1])
+                    out.write(String(Character.toChars(codePoint)).toByteArray(Charsets.UTF_8))
+                    i += 2
+                    continue
+                }
+                out.write(c.toString().toByteArray(Charsets.UTF_8))
                 i++
             }
             return out.toString(Charsets.UTF_8)

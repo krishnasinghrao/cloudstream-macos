@@ -13,7 +13,7 @@ final class WindowSessionRegistry {
         init(_ session: WindowSession) { self.session = session }
     }
     private var entries: [UUID: Entry] = [:]
-    private var activeID: UUID?
+    private(set) var activeID: UUID?
     private var activationOrder: [UUID] = []
     private let pending = WindowSession()
 
@@ -86,6 +86,9 @@ final class WindowSessionRegistry {
             session.detailPath.removeAll()
             session.clearSearch()
             session.libraryFilter = ""
+            if case .page = session.selection {
+                session.selection = .home
+            }
         }
     }
 }
