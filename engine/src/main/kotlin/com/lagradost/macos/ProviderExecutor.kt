@@ -278,7 +278,7 @@ object ProviderExecutor {
      */
     fun invalidateCaches() {
         synchronized(detailsCache) { detailsCache.clear() }
-        synchronized(linksCache) { linksCache.clear() }
+        synchronized(linksCache) { linksCache.clear(); linksRevisions.clear() }
         DaemonLog.info("provider.caches_invalidated")
     }
 
@@ -286,14 +286,20 @@ object ProviderExecutor {
     fun invalidateProvider(providerId: String) {
         val prefix = "$providerId\u0000"
         synchronized(detailsCache) { detailsCache.keys.removeAll { it.startsWith(prefix) } }
-        synchronized(linksCache) { linksCache.keys.removeAll { it.startsWith(prefix) } }
+        synchronized(linksCache) {
+            linksCache.keys.removeAll { it.startsWith(prefix) }
+            linksRevisions.keys.removeAll { it.startsWith(prefix) }
+        }
     }
 
     /** Drops cached responses produced by one installation's providers. */
     fun invalidateCaches(installationId: String) {
         val prefix = "$installationId:"
         synchronized(detailsCache) { detailsCache.keys.removeAll { it.startsWith(prefix) } }
-        synchronized(linksCache) { linksCache.keys.removeAll { it.startsWith(prefix) } }
+        synchronized(linksCache) {
+            linksCache.keys.removeAll { it.startsWith(prefix) }
+            linksRevisions.keys.removeAll { it.startsWith(prefix) }
+        }
     }
 
     /**
@@ -353,12 +359,18 @@ object ProviderExecutor {
         entry.response
     }
 
-    private fun storeLinks(provider: MainAPI, data: String, response: LinksResponseDto) {
+    private var linksRevision = 0L
+    private val linksRevisions = object : LinkedHashMap<String, Long>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean = size > 256
+    }
+
+    private fun storeLinks(provider: MainAPI, data: String, response: LinksResponseDto, revision: Long) {
         // Never cache an empty resolution: a transient scrape failure would
         // otherwise pin "no streams" for the whole TTL.
         if (response.links.isEmpty()) return
         synchronized(linksCache) {
-            linksCache[linksCacheKey(provider, data)] = CachedLinks(response, System.currentTimeMillis())
+            val key = linksCacheKey(provider, data)
+            if (linksRevisions[key] == revision) linksCache[key] = CachedLinks(response, System.currentTimeMillis())
         }
     }
 
@@ -407,8 +419,8 @@ object ProviderExecutor {
     }
 
     /** Complete (batch) resolution — POST /links and download JIT resolution. */
-    suspend fun loadLinks(provider: MainAPI, data: String): LinksResponseDto =
-        loadLinksStreaming(provider, data, onLink = {}, onSubtitle = {})
+    suspend fun loadLinks(provider: MainAPI, data: String, refresh: Boolean = false, budgetMs: Long? = null): LinksResponseDto =
+        loadLinksStreaming(provider, data, refresh = refresh, budgetMs = budgetMs, onLink = {}, onSubtitle = {})
 
     /**
      * Progressive resolution (Player-Remediation-Plan A2): every link and
@@ -421,8 +433,15 @@ object ProviderExecutor {
         data: String,
         onLink: (StreamLinkDto) -> Unit,
         onSubtitle: (SubtitleDto) -> Unit,
+        refresh: Boolean = false,
+        budgetMs: Long? = null,
     ): LinksResponseDto {
-        cachedLinks(provider, data)?.let { cached ->
+        val revision = synchronized(linksCache) {
+            val key = linksCacheKey(provider, data)
+            if (refresh) { linksCache.remove(key); linksRevisions[key] = ++linksRevision }
+            linksRevisions.getOrPut(key) { ++linksRevision }
+        }
+        (if (refresh) null else cachedLinks(provider, data))?.let { cached ->
             cached.links.forEach(onLink)
             cached.subtitles.forEach(onSubtitle)
             return cached
@@ -437,9 +456,13 @@ object ProviderExecutor {
         var remote: LinksResponseDto? = null
         try {
             safeProvider(provider, "loadLinks") {
-                val budget = OperationBudget.forHint(provider.loadLinksTimeoutMs)
+                val budget = minOf(OperationBudget.forHint(provider.loadLinksTimeoutMs), budgetMs?.coerceIn(1_000L, 45_000L) ?: Long.MAX_VALUE)
                 if (provider is RemoteProvider) {
-                    val response = provider.remoteLinks(data, budget + REMOTE_MARGIN_MS,
+                    // The worker enforces [budget] itself and reports what it
+                    // found; the host deadline adds the transport margin, as for
+                    // search/home/details, so the two deadlines never race and
+                    // the worker's partial result or typed timeout arrives.
+                    val response = provider.remoteLinks(data, budget + REMOTE_MARGIN_MS, refresh = refresh, budgetMs = budget,
                         onLink = { dto -> synchronized(links) { links.add(dto) }; onLink(dto) },
                         onSubtitle = { dto -> if (synchronized(subtitles) { subtitles.putIfAbsent(dto.url, dto) == null }) onSubtitle(dto) })
                     remote = response
@@ -473,7 +496,7 @@ object ProviderExecutor {
             links = finalLinks, subtitles = remote?.subtitles ?: synchronized(subtitles) { subtitles.values.toList() },
             failures = failures, outcome = if (failures.isEmpty()) "success" else if (finalLinks.isEmpty()) "failure" else "partial",
             skipped = skipped)
-        if (failures.isEmpty()) storeLinks(provider, data, response)
+        if (failures.isEmpty()) storeLinks(provider, data, response, revision)
         return response
     }
 

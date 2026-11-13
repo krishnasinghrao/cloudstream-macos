@@ -8,10 +8,20 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
+import io.ktor.server.request.uri
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import com.lagradost.macos.models.MediaManifestDto
+import okhttp3.Call
 import okhttp3.CookieJar
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -61,10 +71,25 @@ internal object MediaRelay {
 
     /** [directory]: a URL prefix ending in `/`, read as `<path>/<rest under it>`. */
     class Resource(val url: String, val headers: Map<String, String>, val directory: Boolean = false)
+    private data class ManifestWindow(val current: Set<String>, val previous: Set<String>)
     private class Session(val resources: MutableList<String>, @Volatile var lastUsed: Long, var openStreams: Int = 0,
                           val directories: MutableMap<String, String> = HashMap(),
+                          val directoryExpiry: MutableMap<String, Long> = HashMap(),
+                          val manifestWindows: MutableMap<String, ManifestWindow> = HashMap(),
+                          val reads: MutableSet<RelayRead> = HashSet(),
                           /** Set by the first read of any of its resources. */
                           @Volatile var everRead: Boolean = false)
+
+    /** Own calls through the entire response body, not just response headers. */
+    private class RelayRead(val resourceID: String) {
+        private val calls = HashSet<Call>()
+        private var cancelled = false
+        @Synchronized fun own(call: Call): Call {
+            if (cancelled) call.cancel() else calls.add(call)
+            return call
+        }
+        @Synchronized fun cancel() { cancelled = true; calls.forEach { it.cancel() }; calls.clear() }
+    }
 
     private val random = SecureRandom()
     private val sessions = LinkedHashMap<String, Session>()
@@ -74,6 +99,66 @@ internal object MediaRelay {
     internal var clientOverride: OkHttpClient? = null
 
     class Registration(val sessionId: String, val paths: List<String>)
+
+    /** Separate diagnostic sample; it is not claimed to be the manifest
+     * actually consumed by the demuxer. The same SSRF/header rules apply. */
+    suspend fun inspect(requested: Resource): MediaManifestDto = try {
+        MediaResourcePolicy.remoteURL(requested.url)
+        MediaResourcePolicy.headers(requested.headers)
+        checkHostAllowed(requested.url)
+        withTimeout(3_000) {
+            coroutineScope {
+                val read = RelayRead("inspection")
+                val cancellation = launch(start = CoroutineStart.UNDISPATCHED) {
+                    try { awaitCancellation() } finally { read.cancel() }
+                }
+                try {
+                    var resource = requested
+                    repeat(2) {
+                        val pair = withContext(Dispatchers.IO) {
+                            open(resource, false, null, read).use { response ->
+                                if (!response.isSuccessful) return@withContext null
+                                val source = response.body.source()
+                                if (source.request(512L * 1024 + 1)) return@withContext null
+                                response.request.url.toString() to source.readUtf8()
+                            }
+                        } ?: return@coroutineScope MediaManifestDto()
+                        val (url, text) = pair
+                        if (text.trimStart().startsWith("#EXTM3U")) {
+                            val lines = text.lineSequence().map(String::trim).toList()
+                            if (lines.any { it.startsWith("#EXT-X-STREAM-INF:") } && lines.none { it.startsWith("#EXTINF:") }) {
+                                val reference = text.lineSequence().map(String::trim).firstOrNull { line -> line.isNotEmpty() && !line.startsWith('#') }
+                                    ?: return@coroutineScope MediaManifestDto()
+                                val target = URI(url).resolve(reference).toString()
+                                MediaResourcePolicy.remoteURL(target)
+                                checkHostAllowed(target)
+                                val headers = if (origin(URI(target)) == origin(URI(requested.url))) requested.headers
+                                    else requested.headers.filterKeys { key -> key.lowercase(Locale.ROOT) in shareable }
+                                resource = Resource(target, headers)
+                            } else {
+                                val ended = "#EXT-X-ENDLIST" in lines
+                                val sequence = lines.firstOrNull { it.startsWith("#EXT-X-MEDIA-SEQUENCE:") }
+                                    ?.substringAfter(':')?.trim()?.toLongOrNull() ?: 0L
+                                val window = lines.filter { it.startsWith("#EXTINF:") }.sumOf { line ->
+                                    line.substringAfter(':').substringBefore(',').toDoubleOrNull()
+                                        ?.takeIf { it.isFinite() && it > 0 } ?: 0.0
+                                }.takeIf { it.isFinite() }
+                                return@coroutineScope MediaManifestDto(kind = "hls",
+                                    sequence = sequence, ended = ended, event = "#EXT-X-PLAYLIST-TYPE:EVENT" in lines,
+                                    dynamic = !ended, windowSeconds = window)
+                            }
+                        } else if (text.contains("<MPD")) {
+                            return@coroutineScope MediaManifestDto(kind = "dash", dynamic = Regex("type\\s*=\\s*[\"']dynamic[\"']").containsMatchIn(text))
+                        } else return@coroutineScope MediaManifestDto()
+                    }
+                    MediaManifestDto()
+                } finally { read.cancel(); cancellation.cancel() }
+            }
+        }
+    } catch (failure: Exception) {
+        currentCoroutineContext().ensureActive()
+        MediaManifestDto()
+    }
 
     /** Null when every session slot is in use by an active session. */
     fun register(requested: List<Resource>): Registration? {
@@ -87,7 +172,7 @@ internal object MediaRelay {
             expire()
             if (sessions.size >= MAX_SESSIONS) {
                 val evictable = sessions.filterValues {
-                    it.openStreams == 0 && now() - it.lastUsed >= (if (it.everRead) MIN_EVICTION_IDLE_MS else NEVER_READ_EVICTION_MS)
+                    it.openStreams == 0 && it.reads.isEmpty() && now() - it.lastUsed >= (if (it.everRead) MIN_EVICTION_IDLE_MS else NEVER_READ_EVICTION_MS)
                 }
                 val oldest = evictable.minByOrNull { it.value.lastUsed }
                 if (oldest != null) {
@@ -104,16 +189,25 @@ internal object MediaRelay {
     }
 
     fun revoke(sessionId: String) {
-        synchronized(sessions) { sessions.remove(sessionId)?.resources?.forEach(resources::remove) }
+        val reads = synchronized(sessions) {
+            sessions.remove(sessionId)?.also { it.resources.forEach(resources::remove) }?.reads?.toList()
+        }
+        reads?.forEach { it.cancel() }
     }
 
     val activeSessions: Int get() = synchronized(sessions) { expire(); sessions.size }
+    internal val activeReads: Int get() = synchronized(sessions) { sessions.values.sumOf { it.reads.size } }
 
-    internal fun reset() = synchronized(sessions) { sessions.clear(); resources.clear() }
+    internal fun reset() {
+        val reads = synchronized(sessions) {
+            sessions.values.flatMap { it.reads }.also { sessions.clear(); resources.clear() }
+        }
+        reads.forEach { it.cancel() }
+    }
 
     private fun expire() {
         val cutoff = now() - IDLE_LIFETIME_MS
-        sessions.entries.filter { it.value.openStreams == 0 && it.value.lastUsed < cutoff }.forEach { (id, session) ->
+        sessions.entries.filter { it.value.openStreams == 0 && it.value.reads.isEmpty() && it.value.lastUsed < cutoff }.forEach { (id, session) ->
             sessions.remove(id); session.resources.forEach(resources::remove)
         }
     }
@@ -131,7 +225,7 @@ internal object MediaRelay {
      * set) plus the rest of the URL. Headers follow the redirect rule:
      * credentials only on [owner]'s origin.
      */
-    private fun pathFor(sessionId: String, url: String, headers: Map<String, String>, owner: String): String {
+    private fun pathFor(sessionId: String, url: String, headers: Map<String, String>, owner: String, retentionMs: Long? = null): String {
         MediaResourcePolicy.remoteURL(url)
         checkHostAllowed(url)
         val uri = URI(url)
@@ -142,7 +236,19 @@ internal object MediaRelay {
         val inherited = if (origin(uri) == origin(URI(owner))) headers else headers.filterKeys { it.lowercase(Locale.ROOT) in shareable }
         synchronized(sessions) {
             val session = sessions[sessionId] ?: throw RejectedMediaResourceException("session")
-            val key = base + "\n" + inherited.entries.sortedBy { it.key }.joinToString("\n")
+            val key = directoryKey(url, headers, owner)
+            // Only measured rolling HLS or explicitly bounded dynamic DASH
+            // mappings may retire. Finite/unknown windows stay protected.
+            if (retentionMs != null) {
+                val retired = session.directoryExpiry.filter { (key, expiry) ->
+                    expiry < now() && session.reads.none { it.resourceID == session.directories[key] } &&
+                        session.manifestWindows.values.none { key in it.current || key in it.previous }
+                }.keys.toList()
+                retired.forEach { old ->
+                    session.directories.remove(old)?.let { resources.remove(it); session.resources.remove(it) }
+                    session.directoryExpiry.remove(old)
+                }
+            }
             val id = session.directories[key] ?: run {
                 if (session.directories.size >= MAX_DIRECTORIES) throw RejectedMediaResourceException("directories")
                 token().also {
@@ -151,7 +257,36 @@ internal object MediaRelay {
                     session.directories[key] = it
                 }
             }
+            if (retentionMs != null) session.directoryExpiry[key] = now() + retentionMs
+            else session.directoryExpiry.remove(key)
             return "$PATH_PREFIX$id/$rest"
+        }
+    }
+
+    private fun directoryKey(url: String, headers: Map<String, String>, owner: String): String {
+        val uri = URI(url)
+        val path = uri.rawPath.orEmpty().ifEmpty { "/" }
+        val base = "${uri.scheme.lowercase(Locale.ROOT)}://${uri.rawAuthority}${path.substring(0, path.lastIndexOf('/') + 1)}"
+        val scoped = if (origin(uri) == origin(URI(owner))) headers else headers.filterKeys { it.lowercase(Locale.ROOT) in shareable }
+        return base + "\n" + scoped.entries.sortedBy { it.key }.joinToString("\n")
+    }
+
+    /** Keep two complete advertised generations, rather than accumulating
+     * several windows after each directory's last reference. Active readers
+     * and mappings also used by finite/unknown manifests remain protected. */
+    private fun advanceManifestWindow(sessionId: String, owner: String, current: Set<String>) = synchronized(sessions) {
+        val session = sessions[sessionId] ?: throw RejectedMediaResourceException("session")
+        if (owner !in session.manifestWindows && session.manifestWindows.size >= MAX_DIRECTORIES) throw RejectedMediaResourceException("manifests")
+        val old = session.manifestWindows[owner]
+        val canonical = session.directories.keys.associateWith { it }
+        session.manifestWindows[owner] = ManifestWindow(current.mapTo(HashSet()) { canonical[it] ?: it }, old?.current.orEmpty())
+        val protected = session.manifestWindows.values.flatMap { it.current + it.previous }.toSet()
+        val retired = (old?.previous.orEmpty() - protected).filter { key ->
+            key in session.directoryExpiry && session.reads.none { it.resourceID == session.directories[key] }
+        }
+        retired.forEach { key ->
+            session.directories.remove(key)?.let { resources.remove(it); session.resources.remove(it) }
+            session.directoryExpiry.remove(key)
         }
     }
 
@@ -207,7 +342,7 @@ internal object MediaRelay {
         followRedirects(false)
         followSslRedirects(false)
         connectTimeout(15, TimeUnit.SECONDS)
-        readTimeout(30, TimeUnit.SECONDS)
+        readTimeout(15, TimeUnit.SECONDS)
         callTimeout(0, TimeUnit.SECONDS)
         // SEC-02: DNS validation against private, loopback and link-local addresses (SSRF defense)
         dns { hostname ->
@@ -226,7 +361,7 @@ internal object MediaRelay {
 
 
     /** Fetches `resource`, following only valid HTTP(S) redirects. The caller closes the response. */
-    private fun open(resource: Resource, head: Boolean, range: String?): Response {
+    private fun open(resource: Resource, head: Boolean, range: String?, read: RelayRead): Response {
         val http = client()
         var url = resource.url
         var headers = resource.headers
@@ -240,7 +375,7 @@ internal object MediaRelay {
                 header("Accept-Encoding", "identity")
                 range?.let { header("Range", it) }
             }.build()
-            val response = http.newCall(request).execute()
+            val response = read.own(http.newCall(request)).execute()
             if (response.code !in setOf(301, 302, 303, 307, 308)) return response
             val location = response.header("Location")
             response.close()
@@ -268,10 +403,30 @@ internal object MediaRelay {
     }
 
     /** [rest]: the raw path and query below a directory resource, or null for a registered resource itself. */
-    suspend fun serve(call: ApplicationCall, id: String, head: Boolean, rest: String? = null) {
+    suspend fun serve(call: ApplicationCall, id: String, head: Boolean, rest: String? = null) = coroutineScope {
+        val read = RelayRead(id)
+        val owner = synchronized(sessions) {
+            expire()
+            resources[id]?.first?.let(sessions::get)?.also { it.reads.add(read) }
+        }
+        val cancellation = launch(start = CoroutineStart.UNDISPATCHED) {
+            try { awaitCancellation() } finally { read.cancel() }
+        }
+        try { serveOwned(call, id, head, rest, read) }
+        finally {
+            read.cancel()
+            cancellation.cancel()
+            synchronized(sessions) { owner?.reads?.remove(read) }
+        }
+    }
+
+    private suspend fun serveOwned(call: ApplicationCall, id: String, head: Boolean, rest: String?, read: RelayRead) {
         val (sessionId, registered) = lookup(id) ?: run { call.respond(HttpStatusCode.NotFound, ""); return }
         val resource = when {
-            rest == null && !registered.directory -> registered
+            rest == null && !registered.directory -> {
+                val query = call.request.uri.substringAfter('?', "")
+                if (query.isEmpty()) registered else reloadURL(registered.url, query)?.let { Resource(it, registered.headers) }
+            }
             rest != null && registered.directory -> under(registered.url, rest)?.let { Resource(it, registered.headers) }
             else -> null
         } ?: run { call.respond(HttpStatusCode.NotFound, ""); return }
@@ -280,7 +435,7 @@ internal object MediaRelay {
         val range = call.request.headers["Range"]?.takeIf { rangePattern.matches(it) }
             ?.takeIf { ManifestRewriter.kind(resource.url, null) == null }
         var response = try {
-            withContext(Dispatchers.IO) { open(resource, head, range) }
+            withContext(Dispatchers.IO) { open(resource, head, range, read) }
         } catch (failure: Exception) {
             if (failure is kotlinx.coroutines.CancellationException) throw failure
             DaemonLog.warn("relay.upstream_failed", mapOf("error" to failure.javaClass.simpleName))
@@ -302,7 +457,7 @@ internal object MediaRelay {
             // Recognised only by its content type: fetch it whole.
             response.close()
             response = try {
-                withContext(Dispatchers.IO) { open(resource, head, null) }
+                withContext(Dispatchers.IO) { open(resource, head, null, read) }
             } catch (failure: Exception) {
                 if (failure is kotlinx.coroutines.CancellationException) throw failure
                 call.respond(HttpStatusCode.BadGateway, ""); return
@@ -319,7 +474,7 @@ internal object MediaRelay {
             return
         }
         if (manifest != null && response.code == 200) {
-            serveManifest(call, response, manifest, sessionId, resource, head)
+            serveManifest(call, response, manifest, sessionId, id, resource, head)
             return
         }
         if (manifest != null) {
@@ -379,11 +534,27 @@ internal object MediaRelay {
         }
     }
 
+    /** Only LL-HLS control fields may augment a registered root URL. Signed
+     * provider query bytes stay intact; an existing field is never replaced. */
+    internal fun reloadURL(url: String, query: String): String? {
+        if (query.length > 256) return null
+        val fields = query.split('&')
+        val allowed = Regex("(?:_HLS_msn|_HLS_part)=[0-9]{1,20}|_HLS_skip=(?:YES|v2)")
+        if (fields.any { !allowed.matches(it) }) return null
+        val names = fields.map { it.substringBefore('=') }
+        if (names.distinct().size != names.size) return null
+        val uri = URI(url)
+        val existing = uri.rawQuery.orEmpty().split('&').map { it.substringBefore('=') }
+        if (names.any { it in existing }) return null
+        val prefix = url.substringBefore('#')
+        return prefix + (if (uri.rawQuery == null) "?" else "&") + query
+    }
+
     private fun manifestType(kind: ManifestRewriter.Kind): ContentType =
         ContentType.parse(if (kind == ManifestRewriter.Kind.HLS) "application/vnd.apple.mpegurl" else "application/dash+xml")
 
     /** A manifest is read whole (bounded), rewritten and served as text. */
-    private suspend fun serveManifest(call: ApplicationCall, response: Response, kind: ManifestRewriter.Kind, sessionId: String,
+    private suspend fun serveManifest(call: ApplicationCall, response: Response, kind: ManifestRewriter.Kind, sessionId: String, resourceId: String,
                                       resource: Resource, head: Boolean) {
         val manifestUrl = response.request.url.toString()
         val text = withContext(Dispatchers.IO) {
@@ -394,7 +565,31 @@ internal object MediaRelay {
         }
         val rewritten = text?.let {
             try {
-                ManifestRewriter.rewrite(kind, it, manifestUrl) { url -> pathFor(sessionId, url, resource.headers, resource.url) }
+                val rolling = kind == ManifestRewriter.Kind.HLS && !it.contains("#EXT-X-ENDLIST")
+                val window = Regex("#EXTINF:([0-9.]+)").findAll(it).sumOf { match -> match.groupValues[1].toDoubleOrNull() ?: 0.0 }
+                // Fallback expiry for mappings that could not retire while
+                // read. Current/previous generations and active reads stay
+                // protected; master/unknown playlists never opt into expiry.
+                val retention = when {
+                    rolling && window > 0 -> maxOf(60_000L, (window * 3_000).toLong())
+                    kind == ManifestRewriter.Kind.DASH -> ManifestRewriter.dynamicWindowMs(it)?.let { milliseconds -> maxOf(60_000L, milliseconds * 3) }
+                    else -> null
+                }
+                if (retention != null) {
+                    val keys = HashSet<String>()
+                    // Discover the whole next generation before retiring any
+                    // path: a later reference in this manifest may still need it.
+                    ManifestRewriter.rewrite(kind, it, manifestUrl) { url ->
+                        keys += directoryKey(url, resource.headers, resource.url)
+                        if (keys.size > MAX_DIRECTORIES) throw RejectedMediaResourceException("directories")
+                        url
+                    }
+                    // A stable requested playlist may redirect to a new directory
+                    // on every refresh. Its owner is the requested resource;
+                    // relative references still resolve against the final URL.
+                    advanceManifestWindow(sessionId, resourceId + "\n" + URI(resource.url).rawPath, keys)
+                }
+                ManifestRewriter.rewrite(kind, it, manifestUrl) { url -> pathFor(sessionId, url, resource.headers, resource.url, retention) }
             } catch (failure: Exception) {
                 if (failure !is ManifestRewriter.Unsupported && failure !is RejectedMediaResourceException && failure !is IllegalArgumentException) throw failure
                 DaemonLog.warn("relay.manifest_refused", mapOf("kind" to kind.name, "reason" to (failure.message ?: failure.javaClass.simpleName)))

@@ -107,7 +107,7 @@ internal object WorkerMain {
             }
             Op.LINKS -> handle(frame) {
                 val request = decode<LinksRequest>(frame.payload)
-                val response = ProviderExecutor.loadLinksStreaming(provider(request.provider), request.data,
+                val response = ProviderExecutor.loadLinksStreaming(provider(request.provider), request.data, refresh = request.refresh, budgetMs = request.budgetMs,
                     onLink = { event(frame.id, LinkEvent(link = it)) },
                     onSubtitle = { event(frame.id, LinkEvent(subtitle = it)) })
                 reply(frame.id, com.lagradost.macos.models.LinksResponseDto.serializer(), response)

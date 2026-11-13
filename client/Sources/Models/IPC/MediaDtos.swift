@@ -1,6 +1,6 @@
 import Foundation
 
-// IPC JSON values mirrored by the engine (ipc-api.md, contract v6).
+// IPC JSON values mirrored by the engine (ipc-api.md, contract v7).
 
 struct SearchResultDto: Codable, Sendable, Identifiable, Hashable {
     let name: String
@@ -227,6 +227,8 @@ struct LinksStreamEventDto: Codable, Sendable {
 struct LinksRequestDto: Encodable, Sendable {
     let plugin: String
     let data: String
+    var refresh: Bool = false
+    var budgetMs: Int? = nil
 }
 
 /// POST /extract (IPC v3): extractor-only resolution for a single URL.
@@ -255,6 +257,36 @@ struct VerifierStopRequestDto: Encodable, Sendable {
 struct MediaRelayResourceDto: Encodable, Sendable, Equatable {
     let url: String
     let headers: [String: String]
+}
+
+/// POST /media/inspect (IPC v7): what a stream's playlist says about itself,
+/// sampled once by the engine. Facts only: never a URL, header or key.
+struct MediaManifestDto: Decodable, Sendable {
+    var kind: String = "unknown"
+    var sequence: Int64? = nil
+    /// The playlist is complete: a broadcast that reports this has finished.
+    var ended = false
+    var event = false
+    var dynamic = false
+    var windowSeconds: Double? = nil
+
+    init(kind: String = "unknown", sequence: Int64? = nil, ended: Bool = false, event: Bool = false,
+         dynamic: Bool = false, windowSeconds: Double? = nil) {
+        (self.kind, self.sequence, self.ended, self.event, self.dynamic, self.windowSeconds) = (kind, sequence, ended, event, dynamic, windowSeconds)
+    }
+
+    private enum CodingKeys: String, CodingKey { case kind, sequence, ended, event, dynamic, windowSeconds }
+
+    /// A field the engine leaves out reads as "not known", never as a failure.
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try values.decodeIfPresent(String.self, forKey: .kind) ?? "unknown"
+        sequence = try values.decodeIfPresent(Int64.self, forKey: .sequence)
+        ended = try values.decodeIfPresent(Bool.self, forKey: .ended) ?? false
+        event = try values.decodeIfPresent(Bool.self, forKey: .event) ?? false
+        dynamic = try values.decodeIfPresent(Bool.self, forKey: .dynamic) ?? false
+        windowSeconds = try values.decodeIfPresent(Double.self, forKey: .windowSeconds)
+    }
 }
 
 struct MediaRelayRequestDto: Encodable, Sendable {

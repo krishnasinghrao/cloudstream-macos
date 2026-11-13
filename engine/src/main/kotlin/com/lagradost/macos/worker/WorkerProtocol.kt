@@ -182,7 +182,7 @@ internal data class InitResult(
 @Serializable internal data class SearchRequest(val provider: String, val query: String)
 @Serializable internal data class HomeRequest(val provider: String, val page: Int)
 @Serializable internal data class DetailsRequest(val provider: String, val url: String)
-@Serializable internal data class LinksRequest(val provider: String, val data: String)
+@Serializable internal data class LinksRequest(val provider: String, val data: String, val refresh: Boolean = false, val budgetMs: Long? = null)
 /**
  * Runs extractors on one URL. For routed extraction (RT-12) [visited] holds the
  * installations already on the route, [hops] its depth and [budgetMs] the time

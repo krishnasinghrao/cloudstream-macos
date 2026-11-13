@@ -20,6 +20,7 @@ class LocalMediaPlugin : Plugin() {
 }
 
 class LocalMediaProvider : MainAPI() {
+    private var tokenGeneration = 0
     override var name = "LocalMediaProvider"
     override var mainUrl = "https://local-media.invalid"
 
@@ -32,6 +33,11 @@ class LocalMediaProvider : MainAPI() {
     override suspend fun loadLinks(data: String, isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         val origin = data.trimEnd('/')
+        if (origin.endsWith("/rotating")) {
+            tokenGeneration += 1
+            callback(newExtractorLink(name, "Rotating live token", "$origin/live.m3u8?generation=$tokenGeneration", ExtractorLinkType.M3U8))
+            return true
+        }
         callback(newExtractorLink(name, "HLS", "$origin/hls/index.m3u8", ExtractorLinkType.M3U8) {
             referer = "https://local-media.invalid/"
             quality = Qualities.P720.value

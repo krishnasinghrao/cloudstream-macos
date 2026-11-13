@@ -98,7 +98,7 @@ class ExtensionRoutesTest {
 
     @Test fun `health reports background restore and safe mode`() = RouteHarness().use { http ->
         val health = http.get("/health", auth = false).json.obj()
-        assertEquals("6", health.str("ipcVersion"))
+        assertEquals(com.lagradost.macos.models.HealthDto.IPC_VERSION.toString(), health.str("ipcVersion"))
         assertTrue(health.containsKey("extensions"))
         assertEquals("false", health.str("safeMode"))
     }

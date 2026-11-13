@@ -310,8 +310,12 @@ actor DaemonClient {
     /// Resolves stream links for an episode/movie data string (POST body —
     /// episode data can be multi-KB). Links arrive pre-sorted by quality
     /// (daemon-side failover order) and sanitized (SEC-04).
-    func links(provider: String, data: String) async throws -> LinksResponseDto {
-        try await post("links", body: LinksRequestDto(plugin: provider, data: data))
+    func links(provider: String, data: String, refresh: Bool = false, budgetMs: Int? = nil) async throws -> LinksResponseDto {
+        try await post("links", body: LinksRequestDto(plugin: provider, data: data, refresh: refresh, budgetMs: budgetMs))
+    }
+
+    func inspectManifest(_ resource: MediaRelayResourceDto) async throws -> MediaManifestDto {
+        try await post("media/inspect", body: resource)
     }
 
     /// Runs the daemon's extractors on one URL (trailers).
@@ -374,13 +378,13 @@ actor DaemonClient {
 
     /// Progressive link resolution over NDJSON `POST /links/stream`.
     /// Engines without this endpoint (404/405) fall back to batch `/links`.
-    nonisolated func linksStream(provider: String, data: String) -> AsyncThrowingStream<LinksStreamEventDto, Error> {
+    nonisolated func linksStream(provider: String, data: String, refresh: Bool = false, budgetMs: Int? = nil) -> AsyncThrowingStream<LinksStreamEventDto, Error> {
         eventStream(path: "links/stream") { client, continuation in
-            let body = try JSONEncoder().encode(LinksRequestDto(plugin: provider, data: data))
+            let body = try JSONEncoder().encode(LinksRequestDto(plugin: provider, data: data, refresh: refresh, budgetMs: budgetMs))
             let request = try await client.makeRequest("links/stream", body: body)
             let (bytes, response) = try await Self.session.bytes(for: request)
             if let http = response as? HTTPURLResponse, http.statusCode == 404 || http.statusCode == 405 {
-                let batch = try await client.links(provider: provider, data: data)
+                let batch = try await client.links(provider: provider, data: data, refresh: refresh, budgetMs: budgetMs)
                 for link in batch.links {
                     continuation.yield(LinksStreamEventDto(type: "link", link: link, subtitle: nil, error: nil))
                 }

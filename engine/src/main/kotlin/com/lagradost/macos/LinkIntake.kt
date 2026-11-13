@@ -15,6 +15,7 @@ import com.lagradost.macos.models.SkippedLinkDto
 import com.lagradost.macos.models.StreamLinkDto
 import com.lagradost.macos.models.SubtitleDto
 import com.lagradost.macos.worker.RemoteProvider
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.Base64
 
 /**
@@ -79,7 +80,7 @@ internal class LinkIntake {
             source = link.source,
             quality = link.quality,
             type = link.type.name,
-            headers = withUserAgent(link.getAllHeaders()),
+            headers = withSessionHeaders(link.url, link.getAllHeaders()),
             extractorData = link.extractorData,
             isPlaylist = link is ExtractorLinkPlayList,
             playlist = (link as? ExtractorLinkPlayList)?.playlist?.map { it.url } ?: emptyList(),
@@ -88,28 +89,53 @@ internal class LinkIntake {
                     url = audio.url,
                     label = audio.label,
                     language = audio.language,
-                    headers = withUserAgent(audio.headers ?: link.getAllHeaders()),
+                    headers = withSessionHeaders(audio.url, audio.headers ?: link.getAllHeaders()),
                 )
             },
             drm = drm,
         ).let(RemoteProvider::cleanLink)
 
         /**
-         * On Android the player fetches a stream with the extension's own
-         * User-Agent; mpv is a separate HTTP client with its own. A link whose
-         * host checks the agent (or whose clearance was issued to it) then
-         * fails with a 403 when played. Adds the provider client's
-         * User-Agent when the extension set none itself (its own always wins).
+         * On Android the player fetches a stream with the extension's own HTTP
+         * stack, so the session that scraped a link also plays it. mpv is a
+         * separate HTTP client: without this, a link that relies on the
+         * session's cookies or its User-Agent fails with a 403 when played.
          *
-         * Cookies are deliberately not added here: a credentialed link changes
-         * how the app plays it (through the relay), which is reviewed together
-         * with the relay and live-playback work.
+         * Adds what the extension did not set itself (its own headers always
+         * win): the cookies the engine holds for [url] — from the provider
+         * client's cookie jar and from solved challenges — and the
+         * User-Agent the provider client sends. Cookies are looked up for the
+         * stream's own URL only, so a cookie never reaches a host it was not
+         * set for; the relay keeps it on that origin across redirects.
          */
-        internal fun withUserAgent(headers: Map<String, String>): Map<String, String> {
-            if (headers.keys.any { it.equals("User-Agent", ignoreCase = true) }) return headers
-            val agent = runCatching { app.defaultHeaders.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value }
-                .getOrNull()?.takeIf { it.isNotBlank() && it.none(Char::isISOControl) } ?: USER_AGENT
-            return LinkedHashMap(headers).apply { put("User-Agent", agent) }
+        internal fun withSessionHeaders(url: String, headers: Map<String, String>): Map<String, String> {
+            val result = LinkedHashMap(headers)
+            fun has(name: String) = headers.keys.any { it.equals(name, ignoreCase = true) }
+            if (!has("Cookie")) sessionCookies(url)?.let { result["Cookie"] = it }
+            if (!has("User-Agent")) {
+                val agent = runCatching { app.defaultHeaders.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value }
+                    .getOrNull()?.takeIf { it.isNotBlank() && it.none(Char::isISOControl) } ?: USER_AGENT
+                result["User-Agent"] = agent
+            }
+            return result
+        }
+
+        /** The engine's cookies for [url] as one RFC 6265 `Cookie` value, or null when it holds none. */
+        internal fun sessionCookies(url: String): String? {
+            val httpUrl = url.toHttpUrlOrNull() ?: return null
+            // An extension may install its own jar; one that throws must not lose the link.
+            val jar = runCatching { app.baseClient.cookieJar.loadForRequest(httpUrl) }.getOrDefault(emptyList())
+                .filter { it.name.isNotEmpty() }
+                .joinToString("; ") { "${it.name}=${it.value}" }
+                .takeIf { it.isNotEmpty() }
+            val solved = SolveBridge.cookieHeaderFor(url)?.takeIf(SolveBridge::validCookieHeader)
+            val merged = when {
+                jar == null -> solved
+                solved == null -> jar
+                // The jar's own values win; solved clearance cookies fill in the rest.
+                else -> SolveInterceptor.mergeCookies(jar, solved, overlayWins = false)
+            }
+            return merged?.takeIf { it.isNotEmpty() && it.none { c -> c.isISOControl() } }
         }
 
         /**

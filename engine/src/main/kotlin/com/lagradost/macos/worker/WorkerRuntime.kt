@@ -548,10 +548,10 @@ internal class RemoteProvider(val handle: WorkerHandle, private val descriptor: 
             recommendations = details.recommendations?.take(MAX_RESULTS)?.map(::clean))
     }
 
-    suspend fun remoteLinks(data: String, timeoutMs: Long, onLink: (StreamLinkDto) -> Unit, onSubtitle: (SubtitleDto) -> Unit): LinksResponseDto {
+    suspend fun remoteLinks(data: String, timeoutMs: Long, onLink: (StreamLinkDto) -> Unit, onSubtitle: (SubtitleDto) -> Unit, refresh: Boolean = false, budgetMs: Long? = null): LinksResponseDto {
         var links = 0
         var subtitles = 0
-        val response = handle.call(Op.LINKS, json(LinksRequest(name, data)), LinksResponseDto.serializer(), timeoutMs) { element ->
+        val response = handle.call(Op.LINKS, json(LinksRequest(name, data, refresh, budgetMs)), LinksResponseDto.serializer(), timeoutMs) { element ->
             val event = FrameCodec.json.decodeFromJsonElement(LinkEvent.serializer(), element)
             event.link?.let { if (++links <= MAX_LINKS) onLink(clean(it)) }
             event.subtitle?.let { if (++subtitles <= MAX_SUBTITLES) onSubtitle(clean(it)) }

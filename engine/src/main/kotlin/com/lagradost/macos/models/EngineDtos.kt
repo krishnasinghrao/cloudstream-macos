@@ -26,7 +26,7 @@ data class HealthDto(
         const val DAEMON_VERSION: String = "1.2.0"
 
         /** Bump on any breaking IPC change; the client checks this at connect. */
-        const val IPC_VERSION: Int = 6
+        const val IPC_VERSION: Int = 7
     }
 }
 

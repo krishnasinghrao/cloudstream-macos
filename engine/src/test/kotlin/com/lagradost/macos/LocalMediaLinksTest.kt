@@ -22,6 +22,20 @@ import kotlin.test.*
  * (`scripts/run_full_client_tests.sh` does both).
  */
 class LocalMediaLinksTest {
+    @Test fun `fresh resolution bypasses both daemon and sandboxed worker caches`() = runBlocking<Unit> {
+        assumeTrue(System.getProperty("os.name").startsWith("Mac"))
+        val fetcher = repo.publish(mapOf("LocalMedia" to ExtensionTestSupport.extension("local-media")), revision = 1)
+        val manager = ExtensionTestSupport.use(InstallationManager(WorkerExtensionRuntime(WorkerLauncher(sandboxed = true)), fetcher))
+        val record = manager.install(repo.url, "LocalMedia")
+        val provider = assertIs<RemoteProvider>(assertNotNull(PluginBridge.loadedInstallation(record.id)).providers.single())
+        val data = "https://local-media.invalid/rotating"
+        val first = ProviderExecutor.loadLinks(provider, data).links.single().url
+        assertEquals(first, ProviderExecutor.loadLinks(provider, data).links.single().url)
+        val fresh = ProviderExecutor.loadLinks(provider, data, refresh = true, budgetMs = 10_000).links.single().url
+        assertNotEquals(first, fresh, "a host-only cache bypass would still return the worker's first token")
+        assertTrue(fresh.endsWith("generation=2"), fresh)
+        assertEquals(fresh, ProviderExecutor.loadLinks(provider, data).links.single().url)
+    }
     @Serializable private data class Export(val provider: String, val link: StreamLinkDto)
 
     private val repo = SignedCatalogFixture("https://local-media.invalid/repo.json")

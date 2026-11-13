@@ -195,6 +195,8 @@ data class LinksStreamEventDto(
 data class LinksRequestDto(
     val plugin: String,
     val data: String,
+    val refresh: Boolean = false,
+    val budgetMs: Long? = null,
 )
 
 /** POST /extract — run the bundled extractors on one URL (trailers; IPC v3). */
@@ -233,6 +235,17 @@ data class MediaRelayResourceDto(
 @Serializable
 data class MediaRelayRequestDto(
     val resources: List<MediaRelayResourceDto>,
+)
+
+/** A bounded diagnostic sample; never includes a URL, token, header or key. */
+@Serializable
+data class MediaManifestDto(
+    val kind: String = "unknown",
+    val sequence: Long? = null,
+    val ended: Boolean = false,
+    val event: Boolean = false,
+    val dynamic: Boolean = false,
+    val windowSeconds: Double? = null,
 )
 
 @Serializable

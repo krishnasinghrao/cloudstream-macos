@@ -22,6 +22,13 @@ import org.xml.sax.InputSource
  * (an unknown scheme, or a template identifier inside a host name).
  */
 internal object ManifestRewriter {
+    /** Retire old relay mappings only when a dynamic MPD explicitly bounds
+     * the advertised DVR window. Missing/indefinite windows stay protected. */
+    fun dynamicWindowMs(text: String): Long? = runCatching {
+        val root = parseDash(text).documentElement
+        if (root.localName != "MPD" || root.getAttribute("type") != "dynamic") null
+        else java.time.Duration.parse(root.getAttribute("timeShiftBufferDepth")).toMillis().takeIf { it > 0 && it <= 7 * 24 * 60 * 60 * 1_000L }
+    }.getOrNull()
     class Unsupported(reason: String) : Exception(reason)
 
     enum class Kind { HLS, DASH }
@@ -87,7 +94,7 @@ internal object ManifestRewriter {
 
     private const val TEMPLATE_PLACEHOLDER = "cs-template-segment"
 
-    private fun dash(text: String, base: URI, map: (String) -> String): String {
+    private fun parseDash(text: String): org.w3c.dom.Document {
         val factory = DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = true
             isExpandEntityReferences = false
@@ -95,8 +102,12 @@ internal object ManifestRewriter {
             setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
             setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
         }
-        val document = runCatching { factory.newDocumentBuilder().parse(InputSource(StringReader(text))) }.getOrNull()
+        return runCatching { factory.newDocumentBuilder().parse(InputSource(StringReader(text))) }.getOrNull()
             ?: throw Unsupported("xml")
+    }
+
+    private fun dash(text: String, base: URI, map: (String) -> String): String {
+        val document = parseDash(text)
         val mpd = document.documentElement
         if (mpd.localName != "MPD") throw Unsupported("not an MPD")
         val all = mpd.getElementsByTagNameNS("*", "*")

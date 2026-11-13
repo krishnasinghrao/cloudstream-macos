@@ -54,7 +54,11 @@ final class LiveEngine: @unchecked Sendable {
 
     /// Launches the engine and returns once it has announced its port and proven its token.
     static func start() async throws -> LiveEngine {
-        let jar = repositoryRoot.appendingPathComponent("engine/build/libs/daemon.jar")
+        // CS_LIVE_ENGINE_JAR: a copy staged outside the checkout. When the
+        // checkout is in a protected folder (Desktop, Documents) the test
+        // host's JVM blocks on the privacy prompt and never announces a port.
+        let jar = ProcessInfo.processInfo.environment["CS_LIVE_ENGINE_JAR"].map { URL(fileURLWithPath: $0) }
+            ?? repositoryRoot.appendingPathComponent("engine/build/libs/daemon.jar")
         guard FileManager.default.fileExists(atPath: jar.path) else {
             throw Unavailable(reason: "Build the engine first: ./gradlew :engine:jar (\(jar.path) is missing)")
         }

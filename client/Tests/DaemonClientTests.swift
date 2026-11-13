@@ -122,9 +122,11 @@ final class DaemonClientTests: XCTestCase {
                 XCTAssertEqual(server.requests.count, 2)
                 XCTAssertTrue(server.requests.allSatisfy { $0.hasPrefix("POST ") && $0.contains("Authorization: Bearer fallback-token") && $0.contains("Content-Type: application/json") })
                 for body in server.requestBodies {
-                    let request = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
-                    XCTAssertEqual(request["plugin"], "inst:Provider")
-                    XCTAssertEqual(request["data"], "episode")
+                    let request = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+                    XCTAssertEqual(request["plugin"] as? String, "inst:Provider")
+                    XCTAssertEqual(request["data"] as? String, "episode")
+                    XCTAssertEqual(request["refresh"] as? Bool, false, "ordinary resolution keeps the engine's caches")
+                    XCTAssertNil(request["budgetMs"])
                 }
             } catch {
                 guard case DaemonClient.DaemonError.http(let code, _) = error else { throw error }

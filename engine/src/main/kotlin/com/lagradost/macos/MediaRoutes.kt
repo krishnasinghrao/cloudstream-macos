@@ -237,11 +237,13 @@ internal fun Route.mediaRoutes() {
             return@post
         }
 
-        val links: LinksResponseDto = ProviderExecutor.loadLinks(provider, request.data)
-        val failure = links.failures.firstOrNull()
-        if (links.outcome == "failure" && failure != null) call.respond(HttpStatusCode.fromValue(OperationFailures.status(failure)),
-            ErrorResponseDto(failure.publicMessage, failure = failure))
-        else call.respond(links)
+        call.withConnectionCancellation {
+            val links: LinksResponseDto = ProviderExecutor.loadLinks(provider, request.data, refresh = request.refresh, budgetMs = request.budgetMs)
+            val failure = links.failures.firstOrNull()
+            if (links.outcome == "failure" && failure != null) call.respond(HttpStatusCode.fromValue(OperationFailures.status(failure)),
+                ErrorResponseDto(failure.publicMessage, failure = failure))
+            else call.respond(links)
+        }
     }
 
     // POST /extract — extractor-only resolution for one URL (trailers).
@@ -311,7 +313,7 @@ internal fun Route.mediaRoutes() {
                 val response = withContext(Dispatchers.IO) {
                     ProviderExecutor.loadLinksStreaming(
                         provider,
-                        request.data,
+                        request.data, refresh = request.refresh, budgetMs = request.budgetMs,
                         onLink = { link -> emit(LinksStreamEventDto(type = "link", link = link)) },
                         onSubtitle = { sub -> emit(LinksStreamEventDto(type = "subtitle", subtitle = sub)) },
                     )
@@ -341,6 +343,15 @@ internal fun Route.mediaRoutes() {
     }
 
     // ---- Split-stream transport (audit A35): per-resource headers for one playback session.
+
+    post("/media/inspect") {
+        if (!RateLimiter.check("links")) {
+            call.respond(HttpStatusCode.TooManyRequests, ErrorResponseDto(error = "rate limited"))
+            return@post
+        }
+        val resource = call.receive<com.lagradost.macos.models.MediaRelayResourceDto>()
+        call.respond(MediaRelay.inspect(MediaRelay.Resource(resource.url, resource.headers)))
+    }
 
     post("/media/relay") {
         Metrics.recordRequest("media/relay")

@@ -30,7 +30,7 @@ struct HealthDto: Codable, Sendable {
     var proof: String? = nil
 
     /// The IPC contract this client build speaks.
-    static let expectedIpcVersion = 6
+    static let expectedIpcVersion = 7
 }
 
 struct ExtensionHealthDto: Codable, Sendable, Hashable {

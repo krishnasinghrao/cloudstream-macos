@@ -45,12 +45,13 @@ class LinkPipelineTest {
         assertFalse(response.skipped.toString().contains("magnet:"), "skipped links never carry their URL")
     }
 
-    @Test fun `an extension's own User-Agent is kept and no cookie is ever added`() {
-        val own = LinkIntake.withUserAgent(mapOf("user-agent" to "Extension/1.0", "Referer" to "https://p.invalid/"))
+    @Test fun `an extension's own User-Agent is kept and a host without session cookies gets none`() {
+        val url = "https://no-session.invalid/v.mp4"
+        val own = LinkIntake.withSessionHeaders(url, mapOf("user-agent" to "Extension/1.0", "Referer" to "https://p.invalid/"))
         assertEquals(mapOf("user-agent" to "Extension/1.0", "Referer" to "https://p.invalid/"), own, "the extension's agent wins, in any case")
-        val added = LinkIntake.withUserAgent(mapOf("Referer" to "https://p.invalid/"))
+        val added = LinkIntake.withSessionHeaders(url, mapOf("Referer" to "https://p.invalid/"))
         assertTrue(added["User-Agent"].orEmpty().isNotBlank())
-        assertFalse(added.keys.any { it.equals("Cookie", ignoreCase = true) }, "cookies would force the relay; not added here")
+        assertFalse(added.keys.any { it.equals("Cookie", ignoreCase = true) }, "a cookie would route the link through the relay for nothing")
     }
 
     @Test fun `a provider with only torrent sources says so instead of failing generically`() = runBlocking<Unit> {

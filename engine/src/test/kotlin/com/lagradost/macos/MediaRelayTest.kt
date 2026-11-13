@@ -18,6 +18,137 @@ import kotlin.test.*
  * origin fixture; the "player" is an unauthenticated HTTP client.
  */
 class MediaRelayTest {
+    @Test fun `manifest inspection is bounded redacted and preserves live and event evidence`() = kotlinx.coroutines.runBlocking<Unit> {
+        serve(origin, "/inspect/live.m3u8", "application/vnd.apple.mpegurl",
+            "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:42\n#EXTINF:2,\none.ts\n#EXTINF:2,\ntwo.ts\n")
+        val live = MediaRelay.inspect(MediaRelay.Resource(url("/inspect/live.m3u8?secret=private"), emptyMap()))
+        assertEquals("hls", live.kind)
+        assertEquals(42, live.sequence)
+        assertTrue(live.dynamic)
+        assertFalse(live.ended)
+        assertEquals(4.0, live.windowSeconds)
+        assertFalse("secret" in live.toString())
+        serve(origin, "/inspect/event.m3u8", "application/vnd.apple.mpegurl",
+            "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:2,\none.ts\n#EXT-X-ENDLIST\n")
+        val ended = MediaRelay.inspect(MediaRelay.Resource(url("/inspect/event.m3u8"), emptyMap()))
+        assertTrue(ended.event && ended.ended)
+        assertEquals(0, ended.sequence, "HLS defaults media sequence to zero")
+        serve(origin, "/inspect/comments.m3u8", "application/vnd.apple.mpegurl",
+            "#EXTM3U\n# comment: #EXT-X-ENDLIST #EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:2,\none.ts\n")
+        val comments = MediaRelay.inspect(MediaRelay.Resource(url("/inspect/comments.m3u8"), emptyMap()))
+        assertTrue(comments.dynamic)
+        assertFalse(comments.ended || comments.event)
+        serve(origin, "/inspect/oversized.m3u8", "application/vnd.apple.mpegurl", "#EXTM3U\n" + "x".repeat(513 * 1024))
+        assertEquals("unknown", MediaRelay.inspect(MediaRelay.Resource(url("/inspect/oversized.m3u8"), emptyMap())).kind)
+    }
+
+    @Test fun `revoking a session cancels an upstream call still waiting for headers`() = RouteHarness().use { harness ->
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        origin.createContext("/blocked") { exchange ->
+            entered.countDown()
+            release.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            runCatching { exchange.sendResponseHeaders(200, -1); exchange.close() }
+        }
+        val (session, paths) = register(harness, url("/blocked") to emptyMap())
+        val reader = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val result = reader.submit<Int> { harness.raw(paths.single()).status }
+            assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS))
+            MediaRelay.revoke(session)
+            assertEquals(502, result.get(2, java.util.concurrent.TimeUnit.SECONDS))
+        } finally { release.countDown(); reader.shutdownNow() }
+    }
+    @Test fun `root reload controls preserve signatures and reject unscoped input`() {
+        val signed = "https://cdn.invalid/live.m3u8?sig=a%2Fb&expiry=100"
+        assertEquals("$signed&_HLS_msn=200&_HLS_part=2", MediaRelay.reloadURL(signed, "_HLS_msn=200&_HLS_part=2"))
+        assertNull(MediaRelay.reloadURL(signed, "url=https://other.invalid"))
+        assertNull(MediaRelay.reloadURL(signed, "_HLS_msn=1&_HLS_msn=2"))
+        assertNull(MediaRelay.reloadURL("$signed&_HLS_msn=1", "_HLS_msn=2"))
+        assertNull(MediaRelay.reloadURL(signed, "_HLS_part=-1"))
+    }
+
+    @Test fun `only a bounded dynamic DASH window permits mapping retirement`() {
+        val prefix = "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" "
+        assertEquals(60_000L, ManifestRewriter.dynamicWindowMs(prefix + "type=\"dynamic\" timeShiftBufferDepth=\"PT60S\"/>"))
+        assertNull(ManifestRewriter.dynamicWindowMs(prefix + "type=\"static\" timeShiftBufferDepth=\"PT60S\"/>"))
+        assertNull(ManifestRewriter.dynamicWindowMs(prefix + "type=\"dynamic\"/>"))
+        assertNull(ManifestRewriter.dynamicWindowMs("<!DOCTYPE MPD [<!ENTITY ext SYSTEM 'file:///etc/hosts'>]><MPD/>"))
+    }
+
+    @Test fun `rolling manifests retire obsolete directories without losing the current window`() = RouteHarness().use { harness ->
+        var clock = 1_000L
+        MediaRelay.now = { clock }
+        var sequence = 0
+        origin.createContext("/rotating.m3u8") { exchange ->
+            val text = "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:$sequence\n#EXTINF:2,\ndirectory$sequence/segment.ts\n"
+            val bytes = text.toByteArray()
+            exchange.responseHeaders.add("Content-Type", "application/vnd.apple.mpegurl")
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        val (_, paths) = register(harness, url("/rotating.m3u8") to emptyMap())
+        repeat(120) {
+            sequence = it
+            clock += 2_000
+            assertEquals(200, harness.raw(paths.single()).status, "rolling directory $it must not exhaust a session")
+        }
+    }
+
+    @Test fun `dense sixty second windows keep current and previous references within the directory cap`() = RouteHarness().use { harness ->
+        var clock = 1_000L
+        MediaRelay.now = { clock }
+        var sequence = 0
+        origin.createContext("/dense.m3u8") { exchange ->
+            val text = buildString {
+                append("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:$sequence\n")
+                repeat(30) { append("#EXTINF:2,\ndense/directory${sequence + it}/segment.ts\n") }
+            }.toByteArray()
+            exchange.responseHeaders.add("Content-Type", "application/vnd.apple.mpegurl")
+            exchange.sendResponseHeaders(200, text.size.toLong())
+            exchange.responseBody.use { it.write(text) }
+        }
+        origin.createContext("/dense/") { exchange ->
+            exchange.sendResponseHeaders(200, 7)
+            exchange.responseBody.use { it.write("segment".toByteArray()) }
+        }
+        val (_, paths) = register(harness, url("/dense.m3u8") to emptyMap())
+        var previous: String? = null
+        repeat(120) {
+            sequence = it
+            clock += 2_000
+            val response = harness.raw(paths.single())
+            assertEquals(200, response.status, "dense window $it must not exhaust 64 mappings")
+            val references = response.bytes.decodeToString().lineSequence().filter { line -> line.isNotBlank() && !line.startsWith('#') }.toList()
+            assertEquals(30, references.size)
+            assertEquals("segment", harness.raw(references.first()).bytes.decodeToString())
+            previous?.let { old -> assertEquals(200, harness.raw(old).status, "the previous generation remains readable") }
+            previous = references.first()
+        }
+    }
+
+    @Test fun `rotating redirect targets retain one logical manifest owner`() = RouteHarness().use { harness ->
+        var generation = 0
+        origin.createContext("/redirecting.m3u8") { exchange ->
+            exchange.responseHeaders.add("Location", "/relocated/$generation/live.m3u8")
+            exchange.sendResponseHeaders(302, -1)
+            exchange.close()
+        }
+        origin.createContext("/relocated/") { exchange ->
+            val bytes = buildString {
+                append("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:$generation\n")
+                repeat(30) { append("#EXTINF:2,\ndirectory$it/segment.ts\n") }
+            }.toByteArray()
+            exchange.responseHeaders.add("Content-Type", "application/vnd.apple.mpegurl")
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        val (_, paths) = register(harness, url("/redirecting.m3u8") to emptyMap())
+        repeat(6) {
+            generation = it
+            assertEquals(200, harness.raw(paths.single()).status, "a redirected path is not a new logical manifest owner")
+        }
+    }
     private lateinit var origin: HttpServer
     private lateinit var other: HttpServer
     private val executor = Executors.newFixedThreadPool(4)
@@ -316,6 +447,10 @@ class MediaRelayTest {
         clock += 2000
         assertEquals(1, MediaRelay.activeSessions)
         assertEquals(200, harness.raw(first.second[0]).status)
+        // The client can finish reading just before Ktor's request-finally
+        // releases ownership. Complete that boundary before jumping the clock.
+        repeat(100) { if (MediaRelay.activeReads > 0) Thread.sleep(2) }
+        assertEquals(0, MediaRelay.activeReads)
         clock += MediaRelay.IDLE_LIFETIME_MS + 1
         assertEquals(404, harness.raw(first.second[0]).status)
     }

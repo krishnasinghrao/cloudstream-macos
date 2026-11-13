@@ -34,6 +34,9 @@ trap cleanup EXIT
 
 echo "==> Engine jar (the client's end-to-end tests launch it)"
 (cd "$repo" && ./gradlew :engine:jar --console=plain -q)
+# Staged outside the checkout: from a protected folder (Desktop, Documents)
+# the test host's JVM cannot read the jar and never announces its port.
+cp "$repo/engine/build/libs/daemon.jar" "$work/daemon.jar"
 
 echo "==> Live player fixtures"
 CS_FIXTURE_FFMPEG="$ffmpeg" "$repo/scripts/make_player_fixtures.sh"
@@ -57,18 +60,19 @@ xcodebuild -project "$repo/client/CloudStreamMac.xcodeproj" -scheme CloudStreamM
     build-for-testing CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES COMPILER_INDEX_STORE_ENABLE=NO -quiet
 
 # __TESTROOT__ paths require the modified run file to remain beside Products.
-xctestrun="$(python3 -I - "$derived/Build/Products" "$work/legacy-identity-tool" "$base" "$norange" "$dir" <<'PY'
+xctestrun="$(python3 -I - "$derived/Build/Products" "$work/legacy-identity-tool" "$base" "$norange" "$dir" "$work/daemon.jar" <<'PY'
 from pathlib import Path
 import plistlib
 import sys
 import uuid
-products, tool, base, norange, media = Path(sys.argv[1]), *sys.argv[2:]
+products, tool, base, norange, media, engine = Path(sys.argv[1]), *sys.argv[2:]
 originals = list(products.glob('CloudStreamMac_macosx*-arm64.xctestrun'))
 if len(originals) != 1:
     raise SystemExit('Expected exactly one arm64 client xctestrun')
 data = plistlib.loads(originals[0].read_bytes())
 data['CloudStreamMacTests']['EnvironmentVariables'].update({
     'CS_MPV_ENGINE_TESTS': '1',
+    'CS_LIVE_ENGINE_JAR': engine,
     'CS_LARGE_LIBRARY_TESTS': '1',
     'CS_MPV_BENCH': '1',
     'CS_BENCH_BASE': base,
