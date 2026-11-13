@@ -103,6 +103,7 @@ final class SidebarNavigationUITests: XCTestCase {
 
     /// The native sidebar list moves the selection with the arrow keys and
     /// reports the current destination's row as selected.
+    @MainActor
     func testArrowKeysMoveTheSidebarSelectionAndRowsReportSelected() throws {
         let app = launchSidebarApp()
         defer { app.terminate() }
@@ -131,6 +132,7 @@ final class SidebarNavigationUITests: XCTestCase {
     }
 
     /// Screenshots of the sidebar in both appearances, kept for review.
+    @MainActor
     func testSidebarAppearanceSnapshots() throws {
         for appearance in ["Light", "Dark"] {
             let app = launchSidebarApp(appearance: appearance)
@@ -144,10 +146,12 @@ final class SidebarNavigationUITests: XCTestCase {
     }
 
     /// A destination's label in the sidebar outline.
+    @MainActor
     private func sidebarRow(_ label: String, in app: XCUIApplication) -> XCUIElement {
         app.outlines["Main Sidebar"].staticTexts[label].firstMatch
     }
 
+    @MainActor
     private func launchSidebarApp(appearance: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["CS_IN_MEMORY_DB"] = "1"

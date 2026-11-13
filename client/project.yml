@@ -16,8 +16,8 @@ settings:
     ARCHS: [arm64]
     GENERATE_INFOPLIST_FILE: true
     PRODUCT_NAME: CloudStream
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "2"
     SWIFT_EMIT_LOC_STRINGS: true
     # TMDB suggestion key: injected into Info.plist (TMDbApiKey), read via
     # Bundle — never hardcoded in version control (P1-7). Provide a real key

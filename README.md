@@ -112,6 +112,12 @@ Easily add community repository URLs, browse extensions, and configure playback 
 
 From the release after 1.0.0, CloudStream updates itself. When a new version is published, a small **Update Available** row appears at the bottom of the sidebar, above your profile: choose **Download**, then **Restart** once it is ready (it also installs the next time you quit). Every download is checked against the release's checksum and code signature before it is installed. You can also use **CloudStream ▸ Check for Updates…**, or **Settings ▸ General ▸ Software Update**, where automatic checks can be turned off. Copies of 1.0.0 need to be updated by hand once.
 
+### Uninstalling
+
+Use **Settings ▸ General ▸ Delete CloudStream…**. It shows everything CloudStream keeps on your Mac, offers to save a backup first, asks you to type `DELETE` and confirm with your Mac's password or Touch ID, then removes your library, history, profiles, extensions, settings, caches, logs, saved passwords and Spotlight entries, and moves the app to the Trash. Downloaded videos and screenshots are kept unless you choose to delete your downloads too.
+
+Version 1.0.0 doesn't have this option. To remove it by hand, quit CloudStream, move it to the Trash, and delete `~/.cloudstream-macos`, `~/Library/Application Support/CloudStream`, `~/Library/Application Support/CloudStreamMac*.store*`, `~/Library/Caches/CloudStreamMac`, `~/Library/Caches/com.lagradost.CloudStreamMac`, `~/Library/HTTPStorages/com.lagradost.CloudStreamMac`, `~/Library/WebKit/com.lagradost.CloudStreamMac`, `~/Library/Logs/CloudStreamMac`, and run `defaults delete com.lagradost.CloudStreamMac`.
+
 ---
 
 ## Adding Extensions
@@ -198,7 +204,7 @@ cd client && xcodegen generate && open CloudStreamMac.xcodeproj
 
 ## Contributing & Community
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening pull requests. See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 * **Sponsor:** If you find this project valuable and would like to support ongoing development, consider [sponsoring the project on GitHub](https://github.com/sponsors/krishnasinghrao)!
 * **AI Policy:** All automated or AI-assisted contributions must adhere to [AI-POLICY.md](AI-POLICY.md).

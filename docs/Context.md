@@ -1,7 +1,7 @@
 # Context & Vision: CloudStream macOS
 
 ## 1. Executive Summary
-**CloudStream macOS** is a high-performance, native media workstation for Apple Mac computers (Apple Silicon & Intel). It extracts the robust, community-maintained scraping and streaming engine of CloudStream—an open-source Android media aggregator—and brings it to macOS as an ultra-fast, lightweight, "Fort Knox" secure desktop utility.
+**CloudStream macOS** is a high-performance, native media workstation for Apple Silicon Macs. It extracts the robust, community-maintained scraping and streaming engine of CloudStream—an open-source Android media aggregator—and brings it to macOS as an ultra-fast, lightweight, "Fort Knox" secure desktop utility.
 
 Rather than porting the entire mobile application (which includes phone-centric touch interfaces, social voting, account synchronizations, and discovery feeds), this project isolates what desktop power users care about most:
 1. **Universal Search:** Fast, simultaneous querying across community-maintained provider extensions.

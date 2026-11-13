@@ -46,7 +46,7 @@ final class ArtworkMetadataStore: Sendable {
     /// file next is guaranteed nothing older lands after it.
     func invalidate() {
         writeLock.withLock { _ in
-            epoch.wrappingAdd(1, ordering: .releasing)
+            _ = epoch.wrappingAdd(1, ordering: .releasing)
         }
     }
 

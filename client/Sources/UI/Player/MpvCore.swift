@@ -371,9 +371,11 @@ final class MpvCore: @unchecked Sendable {
                     let now = ContinuousClock.now
                     if let last = lastForwardedRangesAt, now - last < .milliseconds(500) { continue }
                     lastForwardedRangesAt = now
-                    var ranges: [PlaybackRange] = []
+                    let ranges: [PlaybackRange]
                     if property.pointee.format == MPV_FORMAT_NODE, let propData = property.pointee.data {
                         ranges = MpvNodeReader.seekableRanges(from: propData.assumingMemoryBound(to: mpv_node.self).pointee)
+                    } else {
+                        ranges = []
                     }
                     deliver { $0.onProperty?(name, .ranges(ranges)) }
                     continue

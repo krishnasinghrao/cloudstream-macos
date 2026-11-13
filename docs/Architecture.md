@@ -109,7 +109,7 @@ graph TD
     end
 
     subgraph "Native Media Worker"
-        FFmpeg["Bundled Universal ffmpeg CLI Binary"]
+        FFmpeg["Bundled arm64 ffmpeg CLI Binary"]
     end
 
     UI --> State

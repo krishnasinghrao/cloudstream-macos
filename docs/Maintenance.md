@@ -82,7 +82,8 @@ versioned independently.
 To release:
 
 1. Set `MARKETING_VERSION` (and raise `CURRENT_PROJECT_VERSION`) in
-   `client/project.yml`, and merge it to `main` with a passing CI run.
+   `client/project.yml`, add the version's section to `CHANGELOG.md`, and
+   merge it to `main` with a passing CI run.
 2. Run the `ci` workflow once on `main` with **Build and package DMG artifact**
    ticked, and open the resulting DMG.
 3. Tag that commit `vX.Y.Z` (or `vX.Y.Z-beta.N`, `-rc.N`, `-alpha.N` for a
