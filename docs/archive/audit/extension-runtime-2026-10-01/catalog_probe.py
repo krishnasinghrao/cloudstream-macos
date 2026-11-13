@@ -76,9 +76,9 @@ def main():
     tail = source[source.index("private let communityPresets:"):]
     entries = re.findall(r'name: "([^"]+)",\s*targetURL: "([^"]+)"', tail)
     entries += [
-        ("Default repository", "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json"),
-        ("CSX", "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json"),
-        ("Phisher", "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/repo.json"),
+        ("Default repository", "https://raw.githubusercontent.com/example-g/extensions-g/master/repo.json"),
+        ("Repository H", "https://raw.githubusercontent.com/example-h/extensions-h/builds/repo.json"),
+        ("Repository I", "https://raw.githubusercontent.com/example-i/extensions-i/refs/heads/builds/repo.json"),
     ]
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(probe, entries))

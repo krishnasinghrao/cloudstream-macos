@@ -242,7 +242,7 @@ Historical total planning effort before narrowing RT-15: **63–115 engineering 
 4. Implement `DataStore` preference access and key/folder operations against the installation context. Preserve JSON serialization/default semantics used by inlined Kotlin helpers, and distinguish app settings from extension preference names.
 5. Replace relevant volatile shim storage with durable namespaced behavior where the upstream contract persists values. Existing credentials remain protected by the native credential path; never introduce an unscoped plaintext secret store for new native configuration.
 
-**Tests:** compile against Android helper APIs; constructor/companion/member descriptor checks; challenged request retry with matching user agent/cookies and no cross-installation leakage; cancellation; persistent `DataStore` reads after worker restart; two installations with the same keys; CineStream-like initialization before first provider registration.
+**Tests:** compile against Android helper APIs; constructor/companion/member descriptor checks; challenged request retry with matching user agent/cookies and no cross-installation leakage; cancellation; persistent `DataStore` reads after worker restart; two installations with the same keys; Extension30-like initialization before first provider registration.
 
 **Done when:** the cached helper symbols resolve and harmless helper-dependent DEX fixtures initialize and operate in real workers. Validate the affected live extensions in RT-17; a no-op class is not acceptance.
 
@@ -288,7 +288,7 @@ Historical total planning effort before narrowing RT-15: **63–115 engineering 
 3. Validate redirects with repository transport, preserve meaningful case/path/query data, and produce explicit invalid/no-target errors. Keep supported wrapper normalization with shared fixtures.
 4. Add a bounded resolve/preview result if needed for the add sheet, so users can inspect the actual destination before source mutation.
 
-**Tests:** unknown normal code; `!code`; explicit known shortlink with a changed target; no Location; loops; unsafe destination; wrapper/whitespace input; case-sensitive codes; regression for `https://cutt.ly/hexated` override.
+**Tests:** unknown normal code; `!code`; explicit known shortlink with a changed target; no Location; loops; unsafe destination; wrapper/whitespace input; case-sensitive codes; regression for `https://cutt.ly/ext_a` override.
 
 **Done when:** behavior matches generic Android inputs without a table of named repositories, and adding a source uses the displayed resolved identity.
 
@@ -449,7 +449,7 @@ Historical total planning effort before narrowing RT-15: **63–115 engineering 
 1. Replace the empty-artifact/immediate-shutdown smoke test with a valid Kotlin DEX fixture. INIT the extension, run search → details → links/extraction, assert runtime profile/protocol, then shut down. Include resource and helper-dependent fixture coverage in packaged tests.
 2. Test native WebKit and actual media playback with bundled synthetic HLS/MP4 fixtures, required headers, captions, first frame/audio, pause/seek, and mirror failover. Use deterministic fixture infrastructure; repository public-address validation stays active in production.
 3. Run state/proof/translation migrations and restart scenarios on copies of test state. Test disabled/quarantined installations, hashless receipts, old signed/community proofs, offline start, interrupted migration, and old/new client mismatch.
-4. Maintain a dated live matrix outside normal PR tests. Representative sources include the previously hashless catalog families, CNC with digests, official providers/YouTube, the logged failing providers, CineStream, an extractor-only extension, a JavaScript-dependent extractor, and a resource-dependent fixture/affected extension. Sample URLs exist only in tests/evidence, not runtime source selection.
+4. Maintain a dated live matrix outside normal PR tests. Representative sources include the previously hashless catalog families, CNC with digests, official providers/YouTube, the logged failing providers, Extension30, an extractor-only extension, a JavaScript-dependent extractor, and a resource-dependent fixture/affected extension. Sample URLs exist only in tests/evidence, not runtime source selection.
 5. Distinguish unavailable external websites, challenges requiring interaction, host incompatibilities, and player failures. Do not let a flaky website erase deterministic regression failures. A skipped/unavailable live row cannot be called passed.
 6. Validate the shipped JRE modules, sandbox, worker pool/memory, source/cache limits, diagnostics redaction, Swift strict concurrency, and native UI accessibility. Do not broaden worker filesystem access to make a fixture pass.
 7. Update the runtime ledger, Architecture, IPC, Security, signing/help docs, and ADR-0016 for routing/capabilities. Require test names and evidence for each closed finding.
@@ -472,7 +472,7 @@ Historical total planning effort before narrowing RT-15: **63–115 engineering 
 | F10 — Deadlines/discovery truncation | RT-10 | Shared remaining budget, challenge compatibility, queued-child and cancellation tests |
 | F11 — Extractor and health gaps | RT-12, RT-16, RT-17 | Extractor-only/cold/cross-worker routing and honest lifecycle/status presentation |
 | F12 — Incomplete release tests/harness | RT-00, RT-17 | Repository Swift helper works; Kotlin fixtures and packaged INIT → provider-method smoke test |
-| F13 — Startup DataStore absent | RT-04, RT-05, RT-17 | Persistent exact DataStore API; CineStream-style startup registers providers in a worker |
+| F13 — Startup DataStore absent | RT-04, RT-05, RT-17 | Persistent exact DataStore API; Extension30-style startup registers providers in a worker |
 | F14 — Android resources unsupported | RT-13, RT-17 | Resource-bearing DEX fixture loads and operates using actual compiled resources/assets |
 | F15 — Partial Android facilities/settings | RT-03, RT-05, RT-14, RT-15, RT-17 | Functional required facilities, usable configuration, explicit optional limitations, descriptor conformance |
 

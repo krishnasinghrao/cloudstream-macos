@@ -48,7 +48,7 @@ java -cp /private/tmp/cloudstream-runtime-audit/classes:macos/dist/CloudStream.a
 
 The static missing-class list includes optional Android UI paths. A reference's absence alone does not prove that a particular provider operation executes that path. The report distinguishes runtime-confirmed failures from architectural limitations.
 
-`android-abi-results.json` retains the follow-up scan with exact symbol descriptors and callers. `android-compatibility-evidence.json` contains cached manifests, the packaged Android class inventory, and selected CineStream startup instructions. No community extension class is loaded or initialized by these scanners; host reflection uses `Class.forName` with initialization disabled. F13–F15 in the report explain the startup dependency, intentional Android resource rejection, and partial Android capability surface.
+`android-abi-results.json` retains the follow-up scan with exact symbol descriptors and callers. `android-compatibility-evidence.json` contains cached manifests, the packaged Android class inventory, and selected Extension30 startup instructions. No community extension class is loaded or initialized by these scanners; host reflection uses `Class.forName` with initialization disabled. F13–F15 in the report explain the startup dependency, intentional Android resource rejection, and partial Android capability surface.
 
 `runtime-log-evidence.json` preserves only selected provider failures, with original log line numbers and UTC timestamps. `upstream-comparison.json` records exact public source URLs and hashes. `source-snapshot.json` records the local reviewed source and packaged JAR.
 

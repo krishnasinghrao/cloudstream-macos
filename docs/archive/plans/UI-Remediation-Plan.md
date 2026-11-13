@@ -249,7 +249,7 @@ New items planned here get IDs **U-xx**, grouped into workstreams **WS-A…WS-L*
 
 | ID | Pri | Fix |
 |---|---|---|
-| U-66 | P1 | **Register every handled scheme.** `DeepLinkRouter` handles `cloudstream`, `cs.repo`, `cs3` (`RootView.swift:190-191`) but Info.plist registers only `cloudstreamrepo/cloudstreamapp/cloudstreamplayer` (`Info.plist:21-40`, `project.yml:72-76`). Add the missing three to `CFBundleURLSchemes` (project.yml `info.properties` is the source; the checked-in static `Info.plist` is deleted per U-69). |
+| U-66 | P1 | **Register every handled scheme.** `DeepLinkRouter` handles `cloudstream`, `cs.repo`, `cs3` (`RootView.swift:190-191`) but Info.plist registers only `cloudstreamrepo/cloudstreamapp/cloudExtension64er` (`Info.plist:21-40`, `project.yml:72-76`). Add the missing three to `CFBundleURLSchemes` (project.yml `info.properties` is the source; the checked-in static `Info.plist` is deleted per U-69). |
 | U-67 | P1 | **One scheme-stripper.** `DeepLinkRouter`'s prefix loop vs `DaemonClient.normalizeRepoUrl`'s list drift (`cloudstreamapp` present in one, not the other). Their WS-12 `normalizeInput` design wins: DeepLinkRouter normalizes via the same single function, then routes. |
 | U-68 | P2 | Singleton reach-through in `DeepLinkRouter.handle` (`RootView.swift:188`) — router becomes a method on `AppState` (or takes it as a parameter from `.onOpenURL` inside the environment-backed view), so the window can later become multi-window without hidden global state. |
 

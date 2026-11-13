@@ -13,7 +13,7 @@ Reviewed 2026-09-30, ~17:45 IST, against the working tree at that time (HEAD `0c
 | `current-review/CurrentReviewProbe.kt` as committed | **Cannot run.** JUnit rejects the class: `restore publishes even when trust anchor changes during preparation()` returns a value (`assertFails`) instead of `void` |
 | Same probe with one added `Unit` line (run from a scratch copy) | **7/7 reproduced** their characterized defects |
 | Unit-test coverage of `InstallationManager` | None. No normal test constructs it. Only the unsigned-rejection path and a skipped live test reach it through `RepositoryService.installPlugin` |
-| Default repository (`recloudstream/extensions` repo.json, fetched live) | Unsigned. No `signature`, `catalogVersion`, `expiresAt` or `pluginListHashes` |
+| Default repository (`example-g/extensions-g` repo.json, fetched live) | Unsigned. No `signature`, `catalogVersion`, `expiresAt` or `pluginListHashes` |
 
 The normal suite was re-run last to restore ordinary test outputs.
 
@@ -46,7 +46,7 @@ REPORT F15's remedy asked for compatibility repositories under an *accurately la
 
 - `bootFromCache` loads only receipts. Extensions installed before this change are silently not loaded after upgrade; nothing migrates or reports them. REMEDIATION mentions "cache migration remain[s] open" only under F11.
 - Publishers would need to re-sign at least every 30 days to allow new installs.
-- The skipped live test `RepositoryServiceTest` (`CS_LIVE_REPO_TESTS=1`) asserts a successful SoraStream install from a real unsigned repository. It would now fail, and the skip hides that.
+- The skipped live test `RepositoryServiceTest` (`CS_LIVE_REPO_TESTS=1`) asserts a successful Extension63 install from a real unsigned repository. It would now fail, and the skip hides that.
 - Onboarding's "Choose Extensions" (N02 fix) leads to a catalog in which nothing is installable.
 
 **Needed:** an explicit, documented product decision (compatibility tier, publisher migration plan, or accepted loss of function), a migration or notice for existing installs, and a release gate for it.

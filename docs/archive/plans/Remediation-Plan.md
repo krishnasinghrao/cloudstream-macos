@@ -97,7 +97,7 @@
 | **5.6 Extensions management UI** | Settings → Extensions: plugin cards (providers, language, version, apiVersion, verified badge, enable toggle, error reason from `/plugins` + `/diagnostics`), remove plugin (daemon: `beforeUnload()` + registry removal + classloader drop; document GC caveat; restart prompt if unload is incomplete). |
 | **5.7 Provider settings** | Per-provider URL override (clone-site) + `storedCredentials` editing → daemon 2.5 persistence (fixes Invidious returning zero results). |
 | **5.8 Image pipeline** | `ImageCache` actor (NSCache + disk cache under `~/Library/Caches/CloudStreamMac/images`), `CachedPosterImage` view with in-flight cancellation. Replaces bare `AsyncImage` everywhere. |
-| **5.9 Deep links** | `cloudstreamrepo://`, `cloudstreamapp://`, `cloudstreamplayer://` via `CFBundleURLTypes`; repo links open a confirm sheet (no persist-before-confirm — fixing the Android-side pattern at the source); player links route to search/details. |
+| **5.9 Deep links** | `cloudstreamrepo://`, `cloudstreamapp://`, `cloudExtension64er://` via `CFBundleURLTypes`; repo links open a confirm sheet (no persist-before-confirm — fixing the Android-side pattern at the source); player links route to search/details. |
 | **5.10 Onboarding** | First launch: welcome → auto official-repo sync with progress → default provider pick. Gated by `UserDefaults` flag. |
 | **5.11 State views & error surfaces** | Shared `StateView` (loading/empty/error + retry) adopted by Home/Search/Library/Downloads; engine errors surface beyond the current spawn-only banner. |
 

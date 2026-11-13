@@ -10,6 +10,12 @@ split out of the CloudStream fork (where the app lived under `macos/`, the
 engine was `macos/daemon` and the library was multiplatform). New findings go
 into a new document, not into these.
 
+The project names no third-party extension or repository, so these records
+use stable aliases: repositories are *Repository A*–*I* (owners `example-a`–
+`example-i`, packages `com/ext_a`–`com/ext_i`) and extensions are
+*Extension01*–*Extension79*. An alias means the same thing in every file, so
+cross-references between reports, tables and evidence still line up.
+
 ## Plans and status trackers (`plans/`)
 
 | Area | Plan | Status / evidence |

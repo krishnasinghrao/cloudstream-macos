@@ -181,7 +181,7 @@ Run `git status` and ensure all test suites pass without regressions (`./gradlew
   2. Update `counts()` in `LibraryStore.swift:1047` to also check `mergedIntoID == nil` so sidebar badge counts reflect only distinct top-level titles.
 
 ### 4.2 In-Memory Canonical Title Deduplication
-- **Problem:** If a user bookmarks the same movie or show from multiple providers (e.g. FlixHQ and SuperStream), two distinct rows exist with different URLs and different `providerID`s.
+- **Problem:** If a user bookmarks the same movie or show from multiple providers (e.g. Extension38 and Extension68), two distinct rows exist with different URLs and different `providerID`s.
 - **Affected File:** [`client/Sources/UI/Library/LibraryView.swift`](../../../client/Sources/UI/Library/LibraryView.swift)
 - **Changes:**
   1. In `filterAndSort()` or `arranged()`, group items sharing identical canonical keys (`title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()` + matching release year).

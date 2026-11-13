@@ -51,12 +51,12 @@ class RuntimeAuditProbe {
 
     @Test fun `known explicit shortlink ignores the server redirect`() = runBlocking {
         var fetched = false
-        val parsed = RepositoryService.parseRepoUrl("https://cutt.ly/hexated", RepositoryFetcher { _, _ ->
+        val parsed = RepositoryService.parseRepoUrl("https://cutt.ly/ext_a", RepositoryFetcher { _, _ ->
             fetched = true
             RepositoryDocument(byteArrayOf(), "https://audit.invalid/user-target.json")
         })
         assertFalse(fetched)
-        assertEquals("https://codeberg.org/cloudstream/cloudstream-extensions-hexated/raw/branch/builds/repo.json", parsed)
+        assertEquals("https://codeberg.org/example-a/extensions-a/raw/branch/builds/repo.json", parsed)
     }
 
     @Test fun `community consent cannot make a hashless extension installable`() = runBlocking {

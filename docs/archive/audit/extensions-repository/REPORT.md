@@ -315,7 +315,7 @@ The [first boot pass](macos/daemon/src/main/kotlin/com/lagradost/macos/Repositor
 
 ### F35 — P2 — URL normalization rewrites identity too broadly and inconsistently [Code]
 
-[Swift normalization](macos/client/Sources/Services/DaemonClient.swift:65) and [daemon normalization](macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryService.kt:141) have different case, query, fragment, and decoding rules. The daemon’s migration check replaces any URL containing `likdev2583`; shortcode lookup lowercases arbitrary unknown codes and overrides explicit shortener URLs by known slug.
+[Swift normalization](macos/client/Sources/Services/DaemonClient.swift:65) and [daemon normalization](macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryService.kt:141) have different case, query, fragment, and decoding rules. The daemon’s migration check replaces any URL containing `example-e`; shortcode lookup lowercases arbitrary unknown codes and overrides explicit shortener URLs by known slug.
 
 **Trigger/result:** case-sensitive unknown short links can resolve incorrectly; query text containing a migration keyword silently selects a different repository; uppercase HTTPS gets a second prefix in Swift. Daemon `cs.repo` query extraction can include trailing query parameters in the target. Relative redirects from shorteners are not resolved against the original URL. These are reproducible source-level parser cases, not claims that any particular public preset is currently broken.
 

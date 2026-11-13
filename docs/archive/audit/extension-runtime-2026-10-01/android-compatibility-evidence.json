@@ -6,8 +6,8 @@
       "artifact": "30dc643628702d6b2fe139339e59996783c95a0c1d41efe0a31872ae4d10908b.cs3",
       "sha256": "30dc643628702d6b2fe139339e59996783c95a0c1d41efe0a31872ae4d10908b",
       "manifest": {
-        "pluginClassName": "com.megix.CineStream",
-        "name": "CineStream",
+        "pluginClassName": "com.ext_h.Extension30",
+        "name": "Extension30",
         "version": 487,
         "requiresResources": false
       }
@@ -16,8 +16,8 @@
       "artifact": "507b486b195b98903b0cec0fca811c27fdff6cf200f6f94a662c64dd8abe0e59.cs3",
       "sha256": "507b486b195b98903b0cec0fca811c27fdff6cf200f6f94a662c64dd8abe0e59",
       "manifest": {
-        "pluginClassName": "com.megix.Bollyflix",
-        "name": "Bollyflix",
+        "pluginClassName": "com.ext_h.Extension22",
+        "name": "Extension22",
         "version": 33,
         "requiresResources": false
       }
@@ -26,8 +26,8 @@
       "artifact": "52758210caa1cf0a6dc929d0f73fec5919e0ab66e5eddf6386ed30f7c771980a.cs3",
       "sha256": "52758210caa1cf0a6dc929d0f73fec5919e0ab66e5eddf6386ed30f7c771980a",
       "manifest": {
-        "pluginClassName": "com.megix.MoviesDrive",
-        "name": "MoviesDrive",
+        "pluginClassName": "com.ext_h.Extension53",
+        "name": "Extension53",
         "version": 33,
         "requiresResources": false
       }
@@ -36,8 +36,8 @@
       "artifact": "9433fd970480a53f52f3ec4b49d3213c7bda5a26b109dc80ef82cd2ec13a37a7.cs3",
       "sha256": "9433fd970480a53f52f3ec4b49d3213c7bda5a26b109dc80ef82cd2ec13a37a7",
       "manifest": {
-        "pluginClassName": "com.megix.Moviesmod",
-        "name": "Moviesmod",
+        "pluginClassName": "com.ext_h.Extension54",
+        "name": "Extension54",
         "version": 33,
         "requiresResources": false
       }
@@ -46,8 +46,8 @@
       "artifact": "b78635ef4f2f66c134184552fe5e4956cc02ec1c5ce6d6811cccfd3747367883.cs3",
       "sha256": "b78635ef4f2f66c134184552fe5e4956cc02ec1c5ce6d6811cccfd3747367883",
       "manifest": {
-        "pluginClassName": "com.megix.VegaMovies",
-        "name": "VegaMovies",
+        "pluginClassName": "com.ext_h.Extension76",
+        "name": "Extension76",
         "version": 82,
         "requiresResources": false
       }
@@ -141,12 +141,12 @@
       "missing_cloudstream_classes": []
     }
   ],
-  "selected_cinestream_bytecode": [
+  "selected_Extension30_bytecode": [
     {
-      "class": "com.megix.CineStream",
+      "class": "com.ext_h.Extension30",
       "method": "public void load(android.content.Context);",
       "selected_instructions_and_exception_table": [
-        "21: invokevirtual #109                // Method com/megix/settings/Settings.initSeenProviders:()V",
+        "21: invokevirtual #109                // Method com/ext_h/settings/Settings.initSeenProviders:()V",
         "27: invokevirtual #120                // Method com/lagradost/cloudstream3/CloudStreamApp$Companion.getContext:()Landroid/content/Context;",
         "35: getstatic     #125                // Field com/lagradost/cloudstream3/utils/DataStore.INSTANCE:Lcom/lagradost/cloudstream3/utils/DataStore;",
         "45: invokevirtual #129                // Method com/lagradost/cloudstream3/utils/DataStore.getSharedPrefs:(Landroid/content/Context;)Landroid/content/SharedPreferences;",
@@ -219,7 +219,7 @@
       ]
     },
     {
-      "class": "com.megix.settings.Settings",
+      "class": "com.ext_h.settings.Settings",
       "method": "public final void initSeenProviders();",
       "selected_instructions_and_exception_table": [
         "public final void initSeenProviders();",
@@ -228,8 +228,8 @@
         "250: getstatic     #313                // Field com/lagradost/cloudstream3/utils/DataStore.INSTANCE:Lcom/lagradost/cloudstream3/utils/DataStore;",
         "257: invokevirtual #317                // Method com/lagradost/cloudstream3/utils/DataStore.getSharedPrefs:(Landroid/content/Context;)Landroid/content/SharedPreferences;",
         "265: invokeinterface #323,  3          // InterfaceMethod android/content/SharedPreferences.getString:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
-        "477: new           #38                 // class com/megix/settings/Settings$initSeenProviders$lambda$1$$inlined$getKey$1",
-        "484: invokespecial #611                // Method com/megix/settings/Settings$initSeenProviders$lambda$1$$inlined$getKey$1.\"<init>\":()V",
+        "477: new           #38                 // class com/ext_h/settings/Settings$initSeenProviders$lambda$1$$inlined$getKey$1",
+        "484: invokespecial #611                // Method com/ext_h/settings/Settings$initSeenProviders$lambda$1$$inlined$getKey$1.\"<init>\":()V",
         "Exception table:",
         "from    to  target type",
         "254   261   510   Class java/lang/Exception",
@@ -254,7 +254,7 @@
       ]
     },
     {
-      "class": "com.megix.settings.Settings",
+      "class": "com.ext_h.settings.Settings",
       "method": "public final java.util.Set<java.lang.String> getSeenProviders();",
       "selected_instructions_and_exception_table": [
         "public final java.util.Set<java.lang.String> getSeenProviders();",
@@ -262,8 +262,8 @@
         "11: getstatic     #313                // Field com/lagradost/cloudstream3/utils/DataStore.INSTANCE:Lcom/lagradost/cloudstream3/utils/DataStore;",
         "17: invokevirtual #317                // Method com/lagradost/cloudstream3/utils/DataStore.getSharedPrefs:(Landroid/content/Context;)Landroid/content/SharedPreferences;",
         "23: invokeinterface #323,  3          // InterfaceMethod android/content/SharedPreferences.getString:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
-        "203: new           #30                 // class com/megix/settings/Settings$getSeenProviders$$inlined$getKey$1",
-        "208: invokespecial #549                // Method com/megix/settings/Settings$getSeenProviders$$inlined$getKey$1.\"<init>\":()V",
+        "203: new           #30                 // class com/ext_h/settings/Settings$getSeenProviders$$inlined$getKey$1",
+        "208: invokespecial #549                // Method com/ext_h/settings/Settings$getSeenProviders$$inlined$getKey$1.\"<init>\":()V",
         "Exception table:",
         "from    to  target type",
         "15    29   228   Class java/lang/Exception",

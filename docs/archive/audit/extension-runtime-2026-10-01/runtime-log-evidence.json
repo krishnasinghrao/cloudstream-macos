@@ -3,7 +3,7 @@
   "observed_at_utc": "2026-09-30T19:09:22.360708+00:00",
   "failures": [
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'TopMovies' failed during search: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension70' failed during search: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 3,
       "first_line": 37,
       "first_timestamp_utc": "2026-09-30T18:27:04.966436Z",
@@ -11,7 +11,7 @@
       "last_timestamp_utc": "2026-09-30T18:33:11.560603Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'Moviesmod' failed during search: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension54' failed during search: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 3,
       "first_line": 38,
       "first_timestamp_utc": "2026-09-30T18:27:04.967026Z",
@@ -19,7 +19,7 @@
       "last_timestamp_utc": "2026-09-30T18:33:11.549865Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'BollyFlix' failed during search: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension22' failed during search: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 6,
       "first_line": 41,
       "first_timestamp_utc": "2026-09-30T18:27:04.966723Z",
@@ -35,7 +35,7 @@
       "last_timestamp_utc": "2026-09-30T18:33:02.485391Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'MoviesDrive' failed during search: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension53' failed during search: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
       "count": 10,
       "first_line": 215,
       "first_timestamp_utc": "2026-09-30T18:27:05.913844Z",
@@ -43,7 +43,7 @@
       "last_timestamp_utc": "2026-09-30T18:33:11.849746Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'VegaMovies' failed during search: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension76' failed during search: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
       "count": 6,
       "first_line": 302,
       "first_timestamp_utc": "2026-09-30T18:27:05.928795Z",
@@ -51,7 +51,7 @@
       "last_timestamp_utc": "2026-09-30T18:32:55.705256Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'Rogmovies' failed during search: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension58' failed during search: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
       "count": 7,
       "first_line": 346,
       "first_timestamp_utc": "2026-09-30T18:27:06.256118Z",
@@ -59,7 +59,7 @@
       "last_timestamp_utc": "2026-09-30T18:33:02.921062Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'Moviesmod' failed during getMainPage[3]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension54' failed during getMainPage[3]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 1,
       "first_line": 811,
       "first_timestamp_utc": "2026-09-30T18:31:05.103239Z",
@@ -67,7 +67,7 @@
       "last_timestamp_utc": "2026-09-30T18:31:05.103239Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'Moviesmod' failed during getMainPage[2]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension54' failed during getMainPage[2]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 1,
       "first_line": 812,
       "first_timestamp_utc": "2026-09-30T18:31:05.105142Z",
@@ -75,7 +75,7 @@
       "last_timestamp_utc": "2026-09-30T18:31:05.105142Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'Moviesmod' failed during getMainPage[0]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension54' failed during getMainPage[0]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 1,
       "first_line": 833,
       "first_timestamp_utc": "2026-09-30T18:31:05.107196Z",
@@ -83,7 +83,7 @@
       "last_timestamp_utc": "2026-09-30T18:31:05.107196Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'Moviesmod' failed during getMainPage[1]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension54' failed during getMainPage[1]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 1,
       "first_line": 834,
       "first_timestamp_utc": "2026-09-30T18:31:05.107268Z",
@@ -115,7 +115,7 @@
       "last_timestamp_utc": "2026-09-30T18:31:43.623309Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'VegaMovies' failed during load: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension76' failed during load: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
       "count": 1,
       "first_line": 935,
       "first_timestamp_utc": "2026-09-30T18:32:02.636667Z",
@@ -123,7 +123,7 @@
       "last_timestamp_utc": "2026-09-30T18:32:02.636667Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'TopMovies' failed during getMainPage[0]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension70' failed during getMainPage[0]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 1,
       "first_line": 947,
       "first_timestamp_utc": "2026-09-30T18:32:10.913166Z",
@@ -131,7 +131,7 @@
       "last_timestamp_utc": "2026-09-30T18:32:10.913166Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'TopMovies' failed during getMainPage[1]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension70' failed during getMainPage[1]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 1,
       "first_line": 948,
       "first_timestamp_utc": "2026-09-30T18:32:10.913580Z",
@@ -139,7 +139,7 @@
       "last_timestamp_utc": "2026-09-30T18:32:10.913580Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'TopMovies' failed during getMainPage[2]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension70' failed during getMainPage[2]: NoClassDefFoundError: com/lagradost/cloudstream3/network/CloudflareKiller",
       "count": 1,
       "first_line": 969,
       "first_timestamp_utc": "2026-09-30T18:32:10.916573Z",
@@ -147,7 +147,7 @@
       "last_timestamp_utc": "2026-09-30T18:32:10.916573Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'Rogmovies' failed during load: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension58' failed during load: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
       "count": 1,
       "first_line": 1007,
       "first_timestamp_utc": "2026-09-30T18:32:23.479460Z",
@@ -155,7 +155,7 @@
       "last_timestamp_utc": "2026-09-30T18:32:23.479460Z"
     },
     {
-      "message": "ERROR:   [ProviderExecutor] Provider 'MoviesDrive' failed during load: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
+      "message": "ERROR:   [ProviderExecutor] Provider 'Extension53' failed during load: NoSuchMethodError: 'java.lang.Object kotlin.Result.constructor_impl(java.lang.Object)'",
       "count": 1,
       "first_line": 1019,
       "first_timestamp_utc": "2026-09-30T18:32:39.745867Z",

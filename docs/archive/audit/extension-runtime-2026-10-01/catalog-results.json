@@ -3,14 +3,14 @@
   "scope": "Public repository manifests and plugin lists only; no extension installation or media playback.",
   "results": [
     {
-      "name": "Hexated (SoraStream)",
-      "url": "https://codeberg.org/cloudstream/cloudstream-extensions-hexated/raw/branch/builds/repo.json",
+      "name": "Repository A",
+      "url": "https://codeberg.org/example-a/extensions-a/raw/branch/builds/repo.json",
       "manifest_sha256": "8879d640953485f75b368f28f47ab42111bd7f1c8ec1db15158f5bd878818769",
-      "effective_url": "https://codeberg.org/cloudstream/cloudstream-extensions-hexated/raw/branch/builds/repo.json",
+      "effective_url": "https://codeberg.org/example-a/extensions-a/raw/branch/builds/repo.json",
       "transport": "codeberg-contents-api",
       "signed": false,
       "plugin_lists": [
-        "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/plugins.json"
+        "https://raw.githubusercontent.com/ext_a/extensions-a/builds/plugins.json"
       ],
       "total": 64,
       "active": 59,
@@ -20,27 +20,27 @@
       "beta_only": 0,
       "list_errors": [],
       "examples_without_sha256": [
-        "Anichi",
-        "Anilibria",
-        "Animasu",
-        "AnimeDekhoProvider",
-        "AnimeIndoProvider",
-        "AnimeSailProvider",
-        "Aniworld",
-        "Anroll",
-        "Cinemathek",
-        "Dizikorea"
+        "Extension03",
+        "Extension04",
+        "Extension05",
+        "Extension06",
+        "Extension10",
+        "Extension13",
+        "Extension18",
+        "Extension20",
+        "Extension27",
+        "Extension32"
       ]
     },
     {
-      "name": "MegaRepo",
-      "url": "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/repo.json",
+      "name": "Repository B",
+      "url": "https://raw.githubusercontent.com/example-b/repo-b/builds/repo.json",
       "manifest_sha256": "ec001977ef15c356758ddbfbe92c851f8f569ca2a121ab01a672c1043c98e498",
-      "effective_url": "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/repo.json",
+      "effective_url": "https://raw.githubusercontent.com/example-b/repo-b/builds/repo.json",
       "transport": "direct",
       "signed": false,
       "plugin_lists": [
-        "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/plugins.json"
+        "https://raw.githubusercontent.com/example-b/repo-b/builds/plugins.json"
       ],
       "total": 1,
       "active": 1,
@@ -50,18 +50,18 @@
       "beta_only": 0,
       "list_errors": [],
       "examples_without_sha256": [
-        "MegaProvider"
+        "Extension48"
       ]
     },
     {
-      "name": "English Providers",
-      "url": "https://codeberg.org/cloudstream/cloudstream-extensions/raw/branch/builds/repo.json",
+      "name": "Repository C",
+      "url": "https://codeberg.org/example-c/extensions-c/raw/branch/builds/repo.json",
       "manifest_sha256": "91b693d50c40ec8fe729887ec93c89dd0d3ead3361d52fbadec4aaa7257eb662",
-      "effective_url": "https://codeberg.org/cloudstream/cloudstream-extensions/raw/branch/builds/repo.json",
+      "effective_url": "https://codeberg.org/example-c/extensions-c/raw/branch/builds/repo.json",
       "transport": "codeberg-contents-api",
       "signed": false,
       "plugin_lists": [
-        "https://codeberg.org/cloudstream/cloudstream-extensions/raw/branch/builds/plugins.json"
+        "https://codeberg.org/example-c/extensions-c/raw/branch/builds/plugins.json"
       ],
       "total": 33,
       "active": 13,
@@ -71,27 +71,27 @@
       "beta_only": 0,
       "list_errors": [],
       "examples_without_sha256": [
-        "AnimePaheProvider",
-        "Ask4Movie",
-        "DubbedAnimeProvider",
-        "EjaTv",
-        "IHaveNoTvProvider",
-        "KawaiifuProvider",
-        "KimCartoonProvider",
-        "MeloMovieProvider",
-        "NginxProvider",
-        "SoaptwoDayProvider"
+        "Extension12",
+        "Extension21",
+        "Extension34",
+        "Extension36",
+        "Extension40",
+        "Extension44",
+        "Extension45",
+        "Extension49",
+        "Extension55",
+        "Extension62"
       ]
     },
     {
-      "name": "Multilingual Providers",
-      "url": "https://codeberg.org/cloudstream/cloudstream-extensions-multilingual/raw/branch/builds/repo.json",
+      "name": "Repository D",
+      "url": "https://codeberg.org/example-d/extensions-d/raw/branch/builds/repo.json",
       "manifest_sha256": "375b92e7d9602e9494ceb65fb8aa5be2b15a0bbec22268f0c8c684680458abbf",
-      "effective_url": "https://codeberg.org/cloudstream/cloudstream-extensions-multilingual/raw/branch/builds/repo.json",
+      "effective_url": "https://codeberg.org/example-d/extensions-d/raw/branch/builds/repo.json",
       "transport": "codeberg-contents-api",
       "signed": false,
       "plugin_lists": [
-        "https://codeberg.org/cloudstream/cloudstream-extensions-multilingual/raw/branch/builds/plugins.json"
+        "https://codeberg.org/example-d/extensions-d/raw/branch/builds/plugins.json"
       ],
       "total": 56,
       "active": 52,
@@ -101,27 +101,27 @@
       "beta_only": 0,
       "list_errors": [],
       "examples_without_sha256": [
-        "AltadefinizioneProvider",
-        "AnimefenixProvider",
-        "AnimeflvIOProvider",
-        "AnimeflvnetProvider",
-        "AnimeSaturnProvider",
-        "AnimeWorldProvider",
-        "AniPlayProvider",
-        "CalcioStreamingProvider",
-        "CasaCinemaProvider",
-        "CineBlog01Provider"
+        "Extension02",
+        "Extension07",
+        "Extension08",
+        "Extension09",
+        "Extension14",
+        "Extension15",
+        "Extension17",
+        "Extension23",
+        "Extension24",
+        "Extension25"
       ]
     },
     {
-      "name": "LikDev256 (Indian / Tamil)",
-      "url": "https://codeberg.org/JakeWasHere7/likdev256-tamil-providers/raw/branch/builds/repo.json",
+      "name": "Repository E",
+      "url": "https://codeberg.org/example-e/extensions-e/raw/branch/builds/repo.json",
       "manifest_sha256": "cafbcdef6a9d6c1cabee545d5e5c42f3659a5040ddc5f2faa4a8514ea667b02f",
-      "effective_url": "https://codeberg.org/JakeWasHere7/likdev256-tamil-providers/raw/branch/builds/repo.json",
+      "effective_url": "https://codeberg.org/example-e/extensions-e/raw/branch/builds/repo.json",
       "transport": "codeberg-contents-api",
       "signed": false,
       "plugin_lists": [
-        "https://codeberg.org/JakeWasHere7/likdev256-tamil-providers/raw/branch/builds/plugins.json"
+        "https://codeberg.org/example-e/extensions-e/raw/branch/builds/plugins.json"
       ],
       "total": 16,
       "active": 12,
@@ -131,27 +131,27 @@
       "beta_only": 2,
       "list_errors": [],
       "examples_without_sha256": [
-        "AllMovieLandProvider",
-        "EinthusanProvider",
-        "FDMProvider",
-        "KatMoviesProvider",
-        "MadStreamProvider",
-        "MassTamilanProvider",
-        "NOXXProvider",
-        "PrivateMoviezProvider",
-        "ShowFlixProvider",
-        "TamilDhoolProvider"
+        "Extension01",
+        "Extension35",
+        "Extension37",
+        "Extension43",
+        "Extension46",
+        "Extension47",
+        "Extension56",
+        "Extension57",
+        "Extension61",
+        "Extension69"
       ]
     },
     {
-      "name": "CNC Verse",
-      "url": "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/refs/heads/builds/CNC.json",
+      "name": "Repository F",
+      "url": "https://raw.githubusercontent.com/example-f/extensions-f/refs/heads/builds/repo.json",
       "manifest_sha256": "b08197f8947d1d7f16b8bd493d47b8731e7de4cbe7fcaaa731e3ae9e7b7fe0d8",
-      "effective_url": "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/refs/heads/builds/CNC.json",
+      "effective_url": "https://raw.githubusercontent.com/example-f/extensions-f/refs/heads/builds/repo.json",
       "transport": "direct",
       "signed": false,
       "plugin_lists": [
-        "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/builds/plugins.json"
+        "https://raw.githubusercontent.com/example-f/extensions-f/builds/plugins.json"
       ],
       "total": 36,
       "active": 33,
@@ -164,13 +164,13 @@
     },
     {
       "name": "Default repository",
-      "url": "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
+      "url": "https://raw.githubusercontent.com/example-g/extensions-g/master/repo.json",
       "manifest_sha256": "0d0b4659aa105e520b1809251749a647bc21a5581d4db53364520e047f2794c2",
-      "effective_url": "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
+      "effective_url": "https://raw.githubusercontent.com/example-g/extensions-g/master/repo.json",
       "transport": "direct",
       "signed": false,
       "plugin_lists": [
-        "https://raw.githubusercontent.com/recloudstream/extensions/builds/plugins.json"
+        "https://raw.githubusercontent.com/example-g/extensions-g/builds/plugins.json"
       ],
       "total": 5,
       "active": 5,
@@ -182,14 +182,14 @@
       "examples_without_sha256": []
     },
     {
-      "name": "CSX",
-      "url": "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json",
+      "name": "Repository H",
+      "url": "https://raw.githubusercontent.com/example-h/extensions-h/builds/repo.json",
       "manifest_sha256": "ade7e733d7089b1dda3ba65fd01cba2e22286fe6a2c14e3fae44d9ab12244517",
-      "effective_url": "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json",
+      "effective_url": "https://raw.githubusercontent.com/example-h/extensions-h/builds/repo.json",
       "transport": "direct",
       "signed": false,
       "plugin_lists": [
-        "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/plugins.json"
+        "https://raw.githubusercontent.com/example-h/extensions-h/builds/plugins.json"
       ],
       "total": 5,
       "active": 5,
@@ -201,14 +201,14 @@
       "examples_without_sha256": []
     },
     {
-      "name": "Phisher",
-      "url": "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/repo.json",
+      "name": "Repository I",
+      "url": "https://raw.githubusercontent.com/example-i/extensions-i/refs/heads/builds/repo.json",
       "manifest_sha256": "6554ae029fb25d90ee2b0654fa39ef6a0a2b9676f3aa53d009e138a84af0b6a0",
-      "effective_url": "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/repo.json",
+      "effective_url": "https://raw.githubusercontent.com/example-i/extensions-i/refs/heads/builds/repo.json",
       "transport": "direct",
       "signed": false,
       "plugin_lists": [
-        "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/plugins.json"
+        "https://raw.githubusercontent.com/example-i/extensions-i/refs/heads/builds/plugins.json"
       ],
       "total": 85,
       "active": 85,

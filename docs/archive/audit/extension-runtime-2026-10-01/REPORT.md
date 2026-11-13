@@ -4,11 +4,11 @@
 
 The macOS port has genuine host compatibility defects and a repository policy that excludes much of the catalog it recommends. These explain both categories of reported behavior: repositories that browse but cannot install, and installed extensions that search or display titles but fail when opening details. The failures are not adequately explained by unavailable streaming sites.
 
-The strongest evidence is the existing local runtime log: **MoviesDrive, VegaMovies, and Rogmovies fail during `load` with `NoSuchMethodError: kotlin.Result.constructor_impl`**. This is the title-opening path that the engine turns into HTTP 502. Separate logs show **BollyFlix, Moviesmod, and TopMovies missing `CloudflareKiller`**, and **YouTube reporting `downloader is null`**. These are concrete host failures, not guesses about an ISP or video CDN.
+The strongest evidence is the existing local runtime log: **Extension53, Extension76, and Extension58 fail during `load` with `NoSuchMethodError: kotlin.Result.constructor_impl`**. This is the title-opening path that the engine turns into HTTP 502. Separate logs show **Extension22, Extension54, and Extension70 missing `CloudflareKiller`**, and **YouTube reporting `downloader is null`**. These are concrete host failures, not guesses about an ISP or video CDN.
 
-Live catalog inspection found all six built-in suggestions reachable, but **five of the six publish no artifact SHA-256 for their active entries**. Together, **137 of 170 active entries in those suggestions are blocked by the macOS installation rule**, before any artifact download. CNC Verse is the exception in this sample, with digests for its 33 active entries. Digest availability does not establish that its providers can execute or play media.
+Live catalog inspection found all six built-in suggestions reachable, but **five of the six publish no artifact SHA-256 for their active entries**. Together, **137 of 170 active entries in those suggestions are blocked by the macOS installation rule**, before any artifact download. Repository F is the exception in this sample, with digests for its 33 active entries. Digest availability does not establish that its providers can execute or play media.
 
-The follow-up Android capability review found an additional startup dependency: cached **CineStream references the absent Android app `DataStore` during `load(Context)`**, despite declaring `requiresResources=false`. Resource-dependent extensions are separately rejected deliberately with **HTTP 422 / `unsupported`**. These failures are distinct from the details endpoint's 502. Findings F13–F15 document the Android compatibility boundary.
+The follow-up Android capability review found an additional startup dependency: cached **Extension30 references the absent Android app `DataStore` during `load(Context)`**, despite declaring `requiresResources=false`. Resource-dependent extensions are separately rejected deliberately with **HTTP 422 / `unsupported`**. These failures are distinct from the details endpoint's 502. Findings F13–F15 document the Android compatibility boundary.
 
 ## Evidence and limits
 
@@ -99,7 +99,7 @@ Host defines:   kotlin.Result.constructor-impl(Object): Object
 
 Other unresolved references include `exceptionOrNull_impl`, `isFailure_impl`, `box_impl`, and `unbox_impl`. `javap` on the packaged daemon shows their JVM counterparts with hyphens. The method-resolution probe inspected exact names and descriptors without initializing extension classes. For the CloudStream and Kotlin host methods it scanned, the reported missing methods in these artifacts were the `Result` methods.
 
-The local log records three title loads hitting this exact mismatch: VegaMovies at original line 935, Rogmovies at 1007, and MoviesDrive at 1019. It also records repeated search failures in those providers. The error is therefore not an inference from static references alone.
+The local log records three title loads hitting this exact mismatch: Extension76 at original line 935, Extension58 at 1007, and Extension53 at 1019. It also records repeated search failures in those providers. The error is therefore not an inference from static references alone.
 
 **Repair:** introduce a descriptor-aware mapping between DEX host references and actual JVM host symbols. Validate the complete referenced host ABI, not only the first method that happens to fail. Avoid a blanket underscore-to-hyphen replacement, because normal underscores are valid method names. Bump `TRANSLATION_PROFILE` so cached translations cannot survive the change unchanged. Exercise Android-compiled Kotlin fixtures containing `Result`, suspend calls, default arguments, and relevant value classes in the packaged worker runtime. Updating a Kotlin version alone does not address this demonstrated name mismatch.
 
@@ -109,7 +109,7 @@ The local log records three title loads hitting this exact mismatch: VegaMovies 
 
 The daemon depends on [the JVM library target](macos/daemon/build.gradle.kts:26), while [CloudflareKiller](upstream/app/src/main/java/com/lagradost/cloudstream3/network/CloudflareKiller.kt:20) belongs to the Android app module. No compatible class exists in the packaged daemon under that fully qualified name.
 
-Moviesmod, Bollyflix, and CineStream reference that class. The runtime log records Moviesmod, TopMovies, and BollyFlix failing with `NoClassDefFoundError` for it. A plugin can register successfully without resolving every class used later by search or details.
+Extension54, Extension22, and Extension30 reference that class. The runtime log records Extension54, Extension70, and Extension22 failing with `NoClassDefFoundError` for it. A plugin can register successfully without resolving every class used later by search or details.
 
 The macOS [SolveInterceptor](macos/daemon/src/main/kotlin/com/lagradost/macos/SolveInterceptor.kt:21) is a different type in a different package. Installing it on a global HTTP client cannot satisfy a bytecode reference to `com.lagradost.cloudstream3.network.CloudflareKiller`.
 
@@ -135,16 +135,16 @@ The public catalog probe observed the following. “Active” means publisher st
 
 | Catalog | Active entries | Active with valid SHA-256 | Active blocked for absent SHA-256 |
 | --- | ---: | ---: | ---: |
-| Hexated / SoraStream, built-in suggestion | 59 | 0 | 59 |
-| MegaRepo, built-in suggestion | 1 | 0 | 1 |
-| English Providers, built-in suggestion | 13 | 0 | 13 |
-| Multilingual Providers, built-in suggestion | 52 | 0 | 52 |
-| LikDev256, built-in suggestion | 12 | 0 | 12 |
-| CNC Verse, built-in suggestion | 33 | 33 | 0 |
+| Repository A / Extension63, built-in suggestion | 59 | 0 | 59 |
+| Repository B, built-in suggestion | 1 | 0 | 1 |
+| Repository C, built-in suggestion | 13 | 0 | 13 |
+| Repository D, built-in suggestion | 52 | 0 | 52 |
+| example-e, built-in suggestion | 12 | 0 | 12 |
+| Repository F, built-in suggestion | 33 | 33 | 0 |
 | **Built-in suggestion subtotal** | **170** | **33** | **137** |
 | Default recloudstream repository | 5 | 5 | 0 |
-| CSX | 5 | 5 | 0 |
-| Phisher | 85 | 85 | 0 |
+| Repository H | 5 | 5 | 0 |
+| Repository I | 85 | 85 | 0 |
 
 Every manifest in this nine-repository sample was unsigned. The macOS code supports unsigned community repositories with consent, so **absence of an Ed25519 signature is not the blanket blocker** in this sample. Absence of artifact hashes is.
 
@@ -185,7 +185,7 @@ The native [WebViewSolverService](macos/client/Sources/Services/WebViewSolverSer
 There are three separate mechanisms:
 
 - [UserPreferences.defaultRepoURL](macos/client/Sources/Services/UserPreferences.swift:295), used by the default legacy preference array at line 228 and imported once during bootstrap.
-- [Six `communityPresets`](macos/client/Sources/UI/Extensions/ExtensionsView.swift:926), including CNC Verse, Hexated, and others, with compiled descriptions and badges such as “Most Popular.”
+- [Six `communityPresets`](macos/client/Sources/UI/Extensions/ExtensionsView.swift:926), including Repository F, Repository A, and others, with compiled descriptions and badges such as “Most Popular.”
 - [WELL_KNOWN_SHORTCODES](macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryService.kt:133), with dozens of compiled third-party addresses, plus source-specific migration/shutdown handling in `parseRepoUrl`.
 
 The six suggestions require the user to click Add; they are not six automatically installed repositories. The default preference seed is imported once, and bootstrap no longer resyncs it continuously. Upstream does have a `PREBUILT_REPOSITORIES` mechanism, but its default is empty, and the verified upstream source does not contain this CNC/preset/alias table. The [upstream README](https://github.com/recloudstream/cloudstream/blob/d77c8564653346b1dc70339e8758a0fc76dd2819/README.md) describes extension-based source addition. It does not establish a universal ban on every possible repository suggestion.
@@ -202,7 +202,7 @@ Upstream [parseRepoUrl](upstream/app/src/main/java/com/lagradost/cloudstream3/pl
 
 The first probe supplied an ordinary unknown code, `CustomAuditCode`; the macOS parser requested `https://py.md/CustomAuditCode`. That is the wrong shortener for Android's ordinary-code convention.
 
-The second supplied the explicit URL `https://cutt.ly/hexated`; [lines 234–238](macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryService.kt:234) returned the compiled Codeberg address without consulting the URL's server. A user-supplied shortlink is therefore overridden by a compiled assumption.
+The second supplied the explicit URL `https://cutt.ly/ext_a`; [lines 234–238](macos/daemon/src/main/kotlin/com/lagradost/macos/RepositoryService.kt:234) returned the compiled Codeberg address without consulting the URL's server. A user-supplied shortlink is therefore overridden by a compiled assumption.
 
 **Repair:** preserve the distinction between normal and `!` codes, resolve the intended service, reject invalid shortener redirects clearly, and honor explicit URLs. Test unknown codes as well as named examples; hardcoded known aliases conceal general parser defects.
 
@@ -252,17 +252,17 @@ The repository's [isolated Swift test helper](macos/scripts/test_extensions_core
 
 ### F13 — P1: Android DataStore is absent on a real extension's startup path
 
-**Confirmed by exact packaged-host resolution and cached CineStream bytecode; no CineStream worker was executed in this audit.**
+**Confirmed by exact packaged-host resolution and cached Extension30 bytecode; no Extension30 worker was executed in this audit.**
 
-The cached CineStream artifact is version 487, entry class `com.megix.CineStream`, and declares `requiresResources=false`. Its translated `load(android.content.Context)` calls `Settings.initSeenProviders` before provider registration. That settings initialization calls `getSeenProviders`, which reads `CloudStreamApp.context` and invokes `DataStore.getSharedPrefs(Context)`. The entry's own load method also directly references `DataStore.INSTANCE` and `getSharedPrefs` before its first `registerMainAPI` call. These references are captured in the [selected instruction evidence](macos/docs/audit/extension-runtime-2026-10-01/android-compatibility-evidence.json).
+The cached Extension30 artifact is version 487, entry class `com.ext_h.Extension30`, and declares `requiresResources=false`. Its translated `load(android.content.Context)` calls `Settings.initSeenProviders` before provider registration. That settings initialization calls `getSeenProviders`, which reads `CloudStreamApp.context` and invokes `DataStore.getSharedPrefs(Context)`. The entry's own load method also directly references `DataStore.INSTANCE` and `getSharedPrefs` before its first `registerMainAPI` call. These references are captured in the [selected instruction evidence](macos/docs/audit/extension-runtime-2026-10-01/android-compatibility-evidence.json).
 
 `com.lagradost.cloudstream3.utils.DataStore` is absent from the packaged daemon. It belongs to [the Android app module](upstream/app/src/main/java/com/lagradost/cloudstream3/utils/DataStore.kt:89), and its Android `Context` extension functions compile to methods on that object. The local implementation is byte-identical to [the pinned upstream file](https://github.com/recloudstream/cloudstream/blob/d77c8564653346b1dc70339e8758a0fc76dd2819/app/src/main/java/com/lagradost/cloudstream3/utils/DataStore.kt).
 
-The macOS [CloudStreamApp shim](macos/daemon/src/main/kotlin/com/lagradost/cloudstream3/CloudStreamApp.kt:8) supplies a non-null context by default. On the inspected path, that makes the missing `DataStore` dependency reachable. The bytecode's `Exception` handlers cannot catch `NoClassDefFoundError`; relevant `getstatic` instructions also precede those protected ranges. An earlier unrelated failure might occur first, so this is an independently demonstrated startup compatibility blocker, not a claim about the first observed CineStream exception.
+The macOS [CloudStreamApp shim](macos/daemon/src/main/kotlin/com/lagradost/cloudstream3/CloudStreamApp.kt:8) supplies a non-null context by default. On the inspected path, that makes the missing `DataStore` dependency reachable. The bytecode's `Exception` handlers cannot catch `NoClassDefFoundError`; relevant `getstatic` instructions also precede those protected ranges. An earlier unrelated failure might occur first, so this is an independently demonstrated startup compatibility blocker, not a claim about the first observed Extension30 exception.
 
 Providing durable `Context.getSharedPreferences` does not satisfy a dependency on the separate `DataStore` class. The shim's generic in-memory `CloudStreamApp.getKey` also cannot replace a compiled `DataStore.getSharedPrefs` invocation. Likewise, `requiresResources=false` says nothing about app-level helper dependencies.
 
-**Repair:** provide the exact supported `DataStore` object/method/field contract, backed by installation-scoped durable preferences and compatible serialization/key conventions. Audit dependencies introduced by inlined Kotlin helpers as well as explicit imports. Verify CineStream's startup, settings initialization, search, details, and links independently after the Kotlin ABI and helper fixes. Do not implement this as an empty preference map that silently resets settings.
+**Repair:** provide the exact supported `DataStore` object/method/field contract, backed by installation-scoped durable preferences and compatible serialization/key conventions. Audit dependencies introduced by inlined Kotlin helpers as well as explicit imports. Verify Extension30's startup, settings initialization, search, details, and links independently after the Kotlin ABI and helper fixes. Do not implement this as an empty preference map that silently resets settings.
 
 ### F14 — P2: Android resource requirements are deliberately rejected, not implemented
 
@@ -302,7 +302,7 @@ The packaged daemon contains 22 `android.*` class files including nested/generat
 | [Video click actions](macos/daemon/src/main/kotlin/com/lagradost/cloudstream3/plugins/Plugin.kt:24) | Registration accepted but action not installed; explicitly reported as unsupported | This warning alone does not mean provider registration failed |
 | Android app integration | `DataStore`, `MainActivity`, `CommonActivity`, `Event`, sync/account UI types absent | Startup, settings, account, or playback behavior depends on which extension methods actually call them |
 
-For cached CineStream, the expanded static scan found **82 distinct absent referenced host classes: 67 Android classes and 15 CloudStream app classes**, plus two missing methods on types that do exist: `Context.startActivity(Intent)` and `Resources.getDisplayMetrics()`. Their caller lists show that many are in `SettingsDialog`, `SettingsTheme`, `SettingsWebView`, and related optional screens. Those 82 references are not 82 broken providers, and they must not all become unconditional install rejections. In contrast, F13 traces `DataStore` to the actual startup method.
+For cached Extension30, the expanded static scan found **82 distinct absent referenced host classes: 67 Android classes and 15 CloudStream app classes**, plus two missing methods on types that do exist: `Context.startActivity(Intent)` and `Resources.getDisplayMetrics()`. Their caller lists show that many are in `SettingsDialog`, `SettingsTheme`, `SettingsWebView`, and related optional screens. Those 82 references are not 82 broken providers, and they must not all become unconditional install rejections. In contrast, F13 traces `DataStore` to the actual startup method.
 
 The resource flag is therefore insufficient as a compatibility classifier. The backend has no full capability/preflight result distinguishing required startup dependencies, provider method dependencies, and optional Android screens. `unsupportedFeatures` currently records video-click registration, not every missing or ignored Android API.
 

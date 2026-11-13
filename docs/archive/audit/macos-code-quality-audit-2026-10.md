@@ -188,7 +188,7 @@ Despite strong baseline test passing rates, the audit identified **critical arch
 #### Concrete Evidence
 - **Daemon Runtime Log (`~/.cloudstream-macos/logs/daemon.log`):**
   ```text
-  WARNING: A connection to https://apig.inmoviebox.com/ was leaked. Did you forget to close a response body? To see where this was allocated, set the OkHttpClient logger level with AppLogging.enable(LogLevel.DEBUG)
+  WARNING: A connection to https://apig.inExtension50.com/ was leaked. Did you forget to close a response body? To see where this was allocated, set the OkHttpClient logger level with AppLogging.enable(LogLevel.DEBUG)
   ```
 - **File:** [`engine/src/main/kotlin/com/lagradost/macos/worker/WorkerRuntime.kt`](../../../engine/src/main/kotlin/com/lagradost/macos/worker/WorkerRuntime.kt#L236-L260)
 

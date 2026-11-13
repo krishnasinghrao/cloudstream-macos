@@ -609,7 +609,7 @@ if coordinator.lastPushedPlaying != isPlaying {
 * Call sites: `sync()` resolves shorteners **only when the repo URL is not already persisted** (`DaemonState.snapshot().repos.none { it.url == candidate }`); `reTrust(repoUrl)` operates on the **already-normalized persisted URL** and never touches shorteners. A re-trust of an unknown URL is rejected with `IllegalArgumentException("repository must be synced before it can be re-trusted")` — trust actions must not introduce new URLs.
 * The Settings client passes `status.url` (the daemon-normalized URL) into `repositoryURLs` (already does) — the client-side trust path therefore also carries normalized URLs only.
 
-**Tests.** Kotlin: `reTrust("https://cutt.ly/xyz")` → throws; `reTrust(normalizedPersistedUrl)` → clears pin + syncs without any shortener HTTP call (fake `app` client asserting request URLs); `sync("https://hexated")` resolves via shortcode table without network.
+**Tests.** Kotlin: `reTrust("https://cutt.ly/xyz")` → throws; `reTrust(normalizedPersistedUrl)` → clears pin + syncs without any shortener HTTP call (fake `app` client asserting request URLs); `sync("https://ext_a")` resolves via shortcode table without network.
 
 ### 12.2 Restore the mandatory SEC-07 hash gate (N-08)
 
