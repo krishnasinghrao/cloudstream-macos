@@ -356,7 +356,7 @@ final class PersistenceBoundaryTests: XCTestCase {
 
     func testFailedStartupProfileNeverFallsBackToTheDefaultProfile() throws {
         let suite = "profiles-failure-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let defaults = try XCTUnwrap(AppEnvironment.scratchDefaults(suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let profiles = ProfileStore(defaults: defaults)
         let selected = try profiles.add(name: "Selected", symbol: "person")

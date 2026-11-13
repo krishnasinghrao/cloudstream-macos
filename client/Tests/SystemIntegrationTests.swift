@@ -304,8 +304,8 @@ final class SystemIntegrationTests: XCTestCase {
 
     private func spotlightPreferences() -> UserPreferences {
         let suite = "spotlight-tests-" + UUID().uuidString
-        addTeardownBlock { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
-        let preferences = UserPreferences(defaults: UserDefaults(suiteName: suite)!)
+        addTeardownBlock { AppEnvironment.scratchDefaults(suite)?.removePersistentDomain(forName: suite) }
+        let preferences = UserPreferences(defaults: AppEnvironment.scratchDefaults(suite)!)
         preferences.indexInSpotlight = true
         return preferences
     }

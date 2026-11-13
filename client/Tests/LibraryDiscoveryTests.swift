@@ -214,7 +214,7 @@ final class LibraryDiscoveryTests: XCTestCase {
         let initial = series([episode(1)])
         try store.upsertLibraryEntry(details: initial, watchType: .watching)
         let original = try store.captureProfileOperation()
-        let preferences = UserPreferences(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let preferences = UserPreferences(defaults: AppEnvironment.scratchDefaults(UUID().uuidString)!)
         preferences.checkForNewEpisodes = true
         var pending: CheckedContinuation<DetailsDto, Error>?
         let checker = EpisodeUpdateChecker(library: store, preferences: preferences, spacing: .zero,
@@ -238,7 +238,7 @@ final class LibraryDiscoveryTests: XCTestCase {
             let store = LibraryStore(inMemory: true)
             let initial = series([episode(1)])
             try store.upsertLibraryEntry(details: initial, watchType: .watching)
-            let preferences = UserPreferences(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+            let preferences = UserPreferences(defaults: AppEnvironment.scratchDefaults(UUID().uuidString)!)
             preferences.checkForNewEpisodes = true
             let state = EpisodeCheckAuthorization()
             var pending: CheckedContinuation<DetailsDto, Error>?
@@ -266,7 +266,7 @@ final class LibraryDiscoveryTests: XCTestCase {
         try store.upsertLibraryEntry(details: initial, watchType: .watching)
         store.mutationClock = { .distantPast }
         try store.recordEpisodeCheck(details: initial)
-        let preferences = UserPreferences(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let preferences = UserPreferences(defaults: AppEnvironment.scratchDefaults(UUID().uuidString)!)
         preferences.checkForNewEpisodes = true
         preferences.notifyNewEpisodes = true
         var permission: CheckedContinuation<Bool, Never>?
@@ -288,7 +288,7 @@ final class LibraryDiscoveryTests: XCTestCase {
         let store = LibraryStore(inMemory: true)
         let initial = series([episode(1)])
         try store.upsertLibraryEntry(details: initial, watchType: .watching)
-        let preferences = UserPreferences(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let preferences = UserPreferences(defaults: AppEnvironment.scratchDefaults(UUID().uuidString)!)
         preferences.checkForNewEpisodes = true
         var pending: CheckedContinuation<DetailsDto, Error>?
         var requests = 0
@@ -732,7 +732,7 @@ final class LibraryDiscoveryTests: XCTestCase {
     }
 
     func testLibraryViewOptionsAndHomeShelfPersist() throws {
-        let suite = UserDefaults(suiteName: UUID().uuidString)!
+        let suite = AppEnvironment.scratchDefaults(UUID().uuidString)!
         let preferences = UserPreferences(defaults: suite)
         XCTAssertEqual(preferences.homeShelf, .collection(.planToWatch))
         XCTAssertNil(preferences.libraryViewOptions[LibraryCollection.watching.rawValue])

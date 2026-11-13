@@ -161,7 +161,7 @@ final class ExtensionsStoreTests: XCTestCase {
     }
 
     func testBackgroundUpdatesAreAnnouncedOncePerEngineRefresh() async {
-        let defaults = UserDefaults(suiteName: "ExtensionsStoreTests.\(UUID().uuidString)")!
+        let defaults = AppEnvironment.scratchDefaults("ExtensionsStoreTests.\(UUID().uuidString)")!
         let api = ExtensionAPIFixture()
         let store = ExtensionsStore(api: api, defaults: defaults)
         var announced: [[String]] = []
@@ -408,7 +408,7 @@ final class ExtensionsStoreTests: XCTestCase {
     }
 
     func testManagedPolicyIgnoresUnforcedUserDefaults() {
-        let defaults = UserDefaults(suiteName: "policy-test-\(UUID().uuidString)")!
+        let defaults = AppEnvironment.scratchDefaults("policy-test-\(UUID().uuidString)")!
         defaults.set(false, forKey: "ExtensionsAllowCommunityRepositories")
         let policy = ManagedExtensionPolicy.current(defaults: defaults)
         XCTAssertTrue(policy.allowCommunityTier, "only configuration-profile (forced) values apply")
@@ -456,7 +456,7 @@ final class ExtensionsStoreTests: XCTestCase {
 
     /// RT-06: a fresh store has no repositories of its own; everything comes from the engine.
     func testNoRepositoriesExistUntilTheUserAddsOne() async {
-        let store = ExtensionsStore(api: ExtensionAPIFixture(), defaults: UserDefaults(suiteName: "fresh-\(UUID().uuidString)")!)
+        let store = ExtensionsStore(api: ExtensionAPIFixture(), defaults: AppEnvironment.scratchDefaults("fresh-\(UUID().uuidString)")!)
         XCTAssertTrue(store.repositories.isEmpty)
         _ = await store.refresh()
         XCTAssertTrue(store.repositories.isEmpty, "the app ships no preset repositories")
@@ -487,7 +487,7 @@ final class ExtensionsStoreTests: XCTestCase {
             ProviderTestStepDto(name: "search", ok: true, latencyMs: 5, detail: nil),
             ProviderTestStepDto(name: "links", ok: false, latencyMs: 9, detail: "No links"),
         ])])
-        let store = ExtensionsStore(api: api, defaults: UserDefaults(suiteName: "diagnose-\(UUID().uuidString)")!)
+        let store = ExtensionsStore(api: api, defaults: AppEnvironment.scratchDefaults("diagnose-\(UUID().uuidString)")!)
         var dto = plugin("diag")
         dto.providerIds = ["diag:P"]
         await store.diagnose(dto)
@@ -585,8 +585,8 @@ final class ProviderGenerationTests: XCTestCase {
     func testInstalledExtensionChangesAdvanceTheProviderGeneration() async {
         let api = ExtensionAPIFixture()
         let suite = "provider-generation-" + UUID().uuidString
-        addTeardownBlock { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
-        let store = ExtensionsStore(api: api, defaults: UserDefaults(suiteName: suite)!)
+        addTeardownBlock { AppEnvironment.scratchDefaults(suite)?.removePersistentDomain(forName: suite) }
+        let store = ExtensionsStore(api: api, defaults: AppEnvironment.scratchDefaults(suite)!)
         // Library reconciliation hangs off this: it must see the new list.
         var seenByObserver: [[Int]] = []
         store.onProvidersChanged = { seenByObserver.append(store.plugins.map(\.version)) }

@@ -454,10 +454,11 @@ extension SoftwareUpdater.Environment {
         let release = UpdateRelease(version: SemanticVersion(major: 99, minor: 0, patch: 0), tag: "v99.0.0", pageURL: page,
                                     publishedAt: Date(), dmg: asset, checksumAsset: nil)
         let staging = FileManager.default.temporaryDirectory.appendingPathComponent("cs-update-fixture", isDirectory: true)
-        // One fixed domain, emptied each launch: no skip or schedule leaks between runs.
-        let suite = "com.lagradost.cloudstream.update-fixture"
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
+        // A fresh file each launch: no skip or schedule leaks between runs, and
+        // nothing in ~/Library/Preferences.
+        let preferences = staging.appendingPathComponent("preferences")
+        try? FileManager.default.removeItem(at: preferences.appendingPathExtension("plist"))
+        let defaults = AppEnvironment.fileDefaults(at: preferences)
         return Self(
             isEnabled: true,
             currentVersion: SemanticVersion(major: 1, minor: 0, patch: 0),

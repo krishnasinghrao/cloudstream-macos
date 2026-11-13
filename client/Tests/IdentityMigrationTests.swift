@@ -501,7 +501,7 @@ final class IdentityMigrationTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("migration-profile-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let suite = "migration-profile-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let defaults = try XCTUnwrap(AppEnvironment.scratchDefaults(suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let profiles = ProfileStore(defaults: defaults)
         let other = try profiles.add(name: "Other", symbol: ViewerProfile.symbols[0])

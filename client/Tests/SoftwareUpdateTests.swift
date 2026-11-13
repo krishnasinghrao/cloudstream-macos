@@ -387,9 +387,9 @@ final class SoftwareUpdaterTests: XCTestCase {
     private var staging: URL!
 
     override func setUp() async throws {
-        // One fixed domain, emptied around every test (no per-test plist files).
-        suite = "com.lagradost.cloudstream.update-tests"
-        defaults = UserDefaults(suiteName: suite)
+        // A fresh file-backed suite per test (AppEnvironment.scratchDefaults).
+        suite = "update-tests-\(UUID().uuidString)"
+        defaults = AppEnvironment.scratchDefaults(suite)
         defaults.removePersistentDomain(forName: suite)
         staging = FileManager.default.temporaryDirectory.appendingPathComponent("cs-update-ctl-\(UUID().uuidString)")
     }

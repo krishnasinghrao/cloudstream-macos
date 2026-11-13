@@ -28,7 +28,7 @@ final class BackupValidationTests: XCTestCase {
 
     @MainActor func testActualPreferencesRejectPatchBeforeAnyMutation() throws {
         let name = "cloudstream-backup-validation-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        let defaults = try XCTUnwrap(AppEnvironment.scratchDefaults(name))
         defer { defaults.removePersistentDomain(forName: name) }
         let preferences = UserPreferences(defaults: defaults)
         let previousStep = preferences.seekStepSeconds

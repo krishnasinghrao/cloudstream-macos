@@ -52,9 +52,29 @@ enum AppEnvironment {
     }
 
     static var defaults: UserDefaults {
-        guard isIsolated() else { return .standard }
+        guard isIsolated(), let root = root() else { return .standard }
         // Different processes never share preferences, even when a runner
-        // deliberately shares a file root for crash/relaunch fixtures.
-        return UserDefaults(suiteName: "com.lagradost.cloudstream.tests.\(processID)")!
+        // deliberately shares a file root for crash/relaunch fixtures. The
+        // suite is a file in the isolated root, so nothing is left behind in
+        // ~/Library/Preferences.
+        return fileDefaults(at: root.appendingPathComponent("Preferences-\(processID)"))
+    }
+
+    /// A preference suite kept in one plist file (`<url>.plist`): CFPreferences
+    /// treats an absolute path as a file domain, so it never reaches
+    /// ~/Library/Preferences or the app's own domain.
+    static func fileDefaults(at url: URL) -> UserDefaults {
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
+        return UserDefaults(suiteName: url.standardizedFileURL.path)!
+    }
+
+    /// Tests: a named, throwaway suite in this process's temporary folder.
+    /// Optional, like `UserDefaults(suiteName:)`, so call sites read the same.
+    static func scratchDefaults(_ name: String) -> UserDefaults? {
+        let safe = name.replacingOccurrences(of: "/", with: "_")
+        return fileDefaults(at: FileManager.default.temporaryDirectory
+            .appendingPathComponent("cloudstream-defaults-\(processID)", isDirectory: true)
+            .appendingPathComponent(safe.isEmpty ? "unnamed" : safe))
     }
 }

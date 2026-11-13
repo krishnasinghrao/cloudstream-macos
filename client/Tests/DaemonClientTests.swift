@@ -212,7 +212,7 @@ final class DaemonClientTests: XCTestCase {
 
     func testLegacyResponseCacheIsPurgedOnce() throws {
         let suite = "engine-cache-" + UUID().uuidString
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let defaults = try XCTUnwrap(AppEnvironment.scratchDefaults(suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let cache = URLCache(memoryCapacity: 1_000_000, diskCapacity: 0)
         let request = URLRequest(url: URL(string: "http://127.0.0.1:50000/links")!)

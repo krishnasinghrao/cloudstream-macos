@@ -330,7 +330,7 @@ final class BackupProfileTests: XCTestCase {
     }
 
     func testPreferenceRestoreValidatesValuesBeforeApplyingAny() throws {
-        let suite = UserDefaults(suiteName: "cs-backup-prefs-\(UUID().uuidString)")!
+        let suite = AppEnvironment.scratchDefaults("cs-backup-prefs-\(UUID().uuidString)")!
         let prefs = UserPreferences(defaults: suite)
         XCTAssertThrowsError(try prefs.applyBackupValues([
             "seekStepSeconds": .int(30),
@@ -478,7 +478,7 @@ final class BackupProfileTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("schedule-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let suiteName = "schedule-" + UUID().uuidString
-        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let suite = try XCTUnwrap(AppEnvironment.scratchDefaults(suiteName))
         addTeardownBlock { suite.removePersistentDomain(forName: suiteName) }
         let store = LibraryStore(storeDirectory: root.appendingPathComponent("stores"))
         let profiles = ProfileStore(defaults: suite)
@@ -535,7 +535,7 @@ final class BackupProfileTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("external-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
         let suiteName = "external-" + UUID().uuidString
-        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let suite = try XCTUnwrap(AppEnvironment.scratchDefaults(suiteName))
         addTeardownBlock { suite.removePersistentDomain(forName: suiteName) }
         let service = BackupService(defaults: suite)
         service.backupsDirectoryOverride = root
@@ -619,7 +619,7 @@ final class BackupProfileTests: XCTestCase {
 
     func testOlderBackupsDisableProvidersByNameOnlyWhenUnambiguous() async throws {
         let suiteName = "legacy-providers-" + UUID().uuidString
-        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let suite = try XCTUnwrap(AppEnvironment.scratchDefaults(suiteName))
         addTeardownBlock { suite.removePersistentDomain(forName: suiteName) }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("legacy-providers-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
@@ -646,7 +646,7 @@ final class BackupProfileTests: XCTestCase {
 
     func testBackupCarriesTheRememberedExtensionSetupWithItsAge() throws {
         let suiteName = "setup-" + UUID().uuidString
-        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let suite = try XCTUnwrap(AppEnvironment.scratchDefaults(suiteName))
         addTeardownBlock { suite.removePersistentDomain(forName: suiteName) }
         let service = BackupService(defaults: suite)
         XCTAssertNil(service.extensionSetup)
@@ -684,7 +684,7 @@ final class BackupProfileTests: XCTestCase {
     // MARK: Profiles
 
     func testProfilesHaveSeparateLibraries() throws {
-        let suite = UserDefaults(suiteName: "cs-profiles-\(UUID().uuidString)")!
+        let suite = AppEnvironment.scratchDefaults("cs-profiles-\(UUID().uuidString)")!
         let profiles = ProfileStore(defaults: suite)
         let library = LibraryStore(inMemory: true)
         XCTAssertEqual(profiles.profiles.count, 1)
@@ -708,7 +708,7 @@ final class BackupProfileTests: XCTestCase {
     }
 
     func testDownloadsStaySharedAcrossProfiles() throws {
-        let suite = UserDefaults(suiteName: "cs-profiles-\(UUID().uuidString)")!
+        let suite = AppEnvironment.scratchDefaults("cs-profiles-\(UUID().uuidString)")!
         let profiles = ProfileStore(defaults: suite)
         let library = LibraryStore(inMemory: true)
         let id = UUID()
@@ -718,7 +718,7 @@ final class BackupProfileTests: XCTestCase {
     }
 
     func testProfileRules() throws {
-        let suite = UserDefaults(suiteName: "cs-profiles-\(UUID().uuidString)")!
+        let suite = AppEnvironment.scratchDefaults("cs-profiles-\(UUID().uuidString)")!
         let profiles = ProfileStore(defaults: suite)
         XCTAssertThrowsError(try profiles.add(name: "   ", symbol: "x"))
         XCTAssertThrowsError(try profiles.delete(profiles.profiles[0])) {
@@ -783,7 +783,7 @@ final class BackupProfileTests: XCTestCase {
     }
 
     func testProfileLockCannotBeBypassedByPlistTampering() throws {
-        let suite = UserDefaults(suiteName: "cs-profiles-tamper-\(UUID().uuidString)")!
+        let suite = AppEnvironment.scratchDefaults("cs-profiles-tamper-\(UUID().uuidString)")!
         let store = ProfileStore(defaults: suite)
         let lockedProfile = try store.add(name: "SecretProfile", symbol: "lock.fill", requiresUnlock: true)
         XCTAssertTrue(lockedProfile.requiresUnlock)
