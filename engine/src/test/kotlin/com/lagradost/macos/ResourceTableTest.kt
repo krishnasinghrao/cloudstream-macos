@@ -131,4 +131,16 @@ class TranslationGuardTest {
             assertEquals("n", api.javaClass.getMethod("getName").invoke(api))
         } finally { java.nio.file.Files.deleteIfExists(out) }
     }
+
+    /** Try blocks drive dex2jar's liveness cost (a real 8k-statement method with 177 try blocks needs ~390 MB). */
+    @Test fun `statements times try blocks bounds translation independently of registers`() {
+        val dex = ExtensionTestSupport.dexOf("android-resources")
+        // ResourcePlugin.load: 161 statements, 11 registers, 6 try blocks.
+        fun flagged(limit: Long) = TranslationGuard.scan(dex, maxExceptionComplexity = limit).map { it.owner + "." + it.name }
+        val load = TranslationGuard.scan(dex, maxExceptionComplexity = 161L * 6 - 1).single { it.owner == "Lfixture/ResourcePlugin;" && it.name == "load" }
+        assertEquals(6, load.tryBlocks)
+        assertFalse("Lfixture/ResourcePlugin;.load" in flagged(161L * 6), "the bound is exclusive")
+        // A method without try blocks is never flagged by this bound.
+        assertTrue(TranslationGuard.scan(dex, maxExceptionComplexity = 0).all { it.tryBlocks > 0 })
+    }
 }

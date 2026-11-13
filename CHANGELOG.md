@@ -4,6 +4,21 @@ All notable changes to CloudStream for macOS. Versions follow
 [Semantic Versioning](https://semver.org); a release is published by pushing
 a `v<version>` tag that matches `MARKETING_VERSION` in `client/project.yml`.
 
+## Unreleased
+
+### Fixed
+
+- **Extensions built with Jetpack Compose install again.** Their plugin class
+  reads the Compose stability field `$stable` of its host superclass, which the
+  macOS library never declared, so loading failed with "This extension calls a
+  function the Mac version of CloudStream does not provide." The translator
+  now reads a missing host `$stable` as 0 (stable).
+- **Large extensions no longer run out of memory while installing.** Methods
+  dense with try blocks can need over 1 GB to translate. Methods whose
+  statements × try blocks would exceed the worker's memory are now stubbed like
+  other oversized methods: the extension loads, and only the features that use
+  those methods report that they are too large to translate.
+
 ## 1.1.0
 
 The first release with in-app updates. Copies of 1.0.0 have no updater, so

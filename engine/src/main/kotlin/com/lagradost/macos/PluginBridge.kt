@@ -41,7 +41,7 @@ interface UnsupportedFeatureSink {
  */
 object PluginBridge {
     /** Bump whenever dex2jar options, the translator or the android.* stub ABI change. */
-    const val TRANSLATION_PROFILE = "d2j-2.4/reuse-topo-sync-nodebug/stubs-6/host-abi-1/repro-1/guard-1"
+    const val TRANSLATION_PROFILE = "d2j-2.4/reuse-topo-sync-nodebug/stubs-6/host-abi-2/repro-1/guard-2"
     private const val RETIRE_DRAIN_MS = 30_000L
 
     private val json = Json { ignoreUnknownKeys = true }

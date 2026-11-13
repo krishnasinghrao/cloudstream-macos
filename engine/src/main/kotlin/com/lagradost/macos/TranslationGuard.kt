@@ -14,9 +14,14 @@ import com.googlecode.d2j.visitors.DexMethodVisitor
 /**
  * Bounds DEX → JVM translation per method. dex2jar's register analysis grows
  * far faster than linearly with a method's size × registers; one huge method
- * (StreamPlay's 43k-instruction, 157-register `invokeMovieBox`) exhausted 4 GB
- * while the whole worker has 256 MB. Such methods are translated as a body that
- * throws a named [UnsupportedOperationException]: the extension loads, only
+ * seen in a real extension (43k instructions, 157 registers) exhausted 4 GB
+ * while the whole worker has 256 MB. Its liveness pass (UnSSATransformer) also
+ * grows with exception edges: every statement inside a try block gets an edge to
+ * its handler, so statements × try blocks predicts its cost where registers do
+ * not. Measured on real extension methods: 8k statements × 177 try blocks
+ * needs ~390 MB; 4k × 110 and 5.8k × 164 each need ~180 MB.
+ *
+ * Such methods are translated as a body that throws a named [UnsupportedOperationException]: the extension loads, only
  * the paths through that method fail, and the limitation is reported. This
  * also stops a crafted DEX from exhausting a worker during translation.
  */
@@ -25,22 +30,29 @@ internal object TranslationGuard {
     const val MAX_COMPLEXITY = 2_000_000L
     /** Statements above which a method is not translated, whatever its registers. */
     const val MAX_STATEMENTS = 30_000
+    /** Statements × try blocks above which a method is not translated (~250 MB of liveness frames). */
+    const val MAX_EXCEPTION_COMPLEXITY = 1_000_000L
 
-    data class Oversized(val owner: String, val name: String, val descriptor: String, val statements: Int, val registers: Int) {
+    data class Oversized(val owner: String, val name: String, val descriptor: String, val statements: Int, val registers: Int,
+        val tryBlocks: Int = 0) {
         /** `Owner.method`, for users. */
         val label: String get() = owner.removePrefix("L").removeSuffix(";").substringAfterLast('/') + "." + name
     }
 
     /** Methods of [dex] that would not be translated. Reads the file once without translating. */
-    fun scan(dex: ByteArray, maxComplexity: Long = MAX_COMPLEXITY, maxStatements: Int = MAX_STATEMENTS): List<Oversized> {
-        fun tooComplex(statements: Int, registers: Int) =
-            statements > maxStatements || statements.toLong() * registers.coerceAtLeast(1) > maxComplexity
+    fun scan(dex: ByteArray, maxComplexity: Long = MAX_COMPLEXITY, maxStatements: Int = MAX_STATEMENTS,
+        maxExceptionComplexity: Long = MAX_EXCEPTION_COMPLEXITY): List<Oversized> {
+        fun tooComplex(statements: Int, registers: Int, tryBlocks: Int) =
+            statements > maxStatements || statements.toLong() * registers.coerceAtLeast(1) > maxComplexity ||
+                statements.toLong() * tryBlocks > maxExceptionComplexity
         val found = mutableListOf<Oversized>()
         MultiDexFileReader.open(dex).accept(object : DexFileVisitor() {
             override fun visit(access: Int, className: String, superClass: String?, interfaceNames: Array<out String>?) = object : DexClassVisitor() {
                 override fun visitMethod(accessFlags: Int, method: Method) = object : DexMethodVisitor() {
-                    override fun visitCode(): DexCodeVisitor = Counter { statements, registers ->
-                        if (tooComplex(statements, registers)) found += Oversized(className, method.name, method.desc, statements, registers)
+                    override fun visitCode(): DexCodeVisitor = Counter { statements, registers, tryBlocks ->
+                        if (tooComplex(statements, registers, tryBlocks)) {
+                            found += Oversized(className, method.name, method.desc, statements, registers, tryBlocks)
+                        }
                     }
                 }
             }
@@ -94,11 +106,13 @@ internal object TranslationGuard {
         code.visitEnd()
     }
 
-    /** Counts statements and records the register count of one method body. */
-    private class Counter(private val done: (statements: Int, registers: Int) -> Unit) : DexCodeVisitor() {
+    /** Counts statements and try blocks and records the register count of one method body. */
+    private class Counter(private val done: (statements: Int, registers: Int, tryBlocks: Int) -> Unit) : DexCodeVisitor() {
         private var statements = 0
         private var registers = 0
+        private var tryBlocks = 0
         override fun visitRegister(total: Int) { registers = total }
+        override fun visitTryCatch(start: DexLabel?, end: DexLabel?, handler: Array<out DexLabel>?, type: Array<out String>?) { tryBlocks++ }
         override fun visitStmt2R1N(op: Op?, distReg: Int, srcReg: Int, content: Int) { statements++ }
         override fun visitStmt3R(op: Op?, a: Int, b: Int, c: Int) { statements++ }
         override fun visitTypeStmt(op: Op?, a: Int, b: Int, type: String?) { statements++ }
@@ -115,7 +129,7 @@ internal object TranslationGuard {
         override fun visitStmt0R(op: Op?) { statements++ }
         override fun visitStmt1R(op: Op?, reg: Int) { statements++ }
         override fun visitPackedSwitchStmt(op: Op?, aA: Int, firstCase: Int, labels: Array<out DexLabel>?) { statements++ }
-        override fun visitEnd() = done(statements, registers)
+        override fun visitEnd() = done(statements, registers, tryBlocks)
     }
 
     private const val EXCEPTION = "Ljava/lang/UnsupportedOperationException;"
