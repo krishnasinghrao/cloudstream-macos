@@ -81,7 +81,7 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
 
     // .dex -> .jar translation for community .cs3 plugins (SEC-08 pipeline)
-    implementation("de.femtopedia.dex2jar:dex-tools:2.4.38")
+    implementation("de.femtopedia.dex2jar:dex-tools:2.4.39")
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.coroutines.test)
