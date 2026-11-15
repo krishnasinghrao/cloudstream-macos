@@ -4,6 +4,30 @@ All notable changes to CloudStream for macOS. Versions follow
 [Semantic Versioning](https://semver.org); a release is published by pushing
 a `v<version>` tag that matches `MARKETING_VERSION` in `client/project.yml`.
 
+## 1.1.1
+
+Hardening and stability release addressing 68 defects identified during a comprehensive two-pass adversarial QA audit across the player, persistence, engine daemon, scraper library, and client UI lifecycle.
+
+### Fixed
+
+- **Client & Lifecycle**:
+  - Drain daemon supervisor stop completions unconditionally on shutdown timeout to eliminate uninstaller and quit deadlocks.
+  - Fix high CPU busy-spin by partitioning IPC signals into dedicated asynchronous streams and pacing media state polling.
+  - Drain stale restart events in player controller and pace Metal display link presentation to prevent frame judder.
+  - Safely synchronize Metal OpenGL contexts under render locks during display reconfiguration.
+- **Persistence & Security**:
+  - Remap and deduplicate library page entries during identity migration to prevent unique constraint crashes.
+  - Implement SQLite WAL busy timeout and retry backoff to prevent locking errors under concurrent writes.
+  - Enforce fail-closed Keychain locking and preserve snapshot integrity during profile restoration.
+- **Engine & IPC**:
+  - Provide non-null Android mock Resources and Assets in extension sandbox to prevent runtime crashes.
+  - Correctly delegate ContextWrapper storage to base context and handle opaque URIs and surrogate pairs in URL parser.
+  - Fix worker process pipe file descriptor leaks and eliminate SOCKS5 egress socket hangs on upstream disconnect.
+- **Scraper Library**:
+  - Hex-decode HLS AES-128 IVs accurately and support explicit IVs in CryptoJS decryptor.
+  - Cap JsList sparse allocation to avoid out-of-memory spikes and cancel sibling coroutines on errors in parallel collections.
+  - Thread-safe synchronization on AtomicList with dedicated locks.
+
 ## 1.1.0
 
 The first release with in-app updates. Copies of 1.0.0 have no updater, so
