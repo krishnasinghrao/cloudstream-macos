@@ -69,7 +69,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     // Libraries the Android app ships, which extensions link against without bundling them.
-    implementation("com.google.code.gson:gson:2.14.0")
+    implementation("com.google.code.gson:gson:2.15.0")
     implementation("me.xdrop:fuzzywuzzy:1.4.0")
     implementation(libs.juniversalchardet)
     implementation(libs.kotlinx.collections.immutable)
